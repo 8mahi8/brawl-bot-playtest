@@ -997,7 +997,8 @@
       await currentRef.child('players/'+currentRole+'/online').onDisconnect().cancel();
       if(currentRole==='host')await currentRef.remove();
       else await currentRef.update({ 'players/guest':null,'players/host/ready':false });
-    } catch(e){console.warn('leaveRoom',e);}    ref=null;role=null;other=null;game=null;players={};roomId='';ready=false;botPilot=false;botReadyRequested=false;botRematchRequested=false;
+    } catch(e){console.warn('leaveRoom',e);}
+    ref=null;role=null;other=null;game=null;players={};roomId='';ready=false;botPilot=false;botReadyRequested=false;botRematchRequested=false;
     leaving=false;showBotTool();
     showNormalLobby();
   }
@@ -1996,7 +1997,8 @@
     $('copyCodeBtn').classList.toggle('hidden',solo);
   }
   function startSolo(){
-    if(ref||solo)return;    solo=true;botPilot=false;ref=null;role='host';other='guest';isHost=true;
+    if(ref||solo)return;
+    solo=true;botPilot=false;ref=null;role='host';other='guest';isHost=true;
     roomId='SOLO';connected=true;offset=0;ready=false;selected='tank';
     players={host:{online:true,ready:false,char:'tank'},guest:{online:true,ready:true,char:$('botChar').value,bot:true}};
     botConfig={char:$('botChar').value,level:$('botLevel').value};
