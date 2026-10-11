@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'">
+<title>BRAWL NEXT | MAP & STEALTH CONCEPT</title>
+<style>
+:root{color-scheme:dark;--bg:#070f17;--panel:#0e1b28;--line:#2c4858;--cyan:#6ad2ed;--teal:#5ebc9f;--txt:#e9f4f8;--muted:#92acbd}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -30%,#1b3647,#070f17 65%);color:var(--txt);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{width:min(1100px,100%);margin:auto;padding:28px clamp(12px,3vw,36px) 54px}
+header{display:flex;gap:18px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+.kicker{font-size:11px;letter-spacing:.24em;font-weight:850;color:#70c3cd}
+h1{font-size:clamp(27px,4.3vw,43px);font-weight:850;letter-spacing:-.035em;margin:8px 0 6px}
+p{color:var(--muted);margin:0;line-height:1.65}
+.tag{border:1px solid #35596d;background:#112a38;border-radius:8px;color:#a3d6e4;padding:9px 12px;font-size:11px;font-weight:800;white-space:nowrap}
+.panel{background:#0d1a27;border:1px solid #2e4a59;border-radius:15px;overflow:hidden;box-shadow:0 16px 48px #0004}
+.panelhead{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 17px;flex-wrap:wrap;border-bottom:1px solid #294457}
+.panelhead h2{font-size:14px;letter-spacing:.08em;margin:0}.panelhead span{font-size:11px;color:#9db9ca}
+.mapwrap{padding:14px;background:#0b1722}
+canvas{width:100%;height:auto;display:block;aspect-ratio:1360/760;border:1px solid #263f50;border-radius:8px;background:#101e29}
+.caption{padding:0 16px 14px;font-size:11px;color:#8eabbb;line-height:1.6}
+.controls{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:16px 0}
+.controls b{font-size:12px;margin-right:7px;color:#b4ccd8}
+button{cursor:pointer;background:#102431;color:#c6d9e2;border:1px solid #365467;border-radius:9px;padding:9px 13px;font:700 12px system-ui;min-height:38px}
+button.active{color:#071821;background:#8de0d6;border-color:#9ef4e8}
+.status{padding:11px 14px;border:1px solid #335d65;background:#10302f;border-radius:9px;font-size:12px;line-height:1.65;color:#c2e5dd;margin:10px 0 18px}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0 26px}
+.metric{background:#101f2c;border:1px solid #294655;border-radius:12px;padding:15px}
+.metric strong{font-size:clamp(17px,3vw,27px);display:block;color:#e9f6fa;font-weight:800}
+.metric span{font-size:11px;color:#9aafbd}
+.title2{font-size:17px;font-weight:850;margin:0 0 12px}
+.palette{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.swatch{background:#101f2d;border:1px solid #294554;padding:10px;border-radius:12px}
+.swatch-demo{height:76px;border-radius:7px;margin-bottom:10px;display:flex;align-items:center;justify-content:center}
+.swatch b{font-size:12px}.swatch p{font-size:11px;margin:4px 0 0;line-height:1.55}
+.floor{background:repeating-linear-gradient(0deg,transparent 0px,transparent 22px,#233949 23px,#233949 24px),#0d1924}
+.floor:after{content:'';width:35px;height:35px;border:1px solid #4d7681;border-radius:4px;opacity:.55}
+.wall{background:#0e1924}.wall:after{content:'';width:100px;height:44px;background:linear-gradient(#5f8996 0 4px,#324b5b 4px 100%);border:1px solid #7490a2;border-radius:5px;box-shadow:4px 5px #06101a}
+.bush{background:#0d1d23}.bush:after{content:'';width:108px;height:54px;background:repeating-linear-gradient(135deg,transparent 0 15px,#2a6a5eaa 15px 17px,transparent 17px 34px),#19413e;border:1px solid #3b9b87;border-radius:7px}
+footer{border-top:1px solid #294554;padding-top:20px;margin-top:27px;font-size:12px;color:#93aebe;line-height:1.7}
+a{color:#9cdef1}
+@media(max-width:630px){.metrics{gap:6px}.metric{padding:10px}.palette{grid-template-columns:1fr}.swatch{display:flex;align-items:center;gap:13px}.swatch-demo{width:130px;flex:none;margin:0}.swatch-text{flex:1}}
+</style></head><body><main>
+<header><div><div class="kicker">BRAWL // FIELD SYSTEM 02</div><h1>広さと読み合いをつくる。</h1><p>2vs2専用マップと「潜伏・発見」のビジュアル設計案</p></div><span class="tag">CONCEPT v0.1 · 未実装</span></header>
+<section class="panel" aria-label="2vs2マップ設計図">
+<div class="panelhead"><h2>CROSSFIELD / 3 ROUTE ARENA</h2><span>1360 × 760 World Units · KO CONCEPT</span></div>
+<div class="mapwrap"><canvas id="map" width="1360" height="760" aria-label="左右対称で上中下3ルートを持つ2vs2用フィールド。暗い青の床、スレート色の壁、青緑の潜伏エリアを表示"></canvas></div>
+<div class="caption">これは構造と外観を検討するための俯瞰図。実際のゲームではPC/iPadの画面に応じてカメラを調整し、キャラクターが小さくなり過ぎないようにする。</div>
+</section>
+<div class="controls"><b>隠密の見え方：</b><button type="button" data-state="hidden" class="active">潜伏中</button><button type="button" data-state="near">敵が近づいた</button><button type="button" data-state="shot">攻撃した直後</button></div>
+<div class="status" id="status" aria-live="polite">潜伏中：自分のキャラクターは半透明。青緑の破線リングは敵に近距離発見される距離（130単位）を表す。</div>
+<div class="metrics">
+<div class="metric"><strong>×1.72</strong><span>現行2vs2比・マップ面積</span></div>
+<div class="metric"><strong>3 ROUTES</strong><span>上・中央・下で進路選択</span></div>
+<div class="metric"><strong>130</strong><span>近距離発見の試験半径</span></div>
+</div>
+<h2 class="title2">ENVIRONMENT ART / TACTICAL MINIMAL</h2>
+<div class="palette"><div class="swatch"><div class="swatch-demo floor"></div><div class="swatch-text"><b>01 / SURFACE</b><p>床は暗い無彩色。模様を抑え、射撃とキャラの判読性を優先。</p></div></div>
+<div class="swatch"><div class="swatch-demo wall"></div><div class="swatch-text"><b>02 / HARD COVER</b><p>硬いスレートの壁。細い上辺ハイライトと正確な輪郭。</p></div></div>
+<div class="swatch"><div class="swatch-demo bush"></div><div class="swatch-text"><b>03 / STEALTH FIELD</b><p>青緑の潜伏ゾーン。斜めラインで草と通常床を区別。</p></div></div></div>
+<footer>この案は <a href="./DESIGN_MAP_STEALTH_V1.md">設計仕様書</a>に対応する。現在のBRAWLの1vs1・2vs2の遊べるページは変更していない。地形とキャラ性能を同時に変えないことを前提に、次段階で実装・比較・反証する。</footer>
+</main>
+<script>
+(function(){
+'use strict';
+const canvas=document.getElementById('map'),ctx=canvas.getContext('2d'),status=document.getElementById('status');
+let state='hidden';const W=1360,H=760;
+const walls=[
+[320,170,112,110],[928,170,112,110],[320,480,112,110],[928,480,112,110],
+[535,305,85,150],[740,305,85,150],[612,140,136,56],[612,564,136,56]];
+const bushes=[
+[260,40,245,90],[855,40,245,90],[260,630,245,90],[855,630,245,90],
+[465,230,118,65],[777,230,118,65],[465,465,118,65],[777,465,118,65],
+[630,216,100,70],[630,474,100,70]];
+function rr(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+function write(text,x,y,color,size,align){ctx.save();ctx.font='800 '+size+'px system-ui';ctx.fillStyle=color;ctx.textAlign=align||'left';ctx.fillText(text,x,y);ctx.restore();}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,'#142431');bg.addColorStop(.5,'#0d1924');bg.addColorStop(1,'#152632');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle='rgba(110,155,173,.075)';ctx.lineWidth=1;
+ for(let x=34;x<W;x+=52){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+ for(let y=34;y<H;y+=52){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+ for(let i=0;i<3;i++){const y=[185,380,575][i];ctx.strokeStyle='rgba(108,201,211,.115)';ctx.lineWidth=2;ctx.setLineDash([12,19]);ctx.beginPath();ctx.moveTo(85,y);ctx.lineTo(W-85,y);ctx.stroke();ctx.setLineDash([]);}
+ write('NORTH ROUTE',680,65,'#557786',17,'center');write('MID ROUTE',680,397,'#3f6272',15,'center');write('SOUTH ROUTE',680,731,'#557786',17,'center');
+ for(const z of bushes){
+  const [x,y,w,h]=z;ctx.save();
+  ctx.fillStyle='#163a39';rr(x,y,w,h,10);ctx.fill();
+  ctx.strokeStyle='#368f7e';ctx.lineWidth=2;rr(x+1,y+1,w-2,h-2,10);ctx.stroke();
+  rr(x+5,y+5,w-10,h-10,7);ctx.clip();
+  ctx.strokeStyle='rgba(82,177,148,.30)';ctx.lineWidth=4;
+  for(let i=x-h;i<x+w+h;i+=27){ctx.beginPath();ctx.moveTo(i,y+h);ctx.lineTo(i+h,y);ctx.stroke();}
+  ctx.restore();
+ }
+ for(const w of walls){
+  const [x,y,ww,hh]=w;
+  ctx.fillStyle='rgba(1,9,16,.46)';rr(x+7,y+10,ww,hh,8);ctx.fill();
+  ctx.fillStyle='#283d4e';rr(x,y,ww,hh,8);ctx.fill();
+  ctx.fillStyle='#344e60';rr(x+4,y+5,ww-8,hh-11,5);ctx.fill();
+  ctx.fillStyle='#6d95a1';rr(x+5,y+5,ww-10,5,2);ctx.fill();
+  ctx.strokeStyle='#7595a3';ctx.lineWidth=1.6;rr(x+.8,y+.8,ww-1.6,hh-1.6,8);ctx.stroke();
+ }
+ // Spawn site markers and two pairs of team silhouettes.
+ for(const [x,y,team] of [[145,260,'blue'],[145,500,'blue'],[1215,260,'red'],[1215,500,'red']]){
+  const color=team==='blue'?'#69bed9':'#df8191';ctx.strokeStyle=color;ctx.globalAlpha=.52;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,43,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;
+  ctx.fillStyle=team==='blue'?'#143746':'#432835';rr(x-13,y-13,26,26,6);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=3;rr(x-13,y-13,26,26,6);ctx.stroke();
+ }
+ write('BLUE',61,163,'#8accdf',18);write('RED',1299,163,'#f6a0ab',18,'right');
+ // Visual perception demo. YOU is inside a real bush; enemy moves across proximity radius.
+ const px=385,py=90,near=state==='near',revealed=state!=='hidden',enemyX=near?488:700,enemyY=96;
+ ctx.save();ctx.strokeStyle=revealed?'#ecad70':'#79d7b9';ctx.lineWidth=3;
+ ctx.setLineDash([13,10]);ctx.beginPath();ctx.arc(px,py,130,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+ ctx.fillStyle=revealed?'rgba(238,166,100,.04)':'rgba(99,214,169,.045)';ctx.beginPath();ctx.arc(px,py,130,0,Math.PI*2);ctx.fill();ctx.restore();
+ const alpha=revealed?1:.45;
+ ctx.save();ctx.globalAlpha=alpha;ctx.shadowColor='#78f1cc';ctx.shadowBlur=14;
+ ctx.fillStyle='#132e3e';ctx.strokeStyle='#92f1e8';ctx.lineWidth=5;ctx.beginPath();ctx.arc(px,py,22,0,Math.PI*2);ctx.fill();ctx.stroke();
+ ctx.fillStyle='#4fd1db';rr(px-13,py-12,26,24,8);ctx.fill();ctx.restore();
+ ctx.strokeStyle='#e68f9a';ctx.lineWidth=4;ctx.fillStyle='#602938';ctx.beginPath();ctx.arc(enemyX,enemyY,19,0,Math.PI*2);ctx.fill();ctx.stroke();
+ write('BOT',enemyX,enemyY-32,'#f2adb6',14,'center');
+ write(state==='hidden'?'潜伏':near?'発見':'露出',px,py-34,revealed?'#f5c48a':'#9ce5d0',15,'center');
+ write('R 130',px+111,py-65,revealed?'#f5c48a':'#9ce5d0',12);
+ ctx.strokeStyle='rgba(166,216,232,.35)';ctx.strokeRect(5,5,W-10,H-10);
+}
+const msgs={
+ hidden:'潜伏中：自分のキャラクターは半透明。青緑の破線リングは敵に近距離発見される距離（130単位）を表す。',
+ near:'敵が130以内へ接近：ブッシュ内でも位置が見破られる。輪郭がオレンジに変わり、キャラクターは不透明になる。',
+ shot:'攻撃した直後：相手が離れていても約1.5秒間姿が見える。ブッシュ内に残れば、露出終了後に再び潜伏する。'
+};
+document.querySelectorAll('[data-state]').forEach(button=>button.addEventListener('click',()=>{
+ state=button.dataset.state;document.querySelectorAll('[data-state]').forEach(b=>b.classList.toggle('active',b===button));
+ status.textContent=msgs[state];draw();
+}));
+draw();
+})();
+</script></body></html>
