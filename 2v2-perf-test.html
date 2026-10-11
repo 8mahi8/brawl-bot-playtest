@@ -60,6 +60,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
 .battleAction{position:absolute;z-index:11;transform:translate(-50%,-50%);border:2px solid #58bee2;border-radius:50%;background:linear-gradient(#173e58,#134d67);color:#e3fcff;font-weight:900;font-size:10px;pointer-events:auto;touch-action:none;line-height:1.15}
 #ultAction{background:linear-gradient(#ffe7a4,#efad42);border-color:#ffe59b;color:#281c13}
 .battleAction:disabled{opacity:.46}
+#skillToast{position:absolute;z-index:18;bottom:39px;left:50%;transform:translateX(-50%);pointer-events:none;background:#092536ec;border:1px solid #56bcdc;border-radius:9px;padding:7px 12px;color:#e5faff;text-align:center;font-size:12px;font-weight:850;max-width:82%;white-space:normal;box-shadow:0 3px 16px #0005}
 #rematchPanel{position:absolute;z-index:24;top:34%;left:50%;transform:translate(-50%,-50%);width:min(360px,90%);padding:12px;border:1px solid #68849b;background:rgba(8,19,33,.96);border-radius:10px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}#rematchPanel strong{color:#ffe09b}#rematchStatus{font-size:11px;color:#bcd3e1}#gameBanner{min-width:122px}#roundInfo{white-space:nowrap}
 @media(max-width:540px){.hudCard{min-width:90px;padding:4px}.hudCard strong{font-size:10px}#gameBanner{font-size:10px;min-width:93px;padding:4px}.vital{font-size:10px}#roundInfo{font-size:8px!important}}
 
@@ -143,7 +144,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
  <div id="hud" class="hidden"><div class="hudCard ally"><div id="myLabel" class="hudName">YOU / タンク</div><div id="mySeat" class="hudSub">BLUE1</div><div class="hudHp"><i id="myHpFill"></i></div><div id="myHP" class="hudValue">180 / 180</div><div id="myReload" class="reloadStrip" aria-label="リロード進捗"><i></i><i></i><i></i></div><div id="myAmmo" class="hudSub">弾 3 / 3</div><div class="hudUlt"><i id="myUltFill"></i></div><div id="myUlt" class="hudSub">ULT 0% · GAD 2</div><div id="allySummary" class="teamRows"></div></div><div id="gameBanner">2vs2 · KNOCKOUT<small id="roundInfo">ROUND 1 · BLUE 0 - 0 RED</small></div><div class="hudCard enemy" id="teamList"><div id="enemyLabel" class="hudName">ENEMY TEAM</div><div id="enemyTeam" class="hudSub">RED</div><div id="enemySummary" class="teamRows"></div></div></div>
  <button id="botTools" class="hidden">BOT設定 ⚙</button><div id="networkStatus" class="hidden"></div>
  <div id="pauseBanner" class="hidden"></div>
- <div id="moveHint" class="hidden">左ドラッグ 移動 · 右タップ 自動射撃 · 右ドラッグ 手動射撃</div><button id="gadAction" class="battleAction hidden" disabled>GAD</button><button id="ultAction" class="battleAction hidden" disabled>ULT</button>
+ <div id="moveHint" class="hidden">左ドラッグ 移動 · 右タップ 自動射撃 · 右ドラッグ 手動射撃</div><button id="gadAction" class="battleAction hidden" disabled>GAD</button><button id="ultAction" class="battleAction hidden" disabled>ULT</button><div id="skillToast" class="hidden" aria-live="polite"></div>
  <div id="rematchPanel" class="hidden"><strong id="finalBanner">MATCH END</strong><button id="rematchBtn" class="btn primary inline">もう一度戦う（4人で承認）</button><div id="rematchStatus" class="minor">再戦の準備待ち</div></div>
  <button id="returnBtn" class="hidden">退出</button>
  <div id="layoutScreen" class="hidden"><div id="layoutHelp"><strong>BUTTON LAYOUT PREVIEW</strong>ガジェット・ウルトをドラッグで移動<br>
@@ -456,6 +457,7 @@ let suspendTask=Promise.resolve(),pageResumeBusy=false,pageResumeWanted=false;
 let connectionEpoch=0;
 // Requests survive initial listener ordering; predictions never decide HP.
 let pendingActions=new Map(),queuedActions=new Set(),predictedActions=new Set(),localPendingWrites=new Set(),failedLocalActions=new Set();
+let recentGadgetReceipts=new Set(),gadgetToastExpiry=0,lastGadgetPointerAt=-10000;
 let lobbyReady=false,gameReady=false,presenceReady=false,clockReady=false;
 const ACTION_LIMIT=250,ACTION_TTL=3000,ACTION_FUTURE=250;
 const sessionId=()=>{if(typeof crypto!=='undefined'&&crypto.randomUUID)return crypto.randomUUID().replaceAll('-','');return (Date.now().toString(36)+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));};
@@ -475,7 +477,7 @@ function applyLayout(){for(const k of ['gad','ult']){const el=$(k==='gad'?'mockG
  $('gadSize').value=layout.gad.size;$('ultSize').value=layout.ult.size;$('gadVal').textContent=layout.gad.size;$('ultVal').textContent=layout.ult.size;
 }
 function showScene(s){scene=s;$('app').dataset.scene=s;renderBotSetup();$('networkStatus').classList.toggle('hidden',s!=='game');for(const n of ['home','lobby'])$(n+'Screen').classList.toggle('hidden',s!==n);
- $('hud').classList.toggle('hidden',s!=='game');$('moveHint').classList.toggle('hidden',s!=='game');$('returnBtn').classList.toggle('hidden',s!=='game');$('pauseBanner').classList.toggle('hidden',s!=='game'||!paused);$('layoutScreen').classList.toggle('hidden',s!=='layout');$('gadAction').classList.toggle('hidden',s!=='game');$('ultAction').classList.toggle('hidden',s!=='game');$('rematchPanel').classList.toggle('hidden',s!=='game'||game?.phase!=='match_end');if(s==='layout'||s==='game')applyLayout();}
+ $('hud').classList.toggle('hidden',s!=='game');$('moveHint').classList.toggle('hidden',s!=='game');if(s!=='game'){$('skillToast').classList.add('hidden');gadgetToastExpiry=0;}$('returnBtn').classList.toggle('hidden',s!=='game');$('pauseBanner').classList.toggle('hidden',s!=='game'||!paused);$('layoutScreen').classList.toggle('hidden',s!=='layout');$('gadAction').classList.toggle('hidden',s!=='game');$('ultAction').classList.toggle('hidden',s!=='game');$('rematchPanel').classList.toggle('hidden',s!=='game'||game?.phase!=='match_end');if(s==='layout'||s==='game')applyLayout();}
 function status(msg){$(scene==='lobby'?'lobbyStatus':'homeStatus').textContent=msg;}
 function serverNow(){return Date.now()+clockOffset;}
 async function ensureDB(){throw Error('この公開試遊版ではオンライン通信を無効化しています。BOT練習を利用してください。');}function serverStamp(){return solo?Date.now():firebase.database.ServerValue.TIMESTAMP||Date.now();}
@@ -507,7 +509,14 @@ function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;co
  $('roundInfo').textContent='ROUND '+(game?.round||1)+' · BLUE '+(game?.scores?.blue||0)+' - '+(game?.scores?.red||0)+' RED'+(gasMargin()>0?' · GAS':'');
  if(game?.mode==='area'){$('roundInfo').textContent=`BLUE ${Math.floor((game.area?.blueMs||0)/BALANCE.areaCaptureMs*100)}% : ${Math.floor((game.area?.redMs||0)/BALANCE.areaCaptureMs*100)}% RED · ${Math.floor(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)/60)}:${String(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)%60).padStart(2,'0')}`;if(hp===0)$('myHP').textContent='復活まで '+Math.ceil(Math.max(0,(game.respawns?.[myId]||hudNow)-hudNow)/1000)+'秒';}
  $('gameBanner').firstChild.textContent=game?.mode==='area'?'2vs2 · HOT ZONE':'2vs2 · KNOCKOUT';
- const can=combatReady()&&!!hp&&hp>0&&!engine().flying(game,myId);$('gadAction').disabled=botPilot||!can||!(me?.gadgets>0);$('gadAction').textContent=me?.gadgets>0?'GAD '+me.gadgets:game?.mode==='area'?'GAD\n'+Math.ceil(Math.max(0,(me?.gadgetReadyAt||hudNow)-hudNow)/1000)+'秒':'GAD 0';
+ const can=combatReady()&&!!hp&&hp>0&&!engine().flying(game,myId);
+ const armedBomber=activeChar==='bomber'&&!!me?.armed;
+ const sniperInRange=activeChar!=='sniper'||SEATS.some(k=>{
+  const sid=lobby.seats?.[k]?.id;if(!sid||teamOfSeat(k)===myTeam()||!(game.hp?.[sid]>0))return false;
+  const p=targetPoint(sid);return Math.hypot(p.x-local.x,p.y-local.y)<=140;
+ });
+ const gad=$('gadAction');gad.disabled=botPilot||!can||!(me?.gadgets>0)||armedBomber||!sniperInRange;
+ gad.textContent=armedBomber?'GAD\n次弾強化中':!sniperInRange&&me?.gadgets>0?'GAD\n近距離限定':!can&&me?.gadgets>0?'GAD\n準備中':me?.gadgets>0?'GAD '+me.gadgets:game?.mode==='area'?'GAD\n'+Math.ceil(Math.max(0,(me?.gadgetReadyAt||hudNow)-hudNow)/1000)+'秒':'GAD 0';
  $('ultAction').disabled=botPilot||!can||!(me?.ult>=100);$('ultAction').classList.toggle('ready',!!(me?.ult>=100));$('ultAction').textContent=activeChar==='tank'?'JUMP':activeChar==='gunner'?'DRIVE':activeChar==='bomber'?'BOMB':'LASER';
  $('rematchBtn').disabled=!!lobby?.rematch?.[myId];$('rematchBtn').textContent=lobby?.rematch?.[myId]?'承認済み ✓':'もう一度戦う';$('rematchStatus').textContent='再戦希望 '+SEATS.filter(k=>lobby?.rematch?.[lobby?.seats?.[k]?.id]).length+' / 4';
 }
@@ -549,7 +558,7 @@ function attachRoom(){unwatch();lastSnapshotAt=0;snapshotGap=0;const thisRoom=ro
  watch(room.child('lobby'),'value',snap=>{lobby=snap.val();lobbyReady=true;if(!lobby||!mySeat()){if(joined){status('席が無効になったため退出しました');setTimeout(()=>{if(room===thisRoom)leave(false)},1000)}return;}
   ingestPositions();renderLobby();reconcileRoomView();if(lobby.status==='waiting')tryStart();});
  watch(room.child('presence'),'value',snap=>{presence=snap.val()||{};presenceReady=true;ingestPositions();renderLobby();checkPaused();drainActions();tryStart();});
- watch(room.child('game'),'value',snap=>{const snapshotNow=performance.now();if(lastSnapshotAt)snapshotGap=snapshotNow-lastSnapshotAt;lastSnapshotAt=snapshotNow;game=snap.val();WALLS=game?.mode==='area'?AREA_WALLS:KO_WALLS;BUSHES=game?.mode==='area'?AREA_BUSHES:KO_BUSHES;gameReady=true;reconcileRoomView();if(roundResetKey===game?.matchId+':'+game?.round){syncMotion();renderCombatEvents();}});
+ watch(room.child('game'),'value',snap=>{const snapshotNow=performance.now();if(lastSnapshotAt)snapshotGap=snapshotNow-lastSnapshotAt;lastSnapshotAt=snapshotNow;game=snap.val();WALLS=game?.mode==='area'?AREA_WALLS:KO_WALLS;BUSHES=game?.mode==='area'?AREA_BUSHES:KO_BUSHES;gameReady=true;reconcileRoomView();gadgetReceipts();if(roundResetKey===game?.matchId+':'+game?.round){syncMotion();renderCombatEvents();}});
  watch(room.child('positions'),'value',snap=>{rawPositions=snap.val()||{};positionsReady=true;ingestPositions();reconcileRoomView();});
  watch(room.child('actions'),'child_added',snap=>{const a=snap.val();if(a&&snap.key)acceptAction({...a,eventId:snap.key});});
  // Existing effect history must never move the returning player a second time.
@@ -699,6 +708,18 @@ function combatNow(){return game?.clock?.t||0;}
 function resolveBotSeats(seats){return Object.fromEntries(Object.entries(seats).map(([k,s])=>[k,{...s,char:s.bot&&CHARS[s.botNextChar]?s.botNextChar:s.char}]));}
 function makeGame(matchId,seats,mode='ko'){seats=resolveBotSeats(seats);const g=engines[mode==='area'?'area':'ko'].initialize(matchId,seats,mode,serverNow()+1800);g.hostToken=myConnection;return g;}
 function syncMotion(){if(!game?.motions?.[myId])return;const m=game.motions[myId];if(m.rev!==appliedMotionRev){local.x=m.x;local.y=m.y;local.a=m.a;local.vx=local.vy=0;appliedMotionRev=m.rev;sendPositionNow();}}
+function gadgetReceipts(){
+ if(!solo||scene!=='game'||!game?.usedActions)return;
+ for(const [key,receipt] of Object.entries(game.usedActions)){
+  if(receipt?.owner!==myId||receipt?.type!=='gadget'||recentGadgetReceipts.has(key))continue;
+  recentGadgetReceipts.add(key);
+  if(recentGadgetReceipts.size>80)recentGadgetReceipts.delete(recentGadgetReceipts.values().next().value);
+  const char=game.stats?.[myId]?.char;
+  const effects={tank:'タンク：前方ダッシュ！',gunner:'ガンナー：弾を補充・3秒間加速！',sniper:'スナイパー：近距離の敵を吹き飛ばす！',bomber:'ボマー：次の弾を強化！'};
+  $('skillToast').textContent=receipt.status==='accepted'?(effects[char]||'GAD発動！'):'GADを発動できませんでした';
+  $('skillToast').classList.remove('hidden');gadgetToastExpiry=performance.now()+2200;
+ }
+}
 function renderCombatEvents(){for(const [id,e]of Object.entries(game?.events||{})){if(seenEffects.has(id))continue;boundedRemember(seenEffects,id);if(combatNow()-e.at>350)continue;fx.push({...e,type:e.type==='jump'?'impact':e.type,t:.4});}}
 async function claimHost(){if(claimBusy||!isAuthoritative()||game?.hostToken===myConnection||presence[myId]?.[game?.hostToken])return;claimBusy=true;const match=game.matchId,token=myConnection;try{await room.child('game').transaction(g=>g?.matchId===match&&!presence[myId]?.[g.hostToken]?{...g,hostToken:token}:undefined,undefined,false);}finally{claimBusy=false;}}
 function inputSnapshot(){const input=structuredClone(positions);input[myId]={...local,matchId:game?.matchId,round:game?.round,motionRev:appliedMotionRev,life:game?.stats?.[myId]?.life||0};return input;}
@@ -867,7 +888,9 @@ function endPointer(e){if(pointer?.id===e.pointerId)pointer=null;if(aimPointer?.
  const angle=manual?Math.atan2(dy,dx):enemy?Math.atan2(enemy.y-local.y,enemy.x-local.x):local.a;shootAngle(angle,manual?clamp(dist/80*330,55,300):enemy?Math.hypot(enemy.x-local.x,enemy.y-local.y):300);
 }}
 canvas.addEventListener('pointerup',endPointer);canvas.addEventListener('pointercancel',endPointer);
-$('gadAction').addEventListener('click',()=>sendAction('gadget',local.a));
+// Touch/pen triggers on pointerdown: mobile browsers can drop delayed click after gesture cancellation.
+$('gadAction').addEventListener('pointerdown',e=>{if(e.pointerType==='touch'||e.pointerType==='pen'){e.preventDefault();lastGadgetPointerAt=performance.now();sendAction('gadget',local.a);}});
+$('gadAction').addEventListener('click',e=>{if(e.detail===0||performance.now()-lastGadgetPointerAt>700)sendAction('gadget',local.a);});
  $('ultAction').addEventListener('pointerdown',e=>{if(botPilot||!combatReady()||!alive(myId)||!(game.stats?.[myId]?.ult>=100))return;e.preventDefault();ultPointer={id:e.pointerId,x:e.clientX,y:e.clientY,ox:e.clientX,oy:e.clientY,dragged:false,cancelled:false};$('ultAction').setPointerCapture?.(e.pointerId);});
  $('ultAction').addEventListener('pointermove',e=>{if(ultPointer?.id!==e.pointerId)return;ultPointer.x=e.clientX;ultPointer.y=e.clientY;const dist=Math.hypot(e.clientX-ultPointer.ox,e.clientY-ultPointer.oy);if(dist>32)ultPointer.dragged=true;ultPointer.cancelled=ultPointer.dragged&&dist<20;});
  $('ultAction').addEventListener('pointerup',e=>{if(ultPointer?.id!==e.pointerId)return;const aim=ultPointer;ultPointer=null;if(aim.cancelled)return;const angle=aim.dragged?Math.atan2(aim.y-aim.oy,aim.x-aim.ox):local.a;const d=aim.dragged?clamp(Math.hypot(aim.x-aim.ox,aim.y-aim.oy)/80*330,55,330):310;sendAction('ultimate',angle,d);});
@@ -915,7 +938,7 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  if(scene==='game'&&!paused){const a=ultPointer?.dragged&&!ultPointer.cancelled?ultPointer:aimPointer?.dragged?aimPointer:null;if(a){const dx=a.x-a.ox,dy=a.y-a.oy,angle=Math.atan2(dy,dx),char=game?.stats?.[myId]?.char;ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);ctx.strokeStyle='#e2c7ff';ctx.setLineDash([8,6]);ctx.lineWidth=3;ctx.beginPath();if(char==='bomber'||a===ultPointer&&char==='tank'){const reach=clamp(Math.hypot(dx,dy)/80*330,55,char==='bomber'?BALANCE.bomberRange:330),p=engine().landing(local,angle,reach);ctx.arc(p.x,p.y,char==='tank'?76:a===ultPointer?90:65,0,Math.PI*2);}else{ctx.moveTo(local.x,local.y);ctx.lineTo(local.x+Math.cos(angle)*CHARS[char].range,local.y+Math.sin(angle)*CHARS[char].range);}ctx.stroke();ctx.restore();}}
  if(scene==='game'&&pointer&&!paused){const x=pointer.ox,y=pointer.oy;const dx=pointer.x-x,dy=pointer.y-y;ctx.strokeStyle='rgba(160,231,251,.6)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,43,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(107,220,245,.5)';ctx.beginPath();ctx.arc(x+clamp(dx,-44,44),y+clamp(dy,-44,44),18,0,7);ctx.fill();}
 }
-function frame(now){const dt=clamp((now-(lastFrame||now))/1000,0,.06);lastFrame=now;if(dt>0)fps=fps*.9+.1/dt;update(dt);updateBots(dt);if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}draw(dt);requestAnimationFrame(frame);}
+function frame(now){const dt=clamp((now-(lastFrame||now))/1000,0,.06);lastFrame=now;if(gadgetToastExpiry&&now>gadgetToastExpiry){gadgetToastExpiry=0;$('skillToast').classList.add('hidden');}if(dt>0)fps=fps*.9+.1/dt;update(dt);updateBots(dt);if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}draw(dt);requestAnimationFrame(frame);}
 
 function setLayoutDrag(k,e){if(scene!=='layout')return;e.preventDefault();const el=$(k==='gad'?'mockGad':'mockUlt');let active=e.pointerId;el.setPointerCapture?.(active);
  const move=ev=>{if(ev.pointerId!==active)return;const stage=$('app').getBoundingClientRect(),sz=layout[k].size;
