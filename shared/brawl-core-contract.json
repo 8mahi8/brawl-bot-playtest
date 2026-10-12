@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Canonical shared-rule contract for comparison; existing standalone HTML builds do not yet import this file. Do NOT describe this as a completed runtime single-source refactor.",
+  "note": "Canonical single-source shared stats and BALANCE for foundation/1v1-foundation-v1.html and foundation/2v2-foundation-v1.html. Legacy templates remain unchanged; only specified common functions are shared. Full combat engine and UI are not yet unified.",
   "sourceCandidates": [
     "1v1-combat-evolution-test.html",
     "2v2-ui-guardian-r4-test.html"
