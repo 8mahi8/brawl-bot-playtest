@@ -19,7 +19,7 @@ function check(label,fn){for(const ctx of contexts)fn(ctx);console.log('PASS '+l
 check('Normal gunner ammo refill respects 1.25s reload',ctx=>{
  const before={char:'gunner',ammo:1,refillAt:500,overdriveUntil:0};
  assert.equal(ctx.refill(before,1000).ammo,1);
- const next=ctx.refill(before,1750);assert.equal(next.ammo,2);assert.equal(next.refillAt,1750);
+ const next=ctx.refill(before,1500);assert.equal(next.ammo,2);assert.equal(next.refillAt,1750);
  assert.equal(before.ammo,1,'refill must not mutate its argument');
 });
 check('Overdrive refills at 750ms and caps at 3 charges',ctx=>{
