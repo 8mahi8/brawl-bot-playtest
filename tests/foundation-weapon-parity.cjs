@@ -30,7 +30,8 @@ gun.calls.forEach((shot,i)=>{near(shot.angle,c.common.weaponRules.gunnerSpread[i
 assert.deepEqual(legacy(5,'gunner').delays,[0,57,114]);
 const module2=slice(scripts[1],'/* BEGIN COMBAT CORE','/* END COMBAT CORE');
 const weapon2=slice(scripts[1],'/* BEGIN SHARED WEAPON RULES */','/* END SHARED WEAPON RULES */');
-const env={structuredClone};vm.runInNewContext(module2+'\n'+weapon2,env);
+const match2=slice(scripts[1],'/* BEGIN SHARED MATCH STATE */','/* END SHARED MATCH STATE */');
+const env={structuredClone};vm.runInNewContext(module2+'\n'+weapon2+'\n'+match2,env);
 const a=scripts[1].indexOf('const CHARS='),b=scripts[1].indexOf('let WALLS=',a),sp=scripts[1].match(/^const SPAWNS=.*$/m)?.[0];
 assert(a>=0&&b>a&&sp,'character block');
 const {CHARS,SPAWNS}=new Function('BALANCE',scripts[1].slice(a,b)+'\n'+sp+'\nreturn {CHARS,SPAWNS}')(env.BrawlCombatV8.balance);
