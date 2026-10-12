@@ -1,4 +1,4 @@
-# BRAWL 共通開発基盤 V1
+# BRAWL 共通開発基盤 V1.2
 
 **実装済み:** 1vs1と2vs2のビルドで同じ数値・共通の実戦関数を使用し、GitHub Actionsで自動比較・回帰テストを実行できる。
 
@@ -9,6 +9,9 @@
 - [brawl-core-contract.json](./brawl-core-contract.json) — キャラ性能・共通BALANCEの唯一の設定源。ここを編集すると両モードへ反映。
 - [brawl-build-modes.json](./brawl-build-modes.json) — マップ固有の設定、キャラ表示名、1vs1の既存ウルト補足、入力テンプレート・生成先。
 - [combat-primitives.inc.js](./runtime/combat-primitives.inc.js) — 両モードの減衰ダメージ・ジャンプ時間計算の**同じ実行コード**。
+- [projectile-physics.inc.js](./runtime/projectile-physics.inc.js) — 1vs1の従来の弾と両V8ホストエンジンに同じ分割移動/衝突/距離減衰を適用。
+- [combat-actions.inc.js](./runtime/combat-actions.inc.js) — 両V8エンジンの弾薬補充・射撃の弾生成を一つのコードで管理。
+- [weapon-rules.inc.js](./runtime/weapon-rules.inc.js) — 散弾の広がり・3連射の間隔・強化リロード・弾速・スナイパーGAD距離を共通化。
 - [stealth-visibility.inc.js](./runtime/stealth-visibility.inc.js) — 両モードの潜伏判定の**同じ実行コード**。
 - [1vs1テンプレート](../src/modes/1v1.template.html) / [2vs2テンプレート](../src/modes/2v2.template.html) — モード固有の画面・戦闘・BOT処理。歴史的試遊ページを変更しないため、独立した開発ソースとしてコピー済み。
 - [build-brawl.cjs](../scripts/build-brawl.cjs) — 共有ソースを2つのテンプレートに埋め込み、[1vs1](../foundation/1v1-foundation-v1.html) と [2vs2](../foundation/2v2-foundation-v1.html) のスタンドアロンHTMLを生成。
@@ -24,6 +27,6 @@
 
 ## 未完了を明示
 
-2つの戦闘ランタイムの内部はまだ別実装。射撃の発生位置・角度、ウルト強化リロード、スナイパーガジェット・BOTなどに**既知の挙動差**がある。共通化済みと誤認しない。今後の構造統合は、両モードの回帰検査を整えた上で段階的に行う。
+射撃の角度・発射タイミング・弾薬補充・命中・弾の距離減衰までは共有済み。ただし**HP確定と再生・ガジェット/ウルト全体・試合の同期権限・BOT戦術・画面UI**はまだモード別に残る。共通化済みと誤認しない。今後の構造統合は、両モードの回帰検査を整えた上で段階的に行う。
 
 学校iPad SafariやFirebase本番の4人同期は未確認。生成ページはオフラインBOT候補。
