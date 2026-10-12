@@ -48,6 +48,15 @@ for(const name of Object.keys(settings.modes)){
  assert(changed.includes('tankNearDamage:12'),'damage propagated to '+name);
  assert.notEqual(changed,sources[name],'damage makes rebuilt output differ '+name);
 }
+const nextAbility=structuredClone(contract);
+nextAbility.common.abilityRules.sniperLaserMs=720;
+for(const name of Object.keys(settings.modes)){
+ const changed=render(name,null,nextAbility);
+ assert(changed.includes('sniperLaserMs:720'),'shared ULT timer propagates to '+name);
+ assert(!changed.includes('sniperLaserMs:600'),'old sniper timer does not remain in '+name);
+ assert.notEqual(changed,sources[name],'ability contract affects '+name+' generated output');
+}
+console.log('PASS: common GAD/ULT contract edits propagate to both game builds');
 // No accidental mode cross-wiring: HP/character changes must not rewrite legacy templates.
 assert.equal(settings.modes['1vs1'].template,'src/modes/1v1.template.html');
 assert.equal(settings.modes['2vs2'].template,'src/modes/2v2.template.html');
