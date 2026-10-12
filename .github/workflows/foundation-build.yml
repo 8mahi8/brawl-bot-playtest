@@ -1,0 +1,58 @@
+name: BRAWL foundation build and regression
+on:
+  push:
+    paths:
+      - 'shared/brawl-core-contract.json'
+      - 'shared/brawl-build-modes.json'
+      - '1v1-combat-evolution-test.html'
+      - '2v2-ui-clean-r4-1-test.html'
+      - 'foundation/1v1-foundation-v1.html'
+      - 'foundation/2v2-foundation-v1.html'
+      - 'scripts/build-brawl.cjs'
+      - 'tests/foundation-*.cjs'
+      - '.github/workflows/foundation-build.yml'
+  pull_request:
+    paths:
+      - 'shared/brawl-core-contract.json'
+      - 'shared/brawl-build-modes.json'
+      - '1v1-combat-evolution-test.html'
+      - '2v2-ui-clean-r4-1-test.html'
+      - 'foundation/**'
+      - 'scripts/build-brawl.cjs'
+      - 'tests/foundation-*.cjs'
+      - '.github/workflows/foundation-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shared-game-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Both generated pages must exactly match single shared contract and source templates
+        run: node scripts/build-brawl.cjs --check
+      - name: Prove one shared configuration edit propagates to BOTH builds
+        run: node tests/foundation-build-smoke.cjs
+      - name: 2vs2 gameplay and clean interface regression
+        run: node tests/foundation-2v2-gameplay.cjs
+      - name: Install browser runner and Japanese fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+      - name: Generated 1vs1 desktop and tablet BOT playtest
+        run: node tests/foundation-1v1-browser.cjs
+      - name: Generated 2vs2 PC + three mobile UI and BOT playtests
+        run: node tests/foundation-2v2-browser.cjs
+      - name: Store generated-build screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brawl-foundation-1v1-2v2-screen-previews
+          path: artifacts/foundation-v1-*.png
+          if-no-files-found: ignore
+          retention-days: 7
