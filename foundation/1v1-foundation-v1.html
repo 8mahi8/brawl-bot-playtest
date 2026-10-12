@@ -484,7 +484,7 @@
   function motion(g,id,p){const rev=(g.motions[id]?.rev||0)+1;g.motions[id]={rev,x:p.x,y:p.y,a:p.a||0};return rev;}
   function move(p,dx,dy){const q={...p};for(let i=0;i<24;i++){const x=clamp(q.x+dx/24,R,W-R),y=clamp(q.y+dy/24,R,H-R);if(!wall(x,q.y))q.x=x;if(!wall(q.x,y))q.y=y;}return q;}
   function landing(p,a,reach=310){const d=clamp(reach,55,330),x=clamp(p.x+Math.cos(a)*d,R+4,W-R-4),y=clamp(p.y+Math.sin(a)*d,R+4,H-R-4);return {x,y,a,valid:!wall(x,y,R+4)};}
-  function ammo(s,t){const q={...s},rate=q.char==='gunner'&&q.overdriveUntil>t?750:chars[q.char].reload;
+  function ammo(s,t){const q={...s},rate=q.char==='gunner'&&q.overdriveUntil>t?BrawlWeaponV1.overdriveReloadMs:chars[q.char].reload;
    if(q.ammo>=3){q.ammo=3;q.refillAt=0;return q;}
    if(q.refillAt>0&&t>=q.refillAt){const n=Math.floor((t-q.refillAt)/rate)+1;q.ammo=Math.min(3,q.ammo+n);q.refillAt=q.ammo===3?0:q.refillAt+n*rate;}return q;
   }
@@ -492,8 +492,8 @@
    for(const k of seatKeys){const p=seats[k];hp[p.id]=chars[p.char].hp;stats[p.id]={char:p.char,ammo:3,refillAt:0,ult:0,gadgets:mode==='area'?1:2,gadgetReadyAt:0,boostUntil:0,overdriveUntil:0,lastShotAt:0,lastActionSeq:0,life:0,armed:false};motions[p.id]={rev:0,...spawns[k]};}
    return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
   }
-  function burst(a,s,g){const spread=s.char==='tank'?[-.2,-.1,0,.1,.2]:s.char==='gunner'?[-.075,0,.075]:[0],seat=seatOf(g,a.owner);
-   return spread.map((d,i)=>({id:a.eventId+':'+i,owner:a.owner,ownerLife:s.life,team:team(seat),x:a.x+Math.cos(a.angle)*28,y:a.y+Math.sin(a.angle)*28,vx:Math.cos(a.angle+d)*660,vy:Math.sin(a.angle+d)*660,dist:0,range:chars[s.char].range,radius:s.char==='sniper'?5:6,damage:chars[s.char].damage,char:s.char}));
+  function burst(a,s,g){const spread=BrawlWeaponV1.spread(s.char),seat=seatOf(g,a.owner);
+   return spread.map((d,i)=>({id:a.eventId+':'+i,owner:a.owner,ownerLife:s.life,team:team(seat),x:a.x+Math.cos(a.angle)*28,y:a.y+Math.sin(a.angle)*28,vx:Math.cos(a.angle+d)*BrawlWeaponV1.bulletSpeed,vy:Math.sin(a.angle+d)*BrawlWeaponV1.bulletSpeed,dist:0,range:chars[s.char].range,radius:s.char==='sniper'?5:6,damage:chars[s.char].damage,char:s.char}));
   }
   function flying(g,id){return Object.values(g.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===id&&u.ownerLife===g.stats[id]?.life);}
   function receipt(a,now,status,reason){return {owner:a.owner,seq:a.seq,type:a.type,at:a.at,acceptedAt:now,status,reason:reason||''};}
@@ -614,6 +614,18 @@
 })(typeof globalThis==='object'?globalThis:this);
 
 /* END COMBAT CORE */
+/* BEGIN SHARED WEAPON RULES */
+// Source of truth for common 1vs1/2vs2 weapon timing, spread and gadget knockback.
+// This is inserted into BOTH standalone game HTML files by build-brawl.cjs.
+// __*__ placeholders are replaced exclusively with shared/brawl-core-contract.json.
+const BrawlWeaponV1=Object.freeze({
+ spread(char){return char==='tank'?[-0.2,-0.1,0,0.1,0.2]:char==='gunner'?[-0.075,0,0.075]:[0];},
+ gapMs(overdrive){return overdrive?57:105;},
+ overdriveReloadMs:750,
+ sniperKnockback:120,
+ bulletSpeed:660
+});
+/* END SHARED WEAPON RULES */
 /* BEGIN BOMBER CORE */
 /* Pure 1vs1 bomb reducer: persisted flights and DOT, one atomic HP decision. */
 (function(root){'use strict';
@@ -1401,16 +1413,17 @@
     if(char==='bomber'){const actor={x,y};const target=owner===role?getRemotePredicted():local;throwBomb(owner,actor,angle,Math.hypot(target.x-x,target.y-y),false);return;}
     if(ult || char==='sniper')emitOneShot(owner,x,y,angle,ult,round);
     else if(char==='tank'){
-      for(const spread of [-.23,-.115,0,.115,.23])emitOneShot(owner,x,y,angle+spread,false,round);
+      for(const spread of BrawlWeaponV1.spread('tank'))emitOneShot(owner,x,y,angle+spread,false,round);
     } else {
       // Three-round burst, one ammo charge. Cancel if a new round begins.
-      for(let i=0;i<3;i++){
+      const angles=BrawlWeaponV1.spread('gunner'),gap=BrawlWeaponV1.gapMs(actorOverdrive(owner)>0);
+      for(let i=0;i<angles.length;i++){
         const send=()=>{
           if(!game||game.phase!=='playing'||game.round!==round||!isPlaying())return;
-          const actor=owner===role?local:remote;
-          emitOneShot(owner,actor.x,actor.y,angle,false,round);
+          // Always use the initial muzzle position, matching host-validated 2vs2 bursts.
+          emitOneShot(owner,x,y,angle+angles[i],false,round);
         };
-        if(i===0)send();else setTimeout(send,i*(actorOverdrive(owner)>0?57:105));
+        if(i===0)send();else setTimeout(send,i*gap);
       }
     }
     markAttack(owner);
@@ -1519,8 +1532,8 @@
     shotReveal[p.owner]=time()+REVEAL_MS;
     if(isHost&&!solo&&p.owner!==role)markAttack(p.owner);
     const s=CHARS[currentChar(p.owner)];
-    const b={id:p.id,owner:p.owner,x:p.x,y:p.y,
-      vx:Math.cos(p.angle)*(p.ult?960:660),vy:Math.sin(p.angle)*(p.ult?960:660),
+    const b={id:p.id,owner:p.owner,x:p.x+Math.cos(p.angle)*28,y:p.y+Math.sin(p.angle)*28,
+      vx:Math.cos(p.angle)*(p.ult?960:BrawlWeaponV1.bulletSpeed),vy:Math.sin(p.angle)*(p.ult?960:BrawlWeaponV1.bulletSpeed),
       dist:0,range:p.ult?s.ultRange:s.range,
       damage:p.ult?s.ultDamage:s.damage,radius:p.ult?s.ultRadius:(s===CHARS.sniper?5:6),ult:!!p.ult,
       char:currentChar(p.owner),sniper:!p.ult&&currentChar(p.owner)==='sniper'};
@@ -1600,7 +1613,7 @@
     }
     if(solo){if(type==='sniper'){const d=Math.hypot(remote.x-local.x,remote.y-local.y);
       if(d<=140){const a=Math.atan2(remote.y-local.y,remote.x-local.x);
-        for(let i=0;i<16;i++)moveWithWall(remote,Math.cos(a)*10,Math.sin(a)*10);
+        for(let i=0;i<BrawlWeaponV1.sniperKnockback/10;i++)moveWithWall(remote,Math.cos(a)*10,Math.sin(a)*10);
         applySoloDamage('guest',10,'host',remote.x,remote.y);}}}
     else ref.child('gadgets').push().set({round:game.round,owner:role,type:type==='tank'?'dash':type==='gunner'?'boost':'shockwave',
       x:local.x,y:local.y,angle:local.angle}).catch(e=>alertStatus('ガジェットの送信に失敗',e));
@@ -1634,7 +1647,7 @@
     if(botPilot)runBot(dt,local,remote,false);
     local.vx=(local.x-oldX)/dt;local.vy=(local.y-oldY)/dt;
     if(local.ammo<3){
-      local.reload+=dt*(local.overdrive>0?1.8:1);
+      local.reload+=dt*(local.overdrive>0?CHARS.gunner.reload*1000/BrawlWeaponV1.overdriveReloadMs:1);
       const t=CHARS[local.char].reload;
       if(local.reload>=t) {local.ammo++;local.reload-=t;updateHUD();}
     }else local.reload=0;
@@ -2261,7 +2274,7 @@
     brain.fire-=dt;brain.strafeTime-=dt;
     brain.boost=Math.max(0,brain.boost-dt);brain.overdrive=Math.max(0,(brain.overdrive||0)-dt);
     if(brain.strafeTime<=0){brain.strafeTime=level==='hard'? .8:1.5;brain.strafe=Math.random()<.5?-1:1;}
-    if(offline&&brain.ammo<3){brain.reload+=dt*(brain.overdrive>0?1.8:1);if(brain.reload>=spec.reload){brain.ammo++;brain.reload-=spec.reload;}}
+    if(offline&&brain.ammo<3){brain.reload+=dt*(brain.overdrive>0?CHARS.gunner.reload*1000/BrawlWeaponV1.overdriveReloadMs:1);if(brain.reload>=spec.reload){brain.ammo++;brain.reload-=spec.reload;}}
     if(offline&&brain.ammo>=3)brain.reload=0;
 
     // Never flee into poison just to maintain ideal sniper range.
