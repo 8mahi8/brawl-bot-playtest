@@ -544,7 +544,7 @@ html,body,#app{background:#081720;color:#ecf7f5}
  // Gemini向け: 反応/射撃間隔は共通戦闘時計(ms)、誤差は角度(rad)。
  const BOT_BALANCE={easy:{shotMs:1000,error:.16,lead:.2},normal:{shotMs:550,error:.07,lead:.6},hard:{shotMs:330,error:.025,lead:.9},repathMs:650,grid:40};
  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
- function create({chars,walls,bushes,spawns,seatKeys}){
+ function create({chars,walls,bushes,spawns,seatKeys,areaRadius=118}){
   const W=1536,H=860;const team=k=>k?.startsWith('blue')?'blue':'red',blocked=(x,y,r=20)=>x<r||x>W-r||y<r||y>H-r||walls.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);
   const bush=p=>bushes.some(b=>p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h);
   function segment(a,b,r=20){const n=Math.ceil(distance(a,b)/10);for(let i=0;i<=n;i++)if(blocked(a.x+(b.x-a.x)*i/(n||1),a.y+(b.y-a.y)*i/(n||1),r))return false;return true;}
@@ -631,7 +631,12 @@ html,body,#app{background:#081720;color:#ecf7f5}
     .filter(e=>e.p&&root.BrawlStealthV1.visible({viewer:actor,target:e.p,concealed:bush(e.p),revealedUntil:g.reveals?.[e.id]||0,now:t}))
     .filter(e=>!(g.protection?.[e.id]>t)&&!Object.values(g.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===e.id&&u.ownerLife===g.stats[e.id].life))
     .sort((a,b)=>distance(actor,a.p)-distance(actor,b.p));
-   const target=visible[0]||null,d=target?distance(actor,target.p):Infinity;
+   // Enemies standing inside AREA are the first priority, except an immediate
+    // close-range attacker. Invisible enemies never enter this selection.
+    const center={x:W/2,y:H/2};
+    const pointEnemy=g.mode==='area'?visible.find(e=>distance(e.p,center)<areaRadius+34):null;
+    const target=pointEnemy&&(!visible[0]||distance(actor,visible[0].p)>145)?pointEnemy:visible[0]||null;
+    const d=target?distance(actor,target.p):Infinity;
    // Never use an invisible enemy's true coordinates. Memory is a past visible position.
    if(target)brain.lastSeen={x:target.p.x,y:target.p.y,id:target.id,at:t};
    else if(brain.lastSeen&&t-brain.lastSeen.at>2200)brain.lastSeen=null;
@@ -675,9 +680,18 @@ html,body,#app{background:#081720;color:#ecf7f5}
    }else if(brain.lastSeen){
     goal={x:brain.lastSeen.x,y:brain.lastSeen.y};brain.tactic='investigate';
    }
-   if(g.mode==='area'&&!target&&!brain.lastSeen&&!brain.recovering){
-    goal={x:W/2+(team(mine)==='blue'?-55:55),y:mine.endsWith('1')?H/2-65:H/2+65};
-    brain.tactic='capture';
+   if(g.mode==='area'&&!brain.recovering){
+    // One teammate captures while the other can screen the perimeter.
+    // If no ally occupies the point, never abandon the objective to chase.
+    const teammateOnPoint=allies.some(a=>distance(a.p,center)<areaRadius-25);
+    const onPoint=distance(actor,center)<areaRadius-34;
+    const pointContested=visible.some(e=>distance(e.p,center)<areaRadius+22);
+    const threatened=!!target&&d<155;
+    const anchor={x:center.x+(team(mine)==='blue'?-43:43),y:center.y+(mine.endsWith('1')?-41:41)};
+    if(!teammateOnPoint&&!threatened){
+     if(!onPoint){goal=anchor;brain.tactic=pointContested?'contest':'capture';}
+     else if(!pointContested){goal=anchor;brain.tactic='hold';}
+    }
    }
    const margin=g.mode==='area'?0:clamp((t-28000)/1000*9,0,380);
    goal={x:clamp(goal.x,margin+25,W-25-margin),y:clamp(goal.y,Math.min(H/2-10,margin+25),Math.max(H/2+10,H-25-margin))};
@@ -1502,7 +1516,7 @@ window.addEventListener('pageshow',async()=>{
 });
 /* BOT RUNTIME */
 /* HTML内へ埋め込むBOT driver。通常のposition/action購読を通し、HPは直接変更しない。 */
-const botEngines={ko:BrawlBotV9.create({chars:CHARS,walls:KO_WALLS,bushes:KO_BUSHES,spawns:SPAWNS,seatKeys:SEATS}),area:BrawlBotV9.create({chars:CHARS,walls:AREA_WALLS,bushes:AREA_BUSHES,spawns:SPAWNS,seatKeys:SEATS})};
+const botEngines={ko:BrawlBotV9.create({chars:CHARS,walls:KO_WALLS,bushes:KO_BUSHES,spawns:SPAWNS,seatKeys:SEATS}),area:BrawlBotV9.create({chars:CHARS,walls:AREA_WALLS,bushes:AREA_BUSHES,spawns:SPAWNS,seatKeys:SEATS,areaRadius:BALANCE.areaRadius})};
 function controlledBotIds(){if(!joined||!lobby)return [];return SEATS.map(k=>lobby.seats?.[k]).filter(s=>s?.bot&&(solo||botPilot&&s.id===myId)).map(s=>s.id);}
 function startSolo(){if(joined||connecting||leaveBusy)return;
  liveDB=db;solo=true;botPilot=false;botActors={};botPanelOpen=false;botRowsKey='';myId=sessionId();roomId='SOLO';myConnection='';clockOffset=0;connected=false;pageSuspended=false;
