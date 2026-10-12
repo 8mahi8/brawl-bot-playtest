@@ -553,11 +553,10 @@
     if(t>=d.slowUntil&&t>d.dotUntil)delete g.debuffs[v];
    }
    if(g.mode!=='area'&&t>=g.gasNextAt){const m=clamp((t-28000)/1000*9,0,302);for(const k of seatKeys){const id=g.seats[k].id,p=targets[id];if(m>0&&(p.x<m||p.x>W-m||p.y<m||p.y>H-m))hit('gas:'+g.gasNextAt+':'+id,'gas',id,10);}g.gasNextAt+=1000;}
-   for(const h of hits){if(!(g.hp[h.victim]>0))continue;const amount=Math.min(h.amount,g.hp[h.victim]);g.hp[h.victim]-=amount;
-    if(g.stats[h.owner])g.stats[h.owner].ult=Math.min(100,g.stats[h.owner].ult+amount*.48);
-    g.stats[h.victim].ult=Math.min(100,g.stats[h.victim].ult+amount*(g.stats[h.victim].char==='tank'?.44:.24));g.reveals[h.victim]=t+1500;
-    if(h.enhanced)g.debuffs[h.victim]={life:g.stats[h.victim].life,owner:h.owner,slowUntil:t+BALANCE.bomberSlowMs,dotUntil:t+BALANCE.bomberDotMs,dotNextAt:t+BALANCE.bomberDotEveryMs,dotId:h.key};
-    emit('hit',{owner:h.owner,victim:h.victim,amount,x:targets[h.victim].x,y:targets[h.victim].y});
+   for(const h of hits){
+    const result=BrawlMatchV1.applyHit(g,h,t,BALANCE);
+    if(!result)continue;
+    emit('hit',{owner:h.owner,victim:h.victim,amount:result.amount,x:targets[h.victim].x,y:targets[h.victim].y});
    }
    g.usedHits=bounded(g.usedHits);
    for(const k of seatKeys){const id=g.seats[k].id;
@@ -568,17 +567,7 @@
      const s=g.stats[id];s.life++;s.ammo=3;s.refillAt=0;s.boostUntil=0;s.overdriveUntil=0;s.armed=false;g.hp[id]=chars[s.char].hp;delete g.respawns[id];delete g.debuffs[id];g.protection[id]=t+BALANCE.areaSpawnShieldMs;delete g.reveals[id];motion(g,id,spawns[k]);targets[id]={...spawns[k]};emit('respawn',{owner:id,x:spawns[k].x,y:spawns[k].y});
     }
    }
-   if(g.mode==='area'){
-    const inside={blue:0,red:0};for(const k of seatKeys){const id=g.seats[k].id,p=targets[id];if(g.hp[id]>0&&!(g.protection[id]>t)&&!flying(g,id)&&Math.hypot(p.x-500,p.y-300)<=BALANCE.areaRadius)inside[team(k)]++;}
-    const a=g.area,contested=inside.blue>0&&inside.red>0;a.occupants=inside;a.contested=contested;
-    if(!contested){if(inside.blue)a.blueMs=Math.min(BALANCE.areaCaptureMs,a.blueMs+dt);if(inside.red)a.redMs=Math.min(BALANCE.areaCaptureMs,a.redMs+dt);}
-    let winner=null;if(a.blueMs===BALANCE.areaCaptureMs||a.redMs===BALANCE.areaCaptureMs)winner=a.blueMs===a.redMs?'draw':a.blueMs===BALANCE.areaCaptureMs?'blue':'red';
-    else if(t>=BALANCE.areaLimitMs)winner=a.blueMs===a.redMs?'draw':a.blueMs>a.redMs?'blue':'red';
-    if(winner){g.phase='match_end';g.winner=winner;g.endedAt=wallNow;if(winner!=='draw')g.scores[winner]=1;}
-   }else{
-    const live={blue:0,red:0};for(const k of seatKeys)if(g.hp[g.seats[k].id]>0)live[team(k)]++;
-    if(!live.blue||!live.red){const winner=!live.blue&&!live.red?'draw':!live.blue?'red':'blue';if(winner!=='draw')g.scores[winner]++;g.phase=winner!=='draw'&&g.scores[winner]>=2?'match_end':'round_end';g.winner=winner;g.endedAt=wallNow;}
-   }
+   BrawlMatchV1.resolve(g,{seatKeys,teamOf:team,targets,flying,center:{x:W/2,y:H/2},dt,t,wallNow,balance:BALANCE});
    // Action receipts are short lived. Monotonic player seq remains after pruning.
    g.usedActions=Object.fromEntries(Object.entries(g.usedActions).filter(([,r])=>wallNow-r.acceptedAt<3500));
    return g;
