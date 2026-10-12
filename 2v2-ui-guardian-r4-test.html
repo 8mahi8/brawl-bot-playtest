@@ -125,6 +125,93 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
 #miniMap{display:block;width:clamp(105px,17vw,164px);height:auto;aspect-ratio:1360/760;background:#132531;border-radius:5px;pointer-events:none}
 #cameraToggle{display:block;width:100%;font-size:10px;font-weight:800;border-radius:5px;background:#1d3b4a;border:1px solid #587e87;padding:5px 3px;margin-top:5px;touch-action:manipulation}
 @media(max-width:500px){#mapDock{right:5px;top:93px;padding:4px}#miniMap{width:106px}#cameraToggle{font-size:9px;padding:3px 2px}}
+
+
+/* BRAWL R4 — restrained, readable tactical UI; single modern design system. */
+:root{--bg:#081720;--ink:#ebf8f6;--accent:#82edda;--ally:#78e9dd;--enemy:#fb8597;--gold:#ffd17b;--panel:rgba(9,25,34,.9);--line:rgba(128,184,191,.27);--muted:#abc3ca}
+html,body,#app{background:#081720;color:#ecf7f5}
+.screen{background:radial-gradient(ellipse at 22% 0%,#1a4050 0%,transparent 50%),linear-gradient(160deg,#0c2230,#081620);padding:clamp(8px,2vmin,20px)}
+.screen h1{font-size:clamp(23px,3.7vw,34px);letter-spacing:.075em}
+.screen h1 em{color:#8bf5de}
+#navLine{color:#7fe8d5;letter-spacing:.22em;font-weight:900}
+.sub,#hint{color:#a9c5cb;line-height:1.6}
+.btn,.btn.inline{background:#16313e;border:1px solid #466b78;border-radius:12px;color:#e8f8fa;min-height:40px;box-shadow:none}
+#soloBtn,#readyBtn{background:#88edda!important;border:1px solid #b2ffeb!important;color:#103337!important;font-weight:950;box-shadow:0 7px 22px #15c3a42b!important}
+.charPick{gap:7px}
+.charPick button{background:#132b36;border:1px solid #3a5d69;border-radius:10px;color:#cee1e6;font-size:12px;font-weight:850;padding:9px 12px}
+.charPick button.active{background:#1f534d;border-color:#84f7df;color:white;box-shadow:inset 0 0 0 1px #4b8c7d}
+#abilityGuide{background:#112936;border:1px solid #396473;border-radius:11px;padding:8px 11px;color:#daf0f1;max-height:80px;overflow:auto;touch-action:pan-y;font-size:11px;line-height:1.55}
+.teamPane{background:#102834;border:1px solid #3a5863;border-radius:12px}
+.teamPane.blue{border-top:2px solid #7df2e5}.teamPane.red{border-top:2px solid #fb8a9c}
+.seat{background:#0c202b;border:1px solid #314b56;border-radius:8px}
+.seat.mine{background:#194643;border-color:#88ebd8}
+#hud{z-index:10;top:7px;left:8px;right:8px;gap:5px;align-items:flex-start}
+.hudCard{background:rgba(8,25,34,.91);border:1px solid #4b6872;border-radius:13px;padding:9px 11px;width:clamp(130px,21vw,204px);box-shadow:0 6px 20px #0004;backdrop-filter:blur(5px)}
+.hudName{color:#e7f8f6;font-size:clamp(10px,1.4vw,13px);font-weight:950;letter-spacing:.06em}
+.hudSub{color:#b2cbd0;font-size:10px;line-height:1.4}
+.hudValue{font-size:clamp(13px,2vw,18px);font-weight:950;letter-spacing:.02em}
+.hudHp{height:10px;margin:6px 0 3px;background:#193640;border:0;border-radius:6px}
+.hudHp>i{background:linear-gradient(90deg,#27ad8f,#8ff9cd);border-radius:6px}
+.reloadStrip{height:7px;gap:4px;margin:3px 0}
+.hudUlt{height:5px;background:#23404a;border:0;border-radius:3px}
+.hudUlt>i{background:linear-gradient(90deg,#dca051,#ffe79b)}
+.teamRows{color:#a8c5cc;margin-top:4px;padding-top:4px;border-top:1px solid #4b728055;font-size:9px;line-height:1.4}
+#gameBanner{background:rgba(8,25,33,.9);border:1px solid #456371;border-radius:13px;padding:8px 10px;min-width:125px;max-width:34%;font-size:12px;font-weight:950;color:#ebf9f8;letter-spacing:.06em}
+#roundInfo{font-size:10px!important;color:#f6d595!important;white-space:normal;line-height:1.35;letter-spacing:0}
+#guardMeter{margin-top:4px;border:1px solid #3da790;background:#1c5048;border-radius:7px;padding:4px 6px;color:#a9ffea;font-size:10px;font-weight:950;white-space:normal}
+#myBuff{font-weight:850;color:#a1f7e2}
+#mapDock{z-index:13;right:8px;top:clamp(96px,15vh,132px);min-width:81px;padding:5px;border:1px solid #476a76;border-radius:12px;background:rgba(9,26,35,.96);box-shadow:0 7px 20px #0003}
+#mapDock.compact{padding:0;min-width:81px}
+#mapExpand{display:block;width:100%;min-height:35px;background:transparent;border:0;font-size:11px;font-weight:950;letter-spacing:.1em;color:#d7f1f2;touch-action:manipulation}
+#mapArrow{color:#8af1d9}
+#mapDock.compact #miniMap,#mapDock.compact #cameraToggle{display:none}
+#miniMap{width:clamp(112px,15vw,145px);height:auto;aspect-ratio:272/152;border-radius:7px;border:1px solid #517380}
+#cameraToggle{background:#1c4050;border:1px solid #507281;border-radius:8px;min-height:30px;color:#d6e8ed}
+.battleAction{z-index:33;border:2px solid #8af3df;border-radius:50%;font-size:11px;font-weight:950;white-space:pre-line;line-height:1.14;box-shadow:0 0 0 5px #081720b8,0 5px 19px #0009}
+#gadAction{background:radial-gradient(circle at 36% 20%,#3a8f7e,#15584d 77%);color:#effffb;border-color:#8af3df}
+#ultAction{background:radial-gradient(circle at 32% 18%,#ffe9af,#e6a449 80%);border-color:#ffefb0;color:#33260e}
+.battleAction:disabled{opacity:.53;filter:saturate(.65)}
+.battleAction.ready{box-shadow:0 0 0 6px #ffce7250,0 4px 22px #e8b56a75}
+#botTools,#skillInfoToggle,#returnBtn{z-index:21;bottom:7px;min-height:30px;background:#133341;border:1px solid #53747e;border-radius:8px;color:#cfe8ea;font-size:10px}
+#botTools{left:8px;top:auto;padding:5px 10px}
+#skillInfoToggle{left:110px;right:auto;padding:5px 11px}
+#returnBtn{right:8px;padding:5px 9px}
+#networkStatus{left:8px;bottom:43px;max-width:41%;font-size:9px;border:1px solid #4b67775c;border-radius:6px;padding:3px 6px}
+#moveHint{bottom:43px;left:8px;max-width:38%;font-size:9px;opacity:.7}
+#pcHelp{display:none!important}
+#app[data-scene="game"] #fitButton{display:none}
+#skillInfoPanel{z-index:46;bottom:44px;right:8px;background:rgba(11,36,44,.98);border:1px solid #86e4d4;border-radius:14px;box-shadow:0 12px 37px #000a;max-height:62%;padding:14px}
+#skillInfoPanel strong{color:#aaf9e7}
+#skillToast{z-index:42;top:clamp(92px,24%,165px);bottom:auto;background:rgba(20,69,67,.97);border:1px solid #88decf;border-radius:12px;padding:9px 12px;font-size:12px;max-width:72%;box-shadow:0 7px 22px #0006}
+#guardAlert{position:absolute;z-index:43;top:clamp(125px,35%,225px);left:50%;transform:translateX(-50%);max-width:78%;pointer-events:none;background:#a7ffe6;color:#123c39;border:1px solid #e7fff5;border-radius:10px;padding:8px 13px;text-align:center;font-weight:950;font-size:13px;box-shadow:0 0 0 4px #297d6cb5,0 8px 23px #0009}
+#rematchPanel{background:rgba(9,31,40,.97);border:1px solid #88e3d3;border-radius:15px}
+#layoutScreen{background:rgba(4,19,28,.95)}
+#layoutHelp{background:#163948;border-color:#82dfd0;border-radius:12px}
+#mockGad{background:#23675e;border-color:#91f6e3}
+#mockUlt{background:#efbc6d;border-color:#ffe6b2;color:#332311}
+@media(max-height:520px){
+ #hud{top:4px;left:5px;right:5px}
+ .hudCard{width:clamp(115px,18vw,155px);padding:5px 8px;border-radius:10px}
+ .hudName{font-size:10px}.hudSub,.teamRows{font-size:8px;line-height:1.2}.hudValue{font-size:12px}
+ .hudHp{height:7px;margin:3px 0}.reloadStrip{height:5px;margin:2px 0}
+ #gameBanner{padding:5px 7px;min-width:106px;font-size:10px}
+ #roundInfo{font-size:8px!important}
+ #guardMeter{font-size:8px;padding:2px 4px}
+ #mapDock{top:76px}
+ #skillToast{top:91px}
+ #guardAlert{top:124px;font-size:11px}
+ #moveHint{display:none}
+}
+@media(max-width:600px){
+ #hud{left:4px;right:4px}
+ .hudCard{width:33%;max-width:130px;padding:5px 6px}
+ .hudName{font-size:9px}.hudValue{font-size:12px}.hudSub,.teamRows{font-size:8px}
+ #gameBanner{min-width:92px;max-width:31vw;font-size:10px}
+ #mapDock{top:113px}
+ #miniMap{width:112px}
+ #skillInfoToggle{left:92px}
+}
+@media(max-height:520px) and (max-width:600px){#mapDock{top:76px}}
 </style>
 </head>
 <body>
