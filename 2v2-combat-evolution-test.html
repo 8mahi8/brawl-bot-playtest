@@ -1191,7 +1191,17 @@ function drawPlayer(p,seat,mine,isVisible=true){if(!isVisible)return;const id=lo
  const d=game?.debuffs?.[id];if(d?.slowUntil>now){ctx.strokeStyle='#64ccff';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(p.x,p.y+18,26,8,0,0,Math.PI*2);ctx.stroke();}if(d?.dotUntil>=now){ctx.fillStyle='#ffab54';for(let i=0;i<6;i++){const a=i*Math.PI/3+performance.now()/220;ctx.beginPath();ctx.arc(p.x+Math.cos(a)*28,p.y+Math.sin(a)*28,2.5,0,Math.PI*2);ctx.fill();}}
  if(st?.boostUntil>now||st?.overdriveUntil>now){ctx.save();ctx.globalAlpha=.5;ctx.strokeStyle=st.overdriveUntil>now?'#ffe38c':'#53ffe0';ctx.lineWidth=3;ctx.beginPath();ctx.arc(p.x,p.y,28,0,Math.PI*2);ctx.stroke();ctx.restore();}
  if(game?.protection?.[id]>now){ctx.strokeStyle='#d7f8ff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(p.x,p.y,31,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#d7f8ff';ctx.textAlign='center';ctx.font='bold 8px system-ui';ctx.fillText('RESPAWN',p.x,p.y+43);}
- const hp=game?.hp?.[id]??0,a=BrawlDesignV1.ammo(st,now,chr.reload);BrawlVisualV1.resources(ctx,{x:p.x,y:p.y,hp,maxHp:chr.hp,ammo:a.ammo,reload:a.progress,ult:st?.ult||0,showUlt:mate,team,label:mine?'YOU':lobby?.seats?.[seat]?.bot?'BOT':mate?'ALLY':'ENEMY'});
+ const hp=game?.hp?.[id]??0,a=BrawlDesignV1.ammo(st,now,chr.reload);
+ // Green recovery feedback; combat clock is shared with host and BOT simulation.
+ if(hp>0&&hp<chr.hp&&now-(game.combatAt?.[id]||0)>=3000){
+  const gas=game.mode==='area'?0:gasMargin();
+  if(p.x>=gas&&p.x<=W-gas&&p.y>=gas&&p.y<=H-gas){
+   const bob=Math.sin(performance.now()/260+id.length);
+   ctx.save();ctx.fillStyle='rgba(120,246,164,.88)';ctx.font='bold 15px system-ui';ctx.textAlign='center';
+   ctx.fillText('+',p.x-16,p.y-31+bob*5);ctx.fillText('+',p.x+17,p.y-38-bob*4);ctx.restore();
+  }
+ }
+ BrawlVisualV1.resources(ctx,{x:p.x,y:p.y,hp,maxHp:chr.hp,ammo:a.ammo,reload:a.progress,ult:st?.ult||0,showUlt:mate,team,label:mine?'YOU':lobby?.seats?.[seat]?.bot?'BOT':mate?'ALLY':'ENEMY'});
 }
 const remotes={};
 
@@ -1277,7 +1287,12 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  }
  }else if(scene==='layout'){for(const seat of SEATS){const s=SPAWNS[seat];drawPlayer({...s,char:seat==='blue1'?'tank':'gunner'},seat,false);}}
  if(scene==='game'){for(const u of Object.values(game?.scheduled||{})){if(u.matchId!==game?.matchId||u.round!==game?.round)continue;if(u.kind==='bomb'){if(visualCombatNow()<u.start)continue;const f=clamp((visualCombatNow()-u.start)/(u.until-u.start),0,1),x=u.fromX+(u.x-u.fromX)*f,y=u.fromY+(u.y-u.fromY)*f-Math.sin(f*Math.PI)*80;ctx.fillStyle='#ffab65';ctx.beginPath();ctx.arc(x,y,9,0,7);ctx.fill();ctx.fillStyle='#fff1ba';ctx.fillRect(x+4,y-13,3,6);continue;}ctx.save();ctx.strokeStyle=u.kind==='laser'?'#dcb8f9':'#ffd48d';ctx.globalAlpha=.65;ctx.lineWidth=3;ctx.setLineDash([8,6]);ctx.beginPath();if(u.kind==='laser'){ctx.moveTo(u.x,u.y);ctx.lineTo(u.x+Math.cos(u.angle)*900,u.y+Math.sin(u.angle)*900);}else ctx.arc(u.x,u.y,76,0,Math.PI*2);ctx.stroke();ctx.restore();}drawSmoothProjectiles(dt);for(const f of fx){ctx.save();if(f.type==='laserWarn'||f.type==='laser'){ctx.strokeStyle='#dfb9f5';ctx.lineWidth=f.type==='laser'?16:3;ctx.globalAlpha=f.type==='laser'?.84:.66;ctx.setLineDash(f.type==='laser'?[]:[9,7]);ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x+Math.cos(f.angle)*900,f.y+Math.sin(f.angle)*900);ctx.stroke();}
- else {ctx.strokeStyle=f.type==='shockwave'?'#bd75ff':f.type==='hit'?'#ffe476':'#ffcc75';ctx.lineWidth=f.type==='jumpWarn'?3:f.type==='hit'?5:4;ctx.beginPath();const max=f.type==='shockwave'?140:f.type==='jumpWarn'?76:40;ctx.arc(f.x,f.y,f.type==='jumpWarn'?76:max*(1-Math.max(0,f.t||0)/.5)+4,0,Math.PI*2);ctx.stroke();}ctx.restore();}}
+ else {ctx.strokeStyle=f.type==='shockwave'?'#bd75ff':f.type==='hit'?'#ffe476':'#ffcc75';ctx.lineWidth=f.type==='jumpWarn'?3:f.type==='hit'?5:4;ctx.beginPath();const max=f.type==='shockwave'?140:f.type==='jumpWarn'?76:40;ctx.arc(f.x,f.y,f.type==='jumpWarn'?76:max*(1-Math.max(0,f.t||0)/.5)+4,0,Math.PI*2);ctx.stroke();
+ if(f.type==='hit'&&Number.isFinite(f.amount)){
+  ctx.font='bold 15px system-ui';ctx.textAlign='center';ctx.fillStyle='#fff0aa';
+  ctx.fillText('-'+Math.round(f.amount),f.x,f.y-38-(1-Math.max(0,f.t||0)/.35)*15);
+ }
+ }ctx.restore();}}
  ctx.restore();
  drawMinimap(performance.now());
  if(scene==='game'&&!paused&&pcShot&&pcAim&&!botPilot){
