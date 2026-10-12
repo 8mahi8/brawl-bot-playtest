@@ -1592,7 +1592,7 @@
       const dx=left.x-left.ox,dy=left.y-left.oy,mag=Math.hypot(dx,dy);
       if(mag>5){
         const speed=CHARS[local.char].speed*(local.char==='gunner'&&local.boost>0?1.5:1)*(game.debuffs?.[role]?.slowUntil>time()?BALANCE.bomberSlowFactor:1);
-        const intensity=clamp((mag-8)/42,0,1);moveWithWall(local,dx/mag*speed*dt*intensity,dy/mag*speed*dt*intensity);
+        const intensity=left.id===-99?1:clamp((mag-8)/42,0,1);moveWithWall(local,dx/mag*speed*dt*intensity,dy/mag*speed*dt*intensity);
         if(right.id===null)local.angle=Math.atan2(dy,dx);
       }
     }
