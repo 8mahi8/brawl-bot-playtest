@@ -2201,7 +2201,7 @@
   }
   // Four predictable scout waypoints: no access to a concealed enemy's position.
   // Keep the route readable, leaving cover/poison corrections to runBot().
-  const BOT_PATROL=[{x:W*.35,y:H*.34},{x:W*.65,y:H*.34},{x:W*.65,y:H*.66},{x:W*.35,y:H*.66}];
+  const BOT_PATROL=[{x:W*.40,y:H*.30},{x:W*.60,y:H*.30},{x:W*.60,y:H*.70},{x:W*.40,y:H*.70}];
   function runBot(dt,actor,target,offline){
     if(!isPlaying()||game.phase!=='playing')return;
     const brain=botBrain,spec=CHARS[actor.char];
