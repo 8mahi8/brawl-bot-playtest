@@ -81,6 +81,17 @@
       "gunnerOverdriveReloadMs": 750,
       "sniperGadgetKnockback": 120,
       "bulletSpeed": 660
+    },
+    "abilityRules": {
+      "gunnerGadgetBoostMs": 3000,
+      "gunnerUltOverdriveMs": 5000,
+      "sniperGadgetRange": 140,
+      "sniperGadgetDamage": 10,
+      "sniperLaserMs": 600,
+      "tankDashDistance": 115,
+      "tankUltDefaultReach": 310,
+      "guardianLinkMs": 3200,
+      "bomberUltProjectiles": 3
     }
   },
   "deliberateModeDifferences": {
