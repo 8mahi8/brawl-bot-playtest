@@ -129,7 +129,7 @@ check('AREA BOT holding an uncontested point does not chase distant enemies',()=
  assert(Math.hypot(plan.brain.goal.x-768,plan.brain.goal.y-430)<combat.balance.areaRadius-20);
 });
 check('AREA BOT prioritizes visible enemies contesting the point over further duels',()=>{
- const plan=areaPlan({actor:{x:480,y:430,a:0},enemy:{x:770,y:400},enemy2:{x:650,y:430}});
+ const plan=areaPlan({actor:{x:350,y:430,a:0},enemy:{x:770,y:400},enemy2:{x:560,y:430}});
  assert.equal(plan.targetId,'e','enemy occupying point outranks closer flanker');
  assert.equal(plan.brain.tactic,'contest');
 });
