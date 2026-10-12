@@ -1,4 +1,4 @@
-# BRAWL 共通開発基盤 V1.3
+# BRAWL 共通開発基盤 V1.4
 
 **実装済み:** 1vs1と2vs2のビルドで同じ数値・共通の実戦関数を使用し、GitHub Actionsで自動比較・回帰テストを実行できる。
 
@@ -9,6 +9,7 @@
 - [brawl-core-contract.json](./brawl-core-contract.json) — キャラ性能・共通BALANCEの唯一の設定源。ここを編集すると両モードへ反映。
 - [brawl-build-modes.json](./brawl-build-modes.json) — マップ固有の設定、キャラ表示名、1vs1の既存ウルト補足、入力テンプレート・生成先。
 - [combat-primitives.inc.js](./runtime/combat-primitives.inc.js) — 両モードの減衰ダメージ・ジャンプ時間計算の**同じ実行コード**。
+- [abilities.inc.js](./runtime/abilities.inc.js) — 両V8エンジンのガンナー/ボマー/スナイパーGADと全4キャラULTを統一。タンクGADはモード別。
 - [match-state.inc.js](./runtime/match-state.inc.js) — 両V8ホストのHP・ウルト・KO/AREA決着、各モードでの自然回復数値を共有。
 - [projectile-physics.inc.js](./runtime/projectile-physics.inc.js) — 1vs1の従来の弾と両V8ホストエンジンに同じ分割移動/衝突/距離減衰を適用。
 - [combat-actions.inc.js](./runtime/combat-actions.inc.js) — 両V8エンジンの弾薬補充・射撃の弾生成を一つのコードで管理。
@@ -28,6 +29,6 @@
 
 ## 未完了を明示
 
-射撃の角度・発射タイミング・弾薬補充・命中・距離減衰に加え、両V8ホストのHPダメージ・勝敗/AREA判定と回復数値の計算も共有済み。ただし**1vs1旧オンラインとBOTのHP管理全体・ガジェット/ウルト全体・試合の同期権限・BOT戦術・画面UI**はまだモード別に残る。共通化済みと誤認しない。今後の構造統合は、両モードの回帰検査を整えた上で段階的に行う。
+射撃の角度・発射タイミング・弾薬補充・命中・距離減衰に加え、両V8ホストのHPダメージ・勝敗/AREA判定と回復数値の計算も共有済み。両V8エンジンの技発動は基本的に共有済み。ただし**1vs1旧オンライン/単独BOT側の技管理、2vs2のタンク味方保護、試合の同期権限・BOT戦術・画面UI**はまだモード別に残る。共通化済みと誤認しない。今後の構造統合は、両モードの回帰検査を整えた上で段階的に行う。
 
 学校iPad SafariやFirebase本番の4人同期は未確認。生成ページはオフラインBOT候補。
