@@ -214,6 +214,7 @@ html,body,#app{background:#081720;color:#ecf7f5}
 @media(max-height:520px) and (max-width:600px){#mapDock{top:76px}}
 #guardMeter,#guardAlert{display:none!important}
 /* Guardian effectiveness is displayed by the shield rings and link, never blocking text. */
+#enemyTeam{display:none!important}#enemySummary{white-space:pre-line;line-height:1.45;overflow-wrap:anywhere}#moveHint{display:none!important}
 </style>
 </head>
 <body>
@@ -855,7 +856,7 @@ function derivedAmmo(player,now){if(!player)return {ammo:3,progress:0};let ammo=
  return {ammo,progress:ammo>=3?0:clamp(1-(next-now)/reload,0,1)};
 }
 function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;const mine=lobby.seats[mySeat()],me=game.stats[myId],hp=game.hp[myId],hudNow=combatNow(),activeChar=me?.char||mine.char;
- const info=ABILITY_GUIDE[activeChar]||ABILITY_GUIDE.tank;$('skillInfoTitle').textContent=info.title;$('skillInfoText').textContent='GAD：'+info.gad+'\nULT：'+info.ult+'\n操作：タップでガジェット、ULTはドラッグして狙えます。PCは右クリック/Q と Space/E。';
+ const info=ABILITY_GUIDE[activeChar]||ABILITY_GUIDE.tank;$('skillInfoTitle').textContent=info.title;$('skillInfoText').textContent='GAD：'+info.gad+'\nULT：'+info.ult+'\n操作：タップでガジェット、ULTはドラッグして狙えます。PCは右クリック/Q と Space/E。\n左ドラッグで移動、右タップで射撃、右ドラッグで狙う。';
   const vm=BrawlDesignV1.model({seatKeys:SEATS,seats:lobby.seats,stats:game?.stats||{},hp:game?.hp||{},myId,mySeat:mySeat(),now:hudNow,chars:CHARS,visible:id=>canSeeEnemy(targetPoint(id),id)});
  $('myLabel').textContent=(botPilot?'BOT / ':'YOU / ')+(CHARS[activeChar]?.label||'タンク');$('mySeat').textContent=mySeat().toUpperCase()+' · '+myTeam().toUpperCase();
  $('myHP').textContent=Number.isFinite(hp)?Math.ceil(hp)+' / '+CHARS[activeChar].hp:'HP -';$('myHpFill').style.width=clamp((hp||0)/CHARS[activeChar].hp*100,0,100)+'%';
@@ -863,8 +864,8 @@ function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;co
  $('myUlt').textContent='ULT '+Math.floor(vm.ult)+'% · GAD '+vm.gadgets;$('myUltFill').style.width=clamp(vm.ult,0,100)+'%';/* Guardian is communicated in-world instead of HUD text. */
  $('myBuff').textContent=me?.overdriveUntil>hudNow?'オーバードライブ中':me?.boostUntil>hudNow?'加速中':me?.armed?'強化爆弾準備中':'';
  $('allySummary').textContent=vm.allies.map(p=>'ALLY '+p.seat.toUpperCase().slice(-1)+' · '+(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO')).join('  ');
- $('enemyLabel').textContent='ENEMY TEAM';$('enemyTeam').textContent=(myTeam()==='blue'?'RED':'BLUE')+' TEAM';
- $('enemySummary').textContent=vm.enemies.map(p=>p.known?'ENEMY '+p.seat.toUpperCase().slice(-1)+' · '+(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO'):'ENEMY '+p.seat.toUpperCase().slice(-1)+' · ?').join('  ');
+ $('enemyLabel').textContent=(myTeam()==='blue'?'RED':'BLUE')+' TEAM';$('enemyTeam').textContent='';
+ $('enemySummary').textContent=vm.enemies.map((p,i)=>(i+1)+'  '+(p.known?(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO'):'?')).join('\n');
  $('roundInfo').textContent='ROUND '+(game?.round||1)+' · BLUE '+(game?.scores?.blue||0)+' - '+(game?.scores?.red||0)+' RED'+(gasMargin()>0?' · GAS':'');
  if(game?.mode==='area'){$('roundInfo').textContent=`BLUE ${Math.floor((game.area?.blueMs||0)/BALANCE.areaCaptureMs*100)}% : ${Math.floor((game.area?.redMs||0)/BALANCE.areaCaptureMs*100)}% RED · ${Math.floor(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)/60)}:${String(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)%60).padStart(2,'0')}`;if(hp===0)$('myHP').textContent='復活まで '+Math.ceil(Math.max(0,(game.respawns?.[myId]||hudNow)-hudNow)/1000)+'秒';}
  $('gameBanner').firstChild.textContent=game?.mode==='area'?'2vs2 · HOT ZONE':'2vs2 · KNOCKOUT';
