@@ -10,11 +10,11 @@ assert(script&&script.length>100000);
 new vm.Script(script,{filename:'2v2-open-arena-tank-lab.html'});
 // The two gameplay modifications are precisely tank HP and Guardian mitigation.
 const removed=lab.replace('tank:{label:"タンク",hp:160,','tank:{label:"タンク",hp:180,')
- .replace('guardian=null,guardFactor=.75','guardian=null,guardFactor=.65')
+ .replace('guardian=null,guardFactor=0.75','guardian=null,guardFactor=.65')
  .replace('<title>BRAWL 2vs2 | Tank Balance LAB</title>','<title>BRAWL 2vs2 | Open Arena LAB</title>')
  .replace('OPEN ARENA · TANK 160HP · GUARD 25% · COMPARE','QUIET COMBAT R4.1 · PREVIEW')
  .replace('window.__brawlV3QA=()=>({tankBalanceLab:true,openArenaLab:true','window.__brawlV3QA=()=>({openArenaLab:true')
- .replace('<!-- TANK BALANCE COMPARISON: generated from Open Arena LAB; do not edit manually. -->\\n','');
+ .replace('<!-- TANK BALANCE COMPARISON: generated from Open Arena LAB; do not edit manually. -->\n','');
 assert.equal(removed,base,'no other mechanics, navigation, maps, BOT, controls or visuals changed');
 const top=script.indexOf('/* BEGIN SHARED MATCH STATE */'),end=script.indexOf('/* END SHARED MATCH STATE */',top);
 assert(top>=0&&end>top,'actual compiled shared match logic present');

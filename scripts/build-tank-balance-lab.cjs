@@ -15,7 +15,7 @@ function buildTankBalance(html){
  next=one(next,'<title>BRAWL 2vs2 | Open Arena LAB</title>','<title>BRAWL 2vs2 | Tank Balance LAB</title>','document title');
  next=one(next,'QUIET COMBAT R4.1 · PREVIEW','OPEN ARENA · TANK 160HP · GUARD 25% · COMPARE','main menu label');
  next=one(next,'window.__brawlV3QA=()=>({openArenaLab:true','window.__brawlV3QA=()=>({tankBalanceLab:true,openArenaLab:true','read-only QA marker');
- next=one(next,'<!-- OPEN ARENA LAB: independent test candidate','<!-- TANK BALANCE COMPARISON: generated from Open Arena LAB; do not edit manually. -->\\n<!-- OPEN ARENA LAB: independent test candidate','generated provenance');
+ next=one(next,'<!-- OPEN ARENA LAB: independent test candidate','<!-- TANK BALANCE COMPARISON: generated from Open Arena LAB; do not edit manually. -->\n<!-- OPEN ARENA LAB: independent test candidate','generated provenance');
  return next;
 }
 function main(flag){assert(['--check','--write'].includes(flag),'expected --check or --write');const built=buildTankBalance(fs.readFileSync(input,'utf8'));
