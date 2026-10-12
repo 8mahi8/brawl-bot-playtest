@@ -38,8 +38,8 @@ function harness({visible=false,now=9000,char='sniper',memory=null,gadgets=2}={}
 // Geometry regression: patrol targets must be reachable by a radius-18 actor.
 // The previous patrol corners (350,204)/(650,204)/(650,396)/(350,396)
 // were embedded in the real collision boxes despite the behavioral test passing.
-const wallsSource=html.match(/const walls = (\\[[\\s\\S]*?\\]);/);
-const patrolSource=code.match(/const BOT_PATROL=(\\[[^\\n]*?\\]);/);
+const wallsSource=html.match(/const walls = (\[[\s\S]*?\]);/);
+const patrolSource=code.match(/const BOT_PATROL=(\[[^\n]*?\]);/);
 assert(wallsSource&&patrolSource,'read current map walls and patrol route from compiled game');
 const walls=vm.runInNewContext(wallsSource[1]);
 const patrol=vm.runInNewContext(patrolSource[1],{W:1000,H:600});
