@@ -491,6 +491,14 @@
    if(q.ammo>=3){q.ammo=3;q.refillAt=0;return q;}
    if(q.refillAt>0&&t>=q.refillAt){const n=Math.floor((t-q.refillAt)/rate)+1;q.ammo=Math.min(3,q.ammo+n);q.refillAt=q.ammo===3?0:q.refillAt+n*rate;}return q;
   }
+  function burst(a,s,g){const spread=BrawlWeaponV1.spread(s.char),seat=seatOf(g,a.owner);
+   return spread.map((d,i)=>({id:a.eventId+':'+i,owner:a.owner,ownerLife:s.life,team:team(seat),x:a.x+Math.cos(a.angle)*28,y:a.y+Math.sin(a.angle)*28,vx:Math.cos(a.angle+d)*BrawlWeaponV1.bulletSpeed,vy:Math.sin(a.angle+d)*BrawlWeaponV1.bulletSpeed,dist:0,range:chars[s.char].range,radius:s.char==='sniper'?5:6,damage:chars[s.char].damage,char:s.char}));
+  }
+ /* END SHARED RUNTIME COMBAT_ACTIONS */
+  function initialize(matchId,seats,mode,startAt){const hp={},stats={},motions={};
+   for(const k of seatKeys){const p=seats[k];hp[p.id]=chars[p.char].hp;stats[p.id]={char:p.char,ammo:3,refillAt:0,ult:0,gadgets:mode==='area'?1:2,gadgetReadyAt:0,boostUntil:0,overdriveUntil:0,lastShotAt:0,lastActionSeq:0,life:0,armed:false};motions[p.id]={rev:0,...spawns[k]};}
+   return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
+  }
   function flying(g,id){return Object.values(g.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===id&&u.ownerLife===g.stats[id]?.life);}
   function receipt(a,now,status,reason){return {owner:a.owner,seq:a.seq,type:a.type,at:a.at,acceptedAt:now,status,reason:reason||''};}
   function normalize(g){for(const key of ['projectiles','scheduled','usedActions','usedHits','debuffs','respawns','protection','reveals','events','motions'])g[key] ||= {};return g;}
