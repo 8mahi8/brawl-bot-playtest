@@ -1,0 +1,30 @@
+name: BRAWL shared rules parity
+on:
+  push:
+    paths:
+      - '1v1-combat-evolution-test.html'
+      - '2v2-ui-guardian-r4-test.html'
+      - 'shared/brawl-core-contract.json'
+      - 'tests/shared-rules-parity.cjs'
+      - '.github/workflows/shared-rules-parity.yml'
+  pull_request:
+    paths:
+      - '1v1-combat-evolution-test.html'
+      - '2v2-ui-guardian-r4-test.html'
+      - 'shared/brawl-core-contract.json'
+      - 'tests/shared-rules-parity.cjs'
+      - '.github/workflows/shared-rules-parity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shared-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compare 1vs1 and 2vs2 common rules and detect artificial drift
+        run: node tests/shared-rules-parity.cjs
