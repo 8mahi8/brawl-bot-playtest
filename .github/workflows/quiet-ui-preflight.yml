@@ -1,0 +1,42 @@
+name: BRAWL pre-share UI quality gate
+on:
+  push:
+    paths:
+      - '2v2-ui-clean-r4-1-test.html'
+      - 'tests/quiet-ui-r4-1-browser.cjs'
+      - 'tests/quiet-ui-r4-1-gameplay.cjs'
+      - '.github/workflows/quiet-ui-preflight.yml'
+  pull_request:
+    paths:
+      - '2v2-ui-clean-r4-1-test.html'
+      - 'tests/quiet-ui-r4-1-browser.cjs'
+      - 'tests/quiet-ui-r4-1-gameplay.cjs'
+      - '.github/workflows/quiet-ui-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify defense still works without UI counters
+        run: node tests/quiet-ui-r4-1-gameplay.cjs
+      - name: Install browser QA driver
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+      - name: Check browser
+        run: command -v google-chrome || command -v chromium || command -v chromium-browser
+      - name: Verify visual clutter, layout bounds, buttons and full BOT playthrough on 4 viewports
+        run: node tests/quiet-ui-r4-1-browser.cjs
+      - name: Save screenshots for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quiet-r41-ui-preflight-screenshots
+          path: artifacts/quiet-r41-*.png
+          if-no-files-found: ignore
+          retention-days: 14
