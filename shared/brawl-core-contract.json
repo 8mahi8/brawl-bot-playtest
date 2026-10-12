@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Canonical single-source shared stats and BALANCE for foundation/1v1-foundation-v1.html and foundation/2v2-foundation-v1.html. Legacy templates remain unchanged; only specified common functions are shared. Full combat engine and UI are not yet unified.",
+  "note": "Canonical common character/stats/rules source for independently built 1vs1 and 2vs2 candidates. Generated foundation builds now inline the same weapon rules, projectile physics, ammo replenishment, and volley creation; full authoritative battle state, online synchronization, BOT behavior and UI remain mode-specific.",
   "sourceCandidates": [
     "1v1-combat-evolution-test.html",
     "2v2-ui-guardian-r4-test.html"
@@ -92,13 +92,18 @@
     "tankGuardianAbility": "2vs2 R4 links teammate; 1vs1 has no teammate. Do not copy team link unconditionally"
   },
   "mismatchesToResolveBeforeClaimingParity": [
-    "Tank basic attack fan 1vs1 ±.23/.115 versus 2vs2 ±.20/.10",
-    "Gunner burst 2nd/3rd bullet spawn location: 1vs1 moving origin; 2vs2 fixed initial origin",
-    "Gunner overdrive reload approx 694ms in 1vs1 versus 750ms in 2vs2",
-    "Sniper GAD knockback solo 1vs1 160 versus 2vs2 120",
-    "Tank GAD dash/invulnerability mechanics differ across modes",
-    "Runtime engine separate: 1vs1 legacy functions versus 2vs2 host-reducer",
-    "Solo bot tactics/path and rendering/UI are separate implementations",
-    "1vs1 HP regeneration independent host call versus 2vs2 combat tick"
-  ]
+    "Authoritative HP/damage lifecycle and host ownership: 1vs1 legacy online shooting path remains distinct from 2vs2 host combat reducer",
+    "Tank gadget: 1vs1 dash versus 2vs2 guardian link differs by mode and needs an explicit mode-specific design decision",
+    "1vs1 solo BOT targeting/retreat/path and 2vs2 BOT tactical decisions are separate",
+    "Natural regeneration scheduling: 1vs1 independent host call, 2vs2 combat tick",
+    "Rendering/HUD/camera and full UI remain separate engines",
+    "Firebase online room namespaces/protocols, disconnection/resume semantics and 4-player networking remain unintegrated",
+    "Some mode-specific ultimate hit/landing and bomb presentation remain separate code paths"
+  ],
+  "resolvedInGeneratedFoundation": {
+    "weaponRules": "Tank spread, gunner burst angles/delay/origin, gunner overdrive reload, sniper knockback and bullet velocity use shared runtime/weapon-rules.inc.js",
+    "projectilePhysics": "1vs1 legacy bullets and both V8 host reducers now use shared runtime/projectile-physics.inc.js for substep movement, circle hit detection and damage falloff",
+    "authoritativeAmmoAndVolley": "Both V8 reducers embed identical shared runtime/combat-actions.inc.js for ammo replenishment and projectile creation",
+    "scope": "Generated foundation candidates only; original historical 1v1/2v2 HTML kept untouched"
+  }
 }
