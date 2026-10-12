@@ -128,7 +128,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
   <div id="pcHelp">WASD / 矢印：移動　左クリック：攻撃　Shift＋左クリック：自動照準　右クリック：GAD　Space：ULT</div>
  <div id="homeScreen" class="screen">
   <div id="navLine">BOT PRACTICE · PERF TEST · OFFLINE</div>
-  <h1>BRAWL <em>2vs2</em><small>V3.0 · ノックアウト / ホットゾーン</small></h1>
+  <h1>BRAWL <em>2vs2</em><small>COMBAT EVOLUTION · 大型統合候補</small></h1>
   <p class="sub">4人でチーム対戦。ノックアウトは2本先取、ホットゾーンは中央エリアを取り合おう。</p>
   <button id="soloBtn" class="btn primary">BOT対戦を開始 · 通信なし</button><p class="sub">この公開版はBOT練習専用です。オンライン対戦とFirebase通信は無効化しています。</p><a href="./1v1-stealth-clean-test.html" style="display:inline-flex;align-items:center;justify-content:center;min-height:40px;min-width:min(270px,88%);padding:8px 12px;text-decoration:none;color:#e0f6ff;background:#173c52;border:1px solid #4c9fbb;border-radius:10px;font-weight:800;font-size:13px;">1vs1 BOT練習へ →</a>
   <button id="createBtn" class="btn">4人ルームを作る</button>
@@ -256,7 +256,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
   bomberDamage:28,bomberRange:300,bomberRadius:56,bomberFlightMs:800,
   bomberUltDamage:18,bomberUltRadius:82,bomberUltGap:400,
   bomberSlowMs:1500,bomberSlowFactor:0.65,bomberDotMs:3000,bomberDotDamage:3,bomberDotEveryMs:1000,
-  areaCaptureMs:60000,areaLimitMs:180000,areaRadius:100,areaRespawnMs:4000,
+  areaCaptureMs:60000,areaLimitMs:180000,areaRadius:118,areaRespawnMs:4000,
   areaGadgetRechargeMs:25000,areaSpawnShieldMs:1000
  };
  // ===== 設定終了。以下は同期・戦闘処理。設定変更でprotocolを変え混在を避ける。 =====
@@ -264,7 +264,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
  const tankDamage=d=>Math.round(BALANCE.tankNearDamage-(BALANCE.tankNearDamage-BALANCE.tankFarDamage)*clamp((d-BALANCE.tankFalloffStart)/(BALANCE.tankFalloffEnd-BALANCE.tankFalloffStart),0,1));
  const jumpDuration=d=>Math.round(BALANCE.tankJumpMinMs+(BALANCE.tankJumpMaxMs-BALANCE.tankJumpMinMs)*clamp(d/BALANCE.tankJumpRange,0,1));
  function create(cfg){
-  const {chars,walls,spawns,seatKeys}=cfg,W=1360,H=760,R=20;
+  const {chars,walls,spawns,seatKeys}=cfg,W=1536,H=860,R=18;
   const team=k=>k.startsWith('blue')?'blue':'red';
   const seatOf=(g,id)=>seatKeys.find(k=>g.seats[k]?.id===id);
   const wall=(x,y,r=R)=>walls.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);
@@ -446,7 +446,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
  const BOT_BALANCE={easy:{shotMs:1000,error:.16,lead:.2},normal:{shotMs:550,error:.07,lead:.6},hard:{shotMs:330,error:.025,lead:.9},repathMs:650,grid:40};
  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
  function create({chars,walls,bushes,spawns,seatKeys}){
-  const W=1360,H=760;const team=k=>k?.startsWith('blue')?'blue':'red',blocked=(x,y,r=20)=>x<r||x>W-r||y<r||y>H-r||walls.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);
+  const W=1536,H=860;const team=k=>k?.startsWith('blue')?'blue':'red',blocked=(x,y,r=20)=>x<r||x>W-r||y<r||y>H-r||walls.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);
   const bush=p=>bushes.some(b=>p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h);
   function segment(a,b,r=20){const n=Math.ceil(distance(a,b)/10);for(let i=0;i<=n;i++)if(blocked(a.x+(b.x-a.x)*i/(n||1),a.y+(b.y-a.y)*i/(n||1),r))return false;return true;}
   const nodes=[];for(let y=20;y<=H-20;y+=40)for(let x=20;x<=W-20;x+=40)if(!blocked(x,y,23))nodes.push({x,y});
@@ -563,7 +563,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
   else if(char==='bomber'){ctx.fillStyle=color;ctx.beginPath();ctx.arc(0,0,18,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#fff0b5';ctx.fillRect(8,-20,10,8);ctx.strokeStyle='#ffd58d';ctx.beginPath();ctx.moveTo(16,-20);ctx.lineTo(22,-27);ctx.stroke();}
   else{ctx.fillStyle='#273447';ctx.beginPath();ctx.moveTo(-20,-8);ctx.lineTo(-10,-19);ctx.lineTo(12,-14);ctx.lineTo(18,0);ctx.lineTo(12,14);ctx.lineTo(-10,19);ctx.lineTo(-20,8);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(-16,-7);ctx.lineTo(-7,-14);ctx.lineTo(11,-11);ctx.lineTo(15,0);ctx.lineTo(11,11);ctx.lineTo(-7,14);ctx.lineTo(-16,7);ctx.closePath();ctx.fill();ctx.fillStyle='#efd9ff';rounded(ctx,-8,-7,17,10,3);ctx.fill();ctx.fillStyle='#2b3550';rounded(ctx,8,-5,35,10,3);ctx.fill();ctx.stroke();ctx.fillStyle='#edd3ff';ctx.fillRect(26,-2,16,4);}
  }
- function character(ctx,o){const team=o.team==='blue'?palette.ally:palette.enemy;ctx.save();ctx.translate(o.x,o.y);ctx.fillStyle=palette.shadow;ctx.beginPath();ctx.ellipse(0,8,24,18,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle=team;ctx.lineWidth=o.mine?4:3;ctx.beginPath();ctx.arc(0,0,23,0,Math.PI*2);ctx.stroke();ctx.rotate(o.angle||0);body(ctx,o.char,o.color);ctx.restore();}
+ function character(ctx,o){const team=o.team==='blue'?palette.ally:palette.enemy;ctx.save();ctx.translate(o.x,o.y);ctx.fillStyle=palette.shadow;ctx.beginPath();ctx.ellipse(0,8,24,18,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle=team;ctx.lineWidth=o.mine?4:3;ctx.beginPath();ctx.arc(0,0,21,0,Math.PI*2);ctx.stroke();ctx.rotate(o.angle||0);body(ctx,o.char,o.color);ctx.restore();}
  function resources(ctx,o){const w=56,x=o.x-w/2,y=o.y-48,ratio=Math.max(0,Math.min(1,o.hp/o.maxHp));ctx.save();ctx.textAlign='center';ctx.font='bold 9px system-ui';ctx.fillStyle=o.team==='blue'?palette.ally:palette.enemy;ctx.fillText(o.label,x+w/2,y-3);ctx.fillStyle='#07162b';ctx.fillRect(x,y,w,7);ctx.fillStyle=o.team==='blue'?palette.hp:palette.enemyHp;ctx.fillRect(x+1,y+1,(w-2)*ratio,5);ctx.strokeStyle='rgba(255,255,255,.42)';ctx.lineWidth=1;ctx.strokeRect(x,y,w,7);
   for(let i=0;i<3;i++){const ax=x+i*19;ctx.fillStyle='#06121e';ctx.fillRect(ax,y+9,18,6);ctx.fillStyle='#273849';ctx.fillRect(ax+1,y+10,16,4);const fill=i<o.ammo?1:i===o.ammo?Math.max(0,Math.min(1,o.reload)):0;ctx.fillStyle=o.team==='blue'?palette.ammo:palette.enemyAmmo;ctx.fillRect(ax+1,y+10,16*fill,4);}
   if(o.showUlt){ctx.fillStyle='#283342';ctx.fillRect(x,y+17,w,3);ctx.fillStyle=palette.ult;ctx.fillRect(x,y+17,w*Math.max(0,Math.min(1,o.ult/100)),3);}ctx.restore();}
@@ -585,24 +585,24 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
 'use strict';
 (()=>{
 const DB_URL='OFFLINE_ONLY_NO_REMOTE_DATABASE';
-const ROOT='rooms2v2',PROTOCOL=3010,SEATS=['blue1','blue2','red1','red2'],W=1360,H=760,R=20;
+const ROOT='rooms2v2',PROTOCOL=3010,SEATS=['blue1','blue2','red1','red2'],W=1536,H=860,R=18;
 const BALANCE=BrawlCombatV8.balance;
 // キャラ設定: HP / speed / damage / range / reload(ms)
 const GAS_DELAY=28_000,GAS_SPEED=9,GAS_CAP=380,GAS_DAMAGE=10,PAUSE_LIMIT=15_000;
-const CHARS={tank:{label:'タンク',color:'#ffa941',hp:180,speed:120,damage:BALANCE.tankNearDamage,range:BALANCE.tankFalloffEnd,reload:833},gunner:{label:'ガンナー',color:'#39dced',hp:100,speed:120,damage:10,range:280,reload:1250},sniper:{label:'スナイパー',color:'#c07aff',hp:70,speed:120,damage:36,range:455,reload:1833},bomber:{label:'ボマー',color:'#ff7954',hp:90,speed:120,damage:BALANCE.bomberDamage,range:BALANCE.bomberRange,reload:1500}};
-const KO_WALLS=[{"x":320,"y":170,"w":112,"h":110},{"x":928,"y":170,"w":112,"h":110},{"x":320,"y":480,"w":112,"h":110},{"x":928,"y":480,"w":112,"h":110},{"x":535,"y":305,"w":85,"h":150},{"x":740,"y":305,"w":85,"h":150},{"x":612,"y":140,"w":136,"h":56},{"x":612,"y":564,"w":136,"h":56}];
-const KO_BUSHES=[{"x":260,"y":40,"w":245,"h":90},{"x":855,"y":40,"w":245,"h":90},{"x":260,"y":630,"w":245,"h":90},{"x":855,"y":630,"w":245,"h":90},{"x":465,"y":230,"w":118,"h":65},{"x":777,"y":230,"w":118,"h":65},{"x":465,"y":465,"w":118,"h":65},{"x":777,"y":465,"w":118,"h":65},{"x":630,"y":216,"w":100,"h":70},{"x":630,"y":474,"w":100,"h":70}];
-const AREA_WALLS=[{"x":465,"y":210,"w":70,"h":100},{"x":825,"y":210,"w":70,"h":100},{"x":465,"y":450,"w":70,"h":100},{"x":825,"y":450,"w":70,"h":100},{"x":645,"y":85,"w":70,"h":50},{"x":645,"y":625,"w":70,"h":50}];
-const AREA_BUSHES=[{"x":280,"y":180,"w":95,"h":125},{"x":985,"y":180,"w":95,"h":125},{"x":280,"y":455,"w":95,"h":125},{"x":985,"y":455,"w":95,"h":125},{"x":600,"y":170,"w":160,"h":55},{"x":600,"y":535,"w":160,"h":55}];
+const CHARS={tank:{label:'タンク',color:'#ffa941',hp:180,speed:102,damage:BALANCE.tankNearDamage,range:BALANCE.tankFalloffEnd,reload:833},gunner:{label:'ガンナー',color:'#39dced',hp:100,speed:102,damage:10,range:280,reload:1250},sniper:{label:'スナイパー',color:'#c07aff',hp:70,speed:102,damage:36,range:455,reload:1833},bomber:{label:'ボマー',color:'#ff7954',hp:90,speed:102,damage:BALANCE.bomberDamage,range:BALANCE.bomberRange,reload:1500}};
+const KO_WALLS=[{"x":320,"y":170,"w":112,"h":110},{"x":928,"y":170,"w":112,"h":110},{"x":320,"y":480,"w":112,"h":110},{"x":928,"y":480,"w":112,"h":110},{"x":535,"y":305,"w":85,"h":150},{"x":740,"y":305,"w":85,"h":150},{"x":612,"y":140,"w":136,"h":56},{"x":612,"y":564,"w":136,"h":56}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1.04),h:Math.round(v.h*1.04)}));
+const KO_BUSHES=[{"x":260,"y":40,"w":245,"h":90},{"x":855,"y":40,"w":245,"h":90},{"x":260,"y":630,"w":245,"h":90},{"x":855,"y":630,"w":245,"h":90},{"x":465,"y":230,"w":118,"h":65},{"x":777,"y":230,"w":118,"h":65},{"x":465,"y":465,"w":118,"h":65},{"x":777,"y":465,"w":118,"h":65},{"x":630,"y":216,"w":100,"h":70},{"x":630,"y":474,"w":100,"h":70}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1.04),h:Math.round(v.h*1.04)}));
+const AREA_WALLS=[{"x":465,"y":210,"w":70,"h":100},{"x":825,"y":210,"w":70,"h":100},{"x":465,"y":450,"w":70,"h":100},{"x":825,"y":450,"w":70,"h":100},{"x":645,"y":85,"w":70,"h":50},{"x":645,"y":625,"w":70,"h":50}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1.04),h:Math.round(v.h*1.04)}));
+const AREA_BUSHES=[{"x":280,"y":180,"w":95,"h":125},{"x":985,"y":180,"w":95,"h":125},{"x":280,"y":455,"w":95,"h":125},{"x":985,"y":455,"w":95,"h":125},{"x":600,"y":170,"w":160,"h":55},{"x":600,"y":535,"w":160,"h":55}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1.04),h:Math.round(v.h*1.04)}));
 let WALLS=KO_WALLS,BUSHES=KO_BUSHES;
-const SPAWNS={blue1:{x:145,y:260,a:0},blue2:{x:145,y:500,a:0},red1:{x:1215,y:260,a:Math.PI},red2:{x:1215,y:500,a:Math.PI}};
+const SPAWNS={blue1:{x:220,y:290,a:0},blue2:{x:220,y:570,a:0},red1:{x:1316,y:290,a:Math.PI},red2:{x:1316,y:570,a:Math.PI}};
 const $=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const canvas=$('arena'),ctx=canvas.getContext('2d',{alpha:false});
 let solo=false,botPilot=false,liveDB=null,sdkPromise=null,botActors={},botPanelOpen=false,botRowsKey='',botRematchBusy=false,leaveBusy=false;
 let lastSnapshotAt=0,snapshotGap=0,fps=60,lastBotSettingsAt=0;
 let appliedMotionRev=-1,combatBusy=false,claimBusy=false;
 let db=null,room=null,roomId='',myId='',myConnection='',lobby=null,presence={},game=null,positions={},joined=false,connected=false,connecting=false,working=false,clockOffset=0;
-let listeners=[],onlineTimer=null,lastSend=0,sendSeq=0,local={x:145,y:260,a:0,vx:0,vy:0},view={scale:1,ox:0,oy:0,cx:NaN,cy:NaN,overhead:false},scene='home',pointer=null,lastFrame=0,pausedSince=0,paused=false,hostBusy=false;
+let listeners=[],onlineTimer=null,lastSend=0,sendSeq=0,local={x:220,y:290,a:0,vx:0,vy:0},view={scale:1,ox:0,oy:0,cx:NaN,cy:NaN,overhead:false},scene='home',pointer=null,lastFrame=0,pausedSince=0,paused=false,hostBusy=false;
 let pcAim=null,pcKeys=new Set();
 let aimPointer=null,actionSeq=0,lastShootLocal=0,seenActions=new Set(),seenEffects=new Set(),clientBullets=[],hostBullets=[],pendingHits=[],hostQueue=[],hostUltPending=[],hostProcessing=false,hitProcessing=false,lastHostTick=0,roundBusy=false,fx=[],revealed={},processedNetworkSeq={};
 let ultPointer=null,dashUntil=0,dashA=0,lastUseLocal=0,roundResetKey='';
@@ -1024,7 +1024,7 @@ function touchingWall(x,y){return WALLS.some(w=>x+R>w.x&&x-R<w.x+w.w&&y+R>w.y&&y
 function moveWithWall(dx,dy){const nx=clamp(local.x+dx,R,W-R),ny=clamp(local.y+dy,R,H-R);
  if(!touchingWall(nx,local.y))local.x=nx;if(!touchingWall(local.x,ny))local.y=ny;}
 function update(dt){if(botPilot)return;if(!combatReady()||!alive(myId)||engine().flying(game,myId))return;
- let dx=0,dy=0;if(pointer){dx=pointer.x-pointer.ox;dy=pointer.y-pointer.oy;const d=Math.hypot(dx,dy);if(d>10){dx/=d;dy/=d;}else{dx=dy=0;}}
+ let dx=0,dy=0;if(pointer){dx=pointer.x-pointer.ox;dy=pointer.y-pointer.oy;const d=Math.hypot(dx,dy);if(d>8){const intensity=clamp((d-8)/42,0,1);dx=dx/d*intensity;dy=dy/d*intensity;}else{dx=dy=0;}}
  else{dx=Number(pcKeys.has('d')||pcKeys.has('arrowright'))-Number(pcKeys.has('a')||pcKeys.has('arrowleft'));dy=Number(pcKeys.has('s')||pcKeys.has('arrowdown'))-Number(pcKeys.has('w')||pcKeys.has('arrowup'));const d=Math.hypot(dx,dy);if(d>0){dx/=d;dy/=d;}}
  const oldX=local.x,oldY=local.y;const boost=game.stats?.[myId]?.boostUntil>combatNow()?1.5:1;
  if(performance.now()<dashUntil){dx=Math.cos(dashA)*6;dy=Math.sin(dashA)*6;}
@@ -1154,7 +1154,7 @@ const remotes={};
 function updateCameraLabel(){$('cameraToggle').textContent=view.overhead?'追従カメラ / F':'全景表示 / F';}
 function cameraTransform(sw,sh,dt){
  const isGame=scene==='game';
- const factor=isGame&&!view.overhead?Math.max(Math.min(sw/1000,sh/600),sw/W,sh/H):Math.min(sw/W,sh/H);
+ const factor=isGame&&!view.overhead?Math.max(Math.min(sw/1130,sh/680),sw/W,sh/H):Math.min(sw/W,sh/H);
  const visibleW=sw/factor,visibleH=sh/factor;
  const targetX=isGame&&!view.overhead?clamp(local.x,visibleW/2,W-visibleW/2):W/2;
  const targetY=isGame&&!view.overhead?clamp(local.y,visibleH/2,H-visibleH/2):H/2;
