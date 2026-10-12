@@ -52,8 +52,8 @@ async function run(browser,name,opts){
    assert(b.rect.left>=0&&b.rect.right<=geometry.viewport.w+2&&b.rect.top>=0&&b.rect.bottom<=geometry.viewport.h+2,'action inside viewport '+b.id);
   }
   await page.locator('#mapExpand').click();
-  const mapAfter=await page.locator('#mapDock').getAttribute('class');
-  assert(mapAfter,'map toggle must remain usable');
+  const mapExpanded=await page.locator('#mapExpand').getAttribute('aria-expanded');
+  assert(['true','false'].includes(mapExpanded),'map toggle maintains accessible expanded state');
   // A second toggle should not cover action controls even if the map cannot expand.
   await page.locator('#mapExpand').click();
   assert.equal(await page.locator('#ultAction').isVisible(),true,'ULT remains visible after map toggles');
