@@ -402,7 +402,7 @@ html,body,#app{background:#081720;color:#ecf7f5}
   function motion(g,id,p){const rev=(g.motions[id]?.rev||0)+1;g.motions[id]={rev,x:p.x,y:p.y,a:p.a||0};return rev;}
   function move(p,dx,dy){const q={...p};for(let i=0;i<24;i++){const x=clamp(q.x+dx/24,R,W-R),y=clamp(q.y+dy/24,R,H-R);if(!wall(x,q.y))q.x=x;if(!wall(q.x,y))q.y=y;}return q;}
   function landing(p,a,reach=310){const d=clamp(reach,55,330),x=clamp(p.x+Math.cos(a)*d,R+4,W-R-4),y=clamp(p.y+Math.sin(a)*d,R+4,H-R-4);return {x,y,a,valid:!wall(x,y,R+4)};}
-  function ammo(s,t){const q={...s},rate=q.char==='gunner'&&q.overdriveUntil>t?750:chars[q.char].reload;
+  function ammo(s,t){const q={...s},rate=q.char==='gunner'&&q.overdriveUntil>t?BrawlWeaponV1.overdriveReloadMs:chars[q.char].reload;
    if(q.ammo>=3){q.ammo=3;q.refillAt=0;return q;}
    if(q.refillAt>0&&t>=q.refillAt){const n=Math.floor((t-q.refillAt)/rate)+1;q.ammo=Math.min(3,q.ammo+n);q.refillAt=q.ammo===3?0:q.refillAt+n*rate;}return q;
   }
@@ -410,8 +410,8 @@ html,body,#app{background:#081720;color:#ecf7f5}
    for(const k of seatKeys){const p=seats[k];hp[p.id]=chars[p.char].hp;combatAt[p.id]=0;stats[p.id]={char:p.char,ammo:3,refillAt:0,ult:0,gadgets:mode==='area'?1:2,gadgetReadyAt:0,boostUntil:0,overdriveUntil:0,lastShotAt:0,lastActionSeq:0,life:0,armed:false,guardUntil:0,guardTargetId:'',guardTargetLife:-1,guardSaved:0};motions[p.id]={rev:0,...spawns[k]};}
    return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},combatAt,events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
   }
-  function burst(a,s,g){const spread=s.char==='tank'?[-.2,-.1,0,.1,.2]:s.char==='gunner'?[-.075,0,.075]:[0],seat=seatOf(g,a.owner);
-   return spread.map((d,i)=>({id:a.eventId+':'+i,owner:a.owner,ownerLife:s.life,team:team(seat),x:a.x+Math.cos(a.angle)*28,y:a.y+Math.sin(a.angle)*28,vx:Math.cos(a.angle+d)*660,vy:Math.sin(a.angle+d)*660,dist:0,range:chars[s.char].range,radius:s.char==='sniper'?5:6,damage:chars[s.char].damage,char:s.char}));
+  function burst(a,s,g){const spread=BrawlWeaponV1.spread(s.char),seat=seatOf(g,a.owner);
+   return spread.map((d,i)=>({id:a.eventId+':'+i,owner:a.owner,ownerLife:s.life,team:team(seat),x:a.x+Math.cos(a.angle)*28,y:a.y+Math.sin(a.angle)*28,vx:Math.cos(a.angle+d)*BrawlWeaponV1.bulletSpeed,vy:Math.sin(a.angle+d)*BrawlWeaponV1.bulletSpeed,dist:0,range:chars[s.char].range,radius:s.char==='sniper'?5:6,damage:chars[s.char].damage,char:s.char}));
   }
   function flying(g,id){return Object.values(g.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===id&&u.ownerLife===g.stats[id]?.life);}
   function receipt(a,now,status,reason){return {owner:a.owner,seq:a.seq,type:a.type,at:a.at,acceptedAt:now,status,reason:reason||''};}
@@ -432,7 +432,7 @@ html,body,#app{background:#081720;color:#ecf7f5}
      const dst=landing(pos,a.angle,Math.min(a.reach||BALANCE.bomberRange,BALANCE.bomberRange)); // bombs may land beside/on walls, unlike jumps
      g.scheduled[a.eventId]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key:a.eventId,x:dst.x,y:dst.y,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,damage:BALANCE.bomberDamage,radius:BALANCE.bomberRadius,enhanced:!!s.armed};s.armed=false;
     }else{const shots=burst({...a,x:pos.x,y:pos.y},s,g);
-       shots.forEach((b,i)=>{g.projectiles[b.id]={...b,spawnAt:t+(char==='gunner'?i*(s.overdriveUntil>t?57:105):0)};});
+       shots.forEach((b,i)=>{g.projectiles[b.id]={...b,spawnAt:t+(char==='gunner'?i*BrawlWeaponV1.gapMs(s.overdriveUntil>t):0)};});
       }
    }else if(a.type==='gadget'){
     if(s.gadgets<1||char==='bomber'&&s.armed)return reject('gadget');
@@ -448,7 +448,7 @@ html,body,#app{background:#081720;color:#ecf7f5}
     else if(char==='sniper'){
      for(const k of seatKeys){const id=g.seats[k].id;if(team(k)===team(seatOf(g,a.owner))||!(g.hp[id]>0))continue;
       const p=point(g,id,input),d=Math.hypot(p.x-pos.x,p.y-pos.y);if(d<=140){const dx=d?(p.x-pos.x)/d:1,dy=d?(p.y-pos.y)/d:0;
-       g.scheduled[a.eventId+':'+id]={kind:'shock',owner:a.owner,ownerLife:s.life,key:a.eventId+':'+id,victim:id,victimLife:g.stats[id].life,until:t,damage:10,x:p.x,y:p.y};motion(g,id,move(p,dx*120,dy*120));}}
+       g.scheduled[a.eventId+':'+id]={kind:'shock',owner:a.owner,ownerLife:s.life,key:a.eventId+':'+id,victim:id,victimLife:g.stats[id].life,until:t,damage:10,x:p.x,y:p.y};motion(g,id,move(p,dx*BrawlWeaponV1.sniperKnockback,dy*BrawlWeaponV1.sniperKnockback));}}
     }
    }else if(a.type==='ultimate'){
     if(s.ult<100)return reject('ultimate');
@@ -478,8 +478,8 @@ html,body,#app{background:#081720;color:#ecf7f5}
    for(const [id,b]of Object.entries(g.projectiles)){
     if(b.spawnAt>t)continue;
     const activeMs=b.spawnAt>oldT?Math.max(0,t-b.spawnAt):dt;
-    let alive=true;const n=Math.max(1,Math.ceil(660*activeMs/1000/6));
-    for(let i=0;i<n;i++){b.x+=b.vx*activeMs/1000/n;b.y+=b.vy*activeMs/1000/n;b.dist+=660*activeMs/1000/n;
+    let alive=true;const n=Math.max(1,Math.ceil(BrawlWeaponV1.bulletSpeed*activeMs/1000/6));
+    for(let i=0;i<n;i++){b.x+=b.vx*activeMs/1000/n;b.y+=b.vy*activeMs/1000/n;b.dist+=BrawlWeaponV1.bulletSpeed*activeMs/1000/n;
      if(b.x<0||b.x>W||b.y<0||b.y>H||wall(b.x,b.y,b.radius)||b.dist>=b.range){alive=false;break;}
      for(const k of seatKeys){const v=g.seats[k].id;if(team(k)===b.team||!canHit(v))continue;const p=targets[v];
       if(Math.hypot(p.x-b.x,p.y-b.y)<=R+b.radius){hit(b.id,b.owner,v,b.char==='tank'?tankDamage(b.dist):b.char==='sniper'?Math.min(64,36+Math.round(b.dist*.065)):b.damage);alive=false;break;}}
@@ -552,6 +552,18 @@ html,body,#app{background:#081720;color:#ecf7f5}
 })(typeof globalThis==='object'?globalThis:this);
 
 /* END COMBAT CORE */
+/* BEGIN SHARED WEAPON RULES */
+// Source of truth for common 1vs1/2vs2 weapon timing, spread and gadget knockback.
+// This is inserted into BOTH standalone game HTML files by build-brawl.cjs.
+// __*__ placeholders are replaced exclusively with shared/brawl-core-contract.json.
+const BrawlWeaponV1=Object.freeze({
+ spread(char){return char==='tank'?[-0.2,-0.1,0,0.1,0.2]:char==='gunner'?[-0.075,0,0.075]:[0];},
+ gapMs(overdrive){return overdrive?57:105;},
+ overdriveReloadMs:750,
+ sniperKnockback:120,
+ bulletSpeed:660
+});
+/* END SHARED WEAPON RULES */
 /* BEGIN LOCAL CORE */
 /* 通信なし練習用。Firebaseを呼ばず、同じ購読/transaction APIで戦闘経路を共有する。 */
 (function(root){
@@ -687,7 +699,7 @@ html,body,#app{background:#081720;color:#ecf7f5}
    const friend=allies[0]||null;
     const allyNeedsHelp=!!friend&&g.hp[friend.id]/chars[g.stats[friend.id].char].hp<.72&&t-(g.combatAt?.[friend.id]||0)<1800&&distance(actor,friend.p)<290;
     const rescue=s.char==='tank'&&allyNeedsHelp&&!(s.guardUntil>t);
-   const ammoRate=s.char==='gunner'&&s.overdriveUntil>t?750:spec.reload;
+   const ammoRate=s.char==='gunner'&&s.overdriveUntil>t?BrawlWeaponV1.overdriveReloadMs:spec.reload;
    const effectiveAmmo=clamp(s.ammo+(s.refillAt>0?Math.max(0,Math.floor((t-s.refillAt)/ammoRate)+1):0),0,3);
    const wounded=g.hp[owner]/spec.hp<.38,empty=effectiveAmmo===0;
    // Persist healing intent until 72% HP, including after an opponent vanishes in mist.
@@ -742,7 +754,7 @@ html,body,#app{background:#081720;color:#ecf7f5}
    }
    let angle=actor.a||0,reach=300,action=null;
    if(target){const flight=s.char==='bomber'?.8:d/660,tx=target.p.x+(target.p.vx||0)*flight*setting.lead,ty=target.p.y+(target.p.vy||0)*flight*setting.lead;angle=Math.atan2(ty-actor.y,tx-actor.x)+Math.sin(t/371+owner.length)*setting.error;reach=clamp(Math.hypot(tx-actor.x,ty-actor.y),55,s.char==='bomber'?300:330);
-    const clear=segment(actor,target.p,5),rate=s.char==='gunner'&&s.overdriveUntil>t?750:spec.reload,ammo=clamp(s.ammo+(s.refillAt>0?Math.max(0,Math.floor((t-s.refillAt)/rate)+1):0),0,3),canShoot=d<=spec.range+10&&(s.char==='bomber'||clear);
+    const clear=segment(actor,target.p,5),rate=s.char==='gunner'&&s.overdriveUntil>t?BrawlWeaponV1.overdriveReloadMs:spec.reload,ammo=clamp(s.ammo+(s.refillAt>0?Math.max(0,Math.floor((t-s.refillAt)/rate)+1):0),0,3),canShoot=d<=spec.range+10&&(s.char==='bomber'||clear);
     if(t>=brain.nextSkill&&s.gadgets>0&&(!brain.recovering||rescue)&&(s.char==='gunner'&&ammo<1||s.char==='bomber'&&ammo<3&&!s.armed||s.char==='sniper'&&d<135||s.char==='tank'&&!(s.guardUntil>t)&&(rescue||d>145&&d<350))){if(rescue)angle=Math.atan2(friend.p.y-actor.y,friend.p.x-actor.x);action='gadget';brain.nextSkill=t+650;}
     else if(!brain.recovering&&t>=brain.nextSkill&&s.ult>=100&&(s.char==='tank'&&d<330&&!blocked(actor.x+Math.cos(angle)*reach,actor.y+Math.sin(angle)*reach,24)||s.char==='gunner'&&d<350||s.char==='sniper'&&d<800||s.char==='bomber'&&d<310)){action='ultimate';brain.nextSkill=t+600;}
     else if(t>=brain.nextShot&&ammo>0&&canShoot&&(!withdrawing||d<92)){
@@ -887,7 +899,7 @@ function guardFor(id,now){if(!game||!lobby||!(game.hp?.[id]>0))return null;
  if(source===id||st.guardTargetId===id&&st.guardTargetLife===game.stats?.[id]?.life)
  return {id:source,until:st.guardUntil,saved:st.guardSaved||0};}
  return null;}
-function derivedAmmo(player,now){if(!player)return {ammo:3,progress:0};let ammo=clamp(player.ammo??3,0,3);const reload=player.char==='gunner'&&(player.overdriveUntil||0)>now?750:(CHARS[player.char]?.reload||1000);
+function derivedAmmo(player,now){if(!player)return {ammo:3,progress:0};let ammo=clamp(player.ammo??3,0,3);const reload=player.char==='gunner'&&(player.overdriveUntil||0)>now?BrawlWeaponV1.overdriveReloadMs:(CHARS[player.char]?.reload||1000);
  if(ammo>=3||!Number.isFinite(player.refillAt))return {ammo,progress:0};
  const gain=Math.max(0,Math.floor((now-player.refillAt)/reload)+1);
  if(now>=player.refillAt&&gain>0){ammo=Math.min(3,ammo+gain);}
