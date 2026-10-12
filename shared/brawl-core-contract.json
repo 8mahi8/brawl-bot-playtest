@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Canonical common character/stats/rules source for independently built 1vs1 and 2vs2 candidates. Generated foundation builds now inline the same weapon rules, projectile physics, ammo replenishment, and volley creation; full authoritative battle state, online synchronization, BOT behavior and UI remain mode-specific.",
+  "note": "Canonical shared stat/weapon/projectile/match/ability contracts for both generated foundation games. V8 common GAD/ULT effects are shared; Tank GAD remains intentionally mode-specific. Standalone 1vs1 legacy UI/BOT and Firebase networking are not fully unified.",
   "sourceCandidates": [
     "1v1-combat-evolution-test.html",
     "2v2-ui-guardian-r4-test.html"
@@ -109,12 +109,13 @@
     "Natural regeneration scheduling: 1vs1 independent host call, 2vs2 combat tick",
     "Rendering/HUD/camera and full UI remain separate engines",
     "Firebase online room namespaces/protocols, disconnection/resume semantics and 4-player networking remain unintegrated",
-    "Some mode-specific ultimate hit/landing and bomb presentation remain separate code paths"
+    "Some real-time legacy 1vs1 ability presentation and client-side animations remain independent even though V8 ultimate scheduling is shared"
   ],
   "resolvedInGeneratedFoundation": {
     "weaponRules": "Tank spread, gunner burst angles/delay/origin, gunner overdrive reload, sniper knockback and bullet velocity use shared runtime/weapon-rules.inc.js",
     "projectilePhysics": "1vs1 legacy bullets and both V8 host reducers now use shared runtime/projectile-physics.inc.js for substep movement, circle hit detection and damage falloff",
     "authoritativeAmmoAndVolley": "Both V8 reducers embed identical shared runtime/combat-actions.inc.js for ammo replenishment and projectile creation",
-    "scope": "Generated foundation candidates only; original historical 1v1/2v2 HTML kept untouched"
+    "scope": "Generated foundation candidates only; original historical 1v1/2v2 HTML kept untouched",
+    "abilities": "Both host V8 engines call shared/runtime/abilities.inc.js for Gunner/Bomber/Sniper GAD and Tank/Gunner/Sniper/Bomber ULT. Tank GAD remains mode-specific (solo dash versus 2vs2 guardian ally link); constants use common.abilityRules."
   }
 }
