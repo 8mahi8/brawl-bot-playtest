@@ -73,7 +73,7 @@ check('Actual host reducers of both modes apply identical sniper scaling',()=>{
 check('Both standalone scripts and legacy 1vs1 shooting use shared physics API',()=>{
  assert(games[0].script.includes('return BrawlProjectileV1.advance(b,dt,{'),'1vs1 actual renderer');
  assert(games[1].script.includes('const aliveBullet=BrawlProjectileV1.advance(bullet,activeSec,{'),'2vs2 actual renderer');
- assert(games[0].script.includes('const alive=BrawlProjectileV1.advance(b,dt/1000,{'),'1vs1 reducer');
+ assert(games[0].script.includes('const alive=BrawlProjectileV1.advance(b,activeMs/1000,{'),'1vs1 reducer with staggered burst');
  assert(games[1].script.includes('const alive=BrawlProjectileV1.advance(b,activeMs/1000,{'),'2vs2 reducer');
 });
 console.log('PASS all '+checks+' cross-mode projectile checks, no Firebase contact');
