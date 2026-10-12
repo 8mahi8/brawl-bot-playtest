@@ -9,6 +9,7 @@ on:
       - 'foundation/1v1-foundation-v1.html'
       - 'foundation/2v2-foundation-v1.html'
       - 'scripts/build-brawl.cjs'
+      - 'scripts/build-open-arena-lab.cjs'
       - 'tests/foundation-*.cjs'
       - '.github/workflows/foundation-build.yml'
   pull_request:
@@ -35,6 +36,10 @@ jobs:
           node-version: '22'
       - name: Both generated pages must exactly match single shared contract and source templates
         run: node scripts/build-brawl.cjs --check
+      - name: Independent wide-map build must exactly match foundation baseline
+        run: node scripts/build-open-arena-lab.cjs --check
+      - name: Wide-map cover symmetry and walkable routes
+        run: node tests/foundation-2v2-open-arena.cjs
       - name: Prove one shared configuration edit propagates to BOTH builds
         run: node tests/foundation-build-smoke.cjs
       - name: Compare actual 1vs1 and 2vs2 weapon behavior before browser QA
@@ -62,11 +67,15 @@ jobs:
         run: node tests/foundation-2v2-browser.cjs
       - name: Live 2vs2 HOT ZONE BOT objective play on desktop and tablet
         run: node tests/foundation-2v2-area-browser.cjs
+      - name: Open Arena LAB desktop KO and tablet HOT ZONE
+        run: node tests/foundation-2v2-open-arena-browser.cjs
       - name: Store generated-build screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: brawl-foundation-1v1-2v2-screen-previews
-          path: artifacts/foundation-v1-*.png
+          path: |
+            artifacts/foundation-v1-*.png
+            artifacts/open-arena-*.png
           if-no-files-found: ignore
           retention-days: 7
