@@ -444,13 +444,21 @@ html,body,#app{background:#081720;color:#ecf7f5}
    for(const [id,b]of Object.entries(g.projectiles)){
     if(b.spawnAt>t)continue;
     const activeMs=b.spawnAt>oldT?Math.max(0,t-b.spawnAt):dt;
-    let alive=true;const n=Math.max(1,Math.ceil(BrawlWeaponV1.bulletSpeed*activeMs/1000/6));
-    for(let i=0;i<n;i++){b.x+=b.vx*activeMs/1000/n;b.y+=b.vy*activeMs/1000/n;b.dist+=BrawlWeaponV1.bulletSpeed*activeMs/1000/n;
-     if(b.x<0||b.x>W||b.y<0||b.y>H||wall(b.x,b.y,b.radius)||b.dist>=b.range){alive=false;break;}
-     for(const k of seatKeys){const v=g.seats[k].id;if(team(k)===b.team||!canHit(v))continue;const p=targets[v];
-      if(Math.hypot(p.x-b.x,p.y-b.y)<=R+b.radius){hit(b.id,b.owner,v,b.char==='tank'?tankDamage(b.dist):b.char==='sniper'?Math.min(64,36+Math.round(b.dist*.065)):b.damage);alive=false;break;}}
-     if(!alive)break;
-    }if(!alive)delete g.projectiles[id];
+    const alive=BrawlProjectileV1.advance(b,activeMs/1000,{
+     width:W,height:H,rangeFirst:true,
+     wallHit:(x,y,r)=>wall(x,y,r),
+     targetHit:bullet=>{
+      for(const k of seatKeys){
+       const v=g.seats[k].id;if(team(k)===bullet.team||!canHit(v))continue;
+       const p=targets[v];
+       if(BrawlProjectileV1.hitCircle(bullet.x,bullet.y,p.x,p.y,R+bullet.radius)){
+        hit(bullet.id,bullet.owner,v,BrawlProjectileV1.damage(bullet,tankDamage));return true;
+       }
+      }
+      return false;
+     }
+    });
+    if(!alive)delete g.projectiles[id];
    }
    const due=Object.entries(g.scheduled).filter(([,u])=>u.until<=t);
    // All landings are applied before the same-tick area/HP decision.
@@ -1163,16 +1171,27 @@ async function processHostQueue(){if(!combatReady()||!isAuthoritative()||hostPro
  }}catch(e){if(activeAction)queuedActions.delete(activeAction.eventId);console.warn('Host action',e);}finally{hostProcessing=false;}}
 
 function projectileStep(list,dt,authoritative){const hits=[];
- for(let j=list.length-1;j>=0;j--){const b=list[j];
-  const now=performance.now();if(b.spawnAt>now)continue;
-  const activeSec=b.spawnAt>now-dt*1000?Math.max(0,(now-b.spawnAt)/1000):dt;
-  let aliveBullet=true;const n=Math.max(1,Math.ceil(660*activeSec/7)),step=activeSec/n;
-  for(let i=0;i<n;i++){b.x+=b.vx*step;b.y+=b.vy*step;b.dist+=660*step;
-   if(b.x<0||b.x>W||b.y<0||b.y>H||WALLS.some(w=>b.x+b.radius>w.x&&b.x-b.radius<w.x+w.w&&b.y+b.radius>w.y&&b.y-b.radius<w.y+w.h)||b.dist>=b.range){aliveBullet=false;break;}
-   if(authoritative){for(const k of SEATS){if(teamOfSeat(k)===b.team)continue;const p=lobby?.seats?.[k];if(!p||!(game?.hp?.[p.id]>0))continue;const pos=targetPoint(p.id);if(Math.hypot(b.x-pos.x,b.y-pos.y)<=R+b.radius){const damage=b.sniper?Math.min(64,36+Math.round(b.dist*.065)):b.damage;hits.push({key:b.id,victim:p.id,owner:b.owner,amount:damage,x:b.x,y:b.y});aliveBullet=false;break;}}
-    if(!aliveBullet)break;
+ for(let j=list.length-1;j>=0;j--){
+  const bullet=list[j],now=performance.now();
+  if(bullet.spawnAt>now)continue;
+  const activeSec=bullet.spawnAt>now-dt*1000?Math.max(0,(now-bullet.spawnAt)/1000):dt;
+  const aliveBullet=BrawlProjectileV1.advance(bullet,activeSec,{
+   width:W,height:H,rangeFirst:true,
+   wallHit:(x,y,r)=>WALLS.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
+   targetHit:b=>{
+    if(!authoritative)return false;
+    for(const k of SEATS){
+     if(teamOfSeat(k)===b.team)continue;
+     const p=lobby?.seats?.[k];if(!p||!(game?.hp?.[p.id]>0))continue;
+     const pos=targetPoint(p.id);
+     if(BrawlProjectileV1.hitCircle(b.x,b.y,pos.x,pos.y,R+b.radius)){
+      hits.push({key:b.id,victim:p.id,owner:b.owner,amount:BrawlProjectileV1.damage(b,BrawlCombatV8.tankDamage),x:b.x,y:b.y});
+      return true;
+     }
+    }
+    return false;
    }
-  }
+  });
   if(!aliveBullet)list.splice(j,1);
  }
  return hits;
