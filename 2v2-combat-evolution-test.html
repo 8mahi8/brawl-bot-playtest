@@ -389,7 +389,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
      if(g.mode==='area'&&!g.respawns[id])g.respawns[id]=t+BALANCE.areaRespawnMs;
     }
     if(g.mode==='area'&&g.respawns[id]&&t>=g.respawns[id]){
-     const s=g.stats[id];s.life++;s.ammo=3;s.refillAt=0;s.boostUntil=0;s.overdriveUntil=0;s.armed=false;g.hp[id]=chars[s.char].hp;delete g.respawns[id];delete g.debuffs[id];g.protection[id]=t+BALANCE.areaSpawnShieldMs;delete g.reveals[id];motion(g,id,spawns[k]);targets[id]={...spawns[k]};emit('respawn',{owner:id,x:spawns[k].x,y:spawns[k].y});
+     const s=g.stats[id];s.life++;s.ammo=3;s.refillAt=0;s.boostUntil=0;s.overdriveUntil=0;s.armed=false;g.hp[id]=chars[s.char].hp;g.combatAt[id]=t;delete g.respawns[id];delete g.debuffs[id];g.protection[id]=t+BALANCE.areaSpawnShieldMs;delete g.reveals[id];motion(g,id,spawns[k]);targets[id]={...spawns[k]};emit('respawn',{owner:id,x:spawns[k].x,y:spawns[k].y});
     }
    }
    if(g.mode==='area'){
@@ -640,15 +640,15 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
 'use strict';
 (()=>{
 const DB_URL='OFFLINE_ONLY_NO_REMOTE_DATABASE';
-const ROOT='rooms2v2',PROTOCOL=3010,SEATS=['blue1','blue2','red1','red2'],W=1536,H=860,R=18;
+const ROOT='rooms2v2',PROTOCOL=3011,SEATS=['blue1','blue2','red1','red2'],W=1536,H=860,R=18;
 const BALANCE=BrawlCombatV8.balance;
 // キャラ設定: HP / speed / damage / range / reload(ms)
 const GAS_DELAY=28_000,GAS_SPEED=9,GAS_CAP=380,GAS_DAMAGE=10,PAUSE_LIMIT=15_000;
 const CHARS={tank:{label:'タンク',color:'#ffa941',hp:180,speed:102,damage:BALANCE.tankNearDamage,range:BALANCE.tankFalloffEnd,reload:833},gunner:{label:'ガンナー',color:'#39dced',hp:100,speed:102,damage:10,range:280,reload:1250},sniper:{label:'スナイパー',color:'#c07aff',hp:70,speed:102,damage:36,range:455,reload:1833},bomber:{label:'ボマー',color:'#ff7954',hp:90,speed:102,damage:BALANCE.bomberDamage,range:BALANCE.bomberRange,reload:1500}};
-const KO_WALLS=[{"x":320,"y":170,"w":112,"h":110},{"x":928,"y":170,"w":112,"h":110},{"x":320,"y":480,"w":112,"h":110},{"x":928,"y":480,"w":112,"h":110},{"x":535,"y":305,"w":85,"h":150},{"x":740,"y":305,"w":85,"h":150},{"x":612,"y":140,"w":136,"h":56},{"x":612,"y":564,"w":136,"h":56}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1.04),h:Math.round(v.h*1.04)}));
-const KO_BUSHES=[{"x":260,"y":40,"w":245,"h":90},{"x":855,"y":40,"w":245,"h":90},{"x":260,"y":630,"w":245,"h":90},{"x":855,"y":630,"w":245,"h":90},{"x":465,"y":230,"w":118,"h":65},{"x":777,"y":230,"w":118,"h":65},{"x":465,"y":465,"w":118,"h":65},{"x":777,"y":465,"w":118,"h":65},{"x":630,"y":216,"w":100,"h":70},{"x":630,"y":474,"w":100,"h":70}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1.04),h:Math.round(v.h*1.04)}));
-const AREA_WALLS=[{"x":465,"y":210,"w":70,"h":100},{"x":825,"y":210,"w":70,"h":100},{"x":465,"y":450,"w":70,"h":100},{"x":825,"y":450,"w":70,"h":100},{"x":645,"y":85,"w":70,"h":50},{"x":645,"y":625,"w":70,"h":50}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1.04),h:Math.round(v.h*1.04)}));
-const AREA_BUSHES=[{"x":280,"y":180,"w":95,"h":125},{"x":985,"y":180,"w":95,"h":125},{"x":280,"y":455,"w":95,"h":125},{"x":985,"y":455,"w":95,"h":125},{"x":600,"y":170,"w":160,"h":55},{"x":600,"y":535,"w":160,"h":55}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1.04),h:Math.round(v.h*1.04)}));
+const KO_WALLS=[{"x":320,"y":170,"w":112,"h":110},{"x":928,"y":170,"w":112,"h":110},{"x":320,"y":480,"w":112,"h":110},{"x":928,"y":480,"w":112,"h":110},{"x":535,"y":305,"w":85,"h":150},{"x":740,"y":305,"w":85,"h":150},{"x":612,"y":140,"w":136,"h":56},{"x":612,"y":564,"w":136,"h":56}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1536/1360),h:Math.round(v.h*860/760)}));
+const KO_BUSHES=[{"x":260,"y":40,"w":245,"h":90},{"x":855,"y":40,"w":245,"h":90},{"x":260,"y":630,"w":245,"h":90},{"x":855,"y":630,"w":245,"h":90},{"x":465,"y":230,"w":118,"h":65},{"x":777,"y":230,"w":118,"h":65},{"x":465,"y":465,"w":118,"h":65},{"x":777,"y":465,"w":118,"h":65},{"x":630,"y":216,"w":100,"h":70},{"x":630,"y":474,"w":100,"h":70}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1536/1360),h:Math.round(v.h*860/760)}));
+const AREA_WALLS=[{"x":465,"y":210,"w":70,"h":100},{"x":825,"y":210,"w":70,"h":100},{"x":465,"y":450,"w":70,"h":100},{"x":825,"y":450,"w":70,"h":100},{"x":645,"y":85,"w":70,"h":50},{"x":645,"y":625,"w":70,"h":50}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1536/1360),h:Math.round(v.h*860/760)}));
+const AREA_BUSHES=[{"x":280,"y":180,"w":95,"h":125},{"x":985,"y":180,"w":95,"h":125},{"x":280,"y":455,"w":95,"h":125},{"x":985,"y":455,"w":95,"h":125},{"x":600,"y":170,"w":160,"h":55},{"x":600,"y":535,"w":160,"h":55}].map(v=>({...v,x:Math.round(v.x*1536/1360),y:Math.round(v.y*860/760),w:Math.round(v.w*1536/1360),h:Math.round(v.h*860/760)}));
 let WALLS=KO_WALLS,BUSHES=KO_BUSHES;
 const SPAWNS={blue1:{x:220,y:290,a:0},blue2:{x:220,y:570,a:0},red1:{x:1316,y:290,a:Math.PI},red2:{x:1316,y:570,a:Math.PI}};
 const $=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
