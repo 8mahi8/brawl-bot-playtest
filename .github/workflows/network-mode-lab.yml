@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - 'network/lab/**'
+      - 'foundation/1v1-foundation-v1.html'
+      - 'foundation/2v2-foundation-v1.html'
       - 'tests/network-*.cjs'
       - '.github/workflows/network-mode-lab.yml'
   pull_request:
@@ -26,5 +28,7 @@ jobs:
         run: node tests/network-mode-isolation.cjs
       - name: Deterministic 2-player and 4-player latency/load simulation
         run: node tests/network-latency-simulation.cjs
+      - name: Multi-client movement, hit and host lease with actual generated V8 engines
+        run: node tests/network-multiclient-integration.cjs
       - name: Verify public playtest candidates do not accidentally enable Firebase networking
         run: node tests/network-public-isolation.cjs
