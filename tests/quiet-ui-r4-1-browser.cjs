@@ -35,6 +35,8 @@ async function run(browser,name,opts){
   assert(!clutter.guardAlert?.visible,'no large shield alert, even when added to DOM');
   assert(!clutter.guardMeter?.visible,'no shield statistics card covering HP');
   assert(!clutter.anyHudOverlap,'HUD cards and center match header do not collide');
+  await page.waitForFunction(()=>document.querySelector('#networkStatus')?.classList.contains('hidden'),null,{timeout:2000});
+  assert(!(await page.locator('#networkStatus').isVisible()),'offline mode hides diagnostic network/FPS text');
   for(const r of clutter.hudCards)assert(r.left>=-2&&r.right<=clutter.viewport.w+2&&r.top>=-2&&r.bottom<=clutter.viewport.h+2,'HUD remains fully inside screen');
   assert.equal(Object.keys(before.stats).length,4,'4 combat actors');
   await page.locator('#skillInfoToggle').click();
