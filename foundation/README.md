@@ -21,6 +21,10 @@
 | 生成した2vs2 | [2v2-foundation-v1.html](./2v2-foundation-v1.html) | 2vs2 R4.1の静かなUI、チームリンク、2vs2 KO/AREAを維持した新しいオフライン開発候補 |
 | CI | [foundation-build.yml](../.github/workflows/foundation-build.yml) | 両ビルドの再現性、共有ソースの双方向伝播、実ゲーム回帰、PC/タッチ操作を自動検証 |
 
+## ネットワーク設計の分離（V1.4以降）
+
+**オンライン通信はゲーム共通エンジンへ無条件に合流させない。** [モード別ネットワークの隔離ラボ](../network/README.md)を作成し、1vs1（host/guest）と2vs2（4席、presence/connectionId、ホストの戦闘tick）の違いを保護した。模擬送受信・遅延・切断/復帰の検証を独立CIで継続する。両Foundation HTMLは引き続きBOT専用でFirebase無効、実オンライン移植は行っていない。
+
 ## ローカルでの作り方
 
 Node.js 22 以上。実行はリポジトリのルートから。
