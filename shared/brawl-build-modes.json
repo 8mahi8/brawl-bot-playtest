@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "purpose": "Both standalone dev builds inherit character stats and combat BALANCE from shared/brawl-core-contract.json. UI/combat architectures remain mode-specific in source templates.",
+  "characterDisplay": {
+    "tank": {
+      "label": "タンク",
+      "color": "#ffa941"
+    },
+    "gunner": {
+      "label": "ガンナー",
+      "color": "#39dced"
+    },
+    "sniper": {
+      "label": "スナイパー",
+      "color": "#c07aff"
+    },
+    "bomber": {
+      "label": "ボマー",
+      "color": "#ff7954"
+    }
+  },
+  "sharedModeBalance": {
+    "areaCaptureMs": 60000,
+    "areaLimitMs": 180000,
+    "areaRespawnMs": 4000,
+    "areaGadgetRechargeMs": 25000,
+    "areaSpawnShieldMs": 1000
+  },
+  "modes": {
+    "1vs1": {
+      "template": "1v1-combat-evolution-test.html",
+      "output": "foundation/1v1-foundation-v1.html",
+      "areaRadius": 100,
+      "characterOrder": [
+        "tank",
+        "gunner",
+        "bomber",
+        "sniper"
+      ],
+      "originalReloadUnit": "seconds",
+      "characterExtras": {
+        "tank": {
+          "ultDamage": 60,
+          "ultRange": 160,
+          "ultRadius": 40
+        },
+        "gunner": {
+          "ultDamage": 40,
+          "ultRange": 320,
+          "ultRadius": 15
+        },
+        "sniper": {
+          "ultDamage": 60,
+          "ultRange": 600,
+          "ultRadius": 20
+        },
+        "bomber": {
+          "ultDamage": 18,
+          "ultRange": 300,
+          "ultRadius": 82
+        }
+      }
+    },
+    "2vs2": {
+      "template": "2v2-ui-clean-r4-1-test.html",
+      "output": "foundation/2v2-foundation-v1.html",
+      "areaRadius": 118,
+      "characterOrder": [
+        "tank",
+        "gunner",
+        "sniper",
+        "bomber"
+      ],
+      "originalReloadUnit": "integerMilliseconds",
+      "characterExtras": {}
+    }
+  }
+}
