@@ -252,7 +252,7 @@
 <body>
   <div id="appStage">
   <canvas id="gameCanvas" aria-label="対戦フィールド"></canvas>
-  <div id="pcHelp">WASD / 矢印：移動　左クリック：攻撃　Shift＋左クリック：自動照準　右クリック：GAD　Space：ULT</div>
+  <div id="pcHelp">WASD / 矢印：移動　左クリック：攻撃　短押し左クリック：自動照準　長押し左クリック：照準して離して射撃　右クリック：GAD　Space：ULT</div>
   <div id="lobbyScreen" class="screen">
     <h1>BRAWL <em>DUEL</em><span>BOT PRACTICE · V2.9</span></h1>
     <p class="sub"><b>左ドラッグ</b> 移動　 ·　 <b>右タップ</b> 自動射撃　 ·　 <b>右ドラッグ</b> 手動射撃</p>
@@ -696,7 +696,7 @@
   let left={id:null,ox:0,oy:0,x:0,y:0}, right={id:null,ox:0,oy:0,x:0,y:0};
   let noticeToken=0;
   let view={sw:0,sh:0,scale:1,ox:0,oy:0};
-  let pcAim=null;
+  let pcAim=null,pcShot=null;
   function pcPointer(e){
     if(!isPlaying()||botPilot||layoutEditing||!view.scale)return;
     const rect=canvas.getBoundingClientRect();
@@ -714,7 +714,7 @@
   function clamp(n,min,max) { return Math.max(min,Math.min(max,n)); }
   function time() { return Date.now()+offset; }
   function isPlaying() { return !!game && game.phase==='playing' && time()>=game.startAt && (solo || (connected && !!(players.host&&players.host.online&&players.guest&&players.guest.online))); }
-  function clearControls() { left.id=null; right.id=null; ultAim=null;normalAimCancelled=false;normalAimEverDragged=false; }
+  function clearControls() { left.id=null; right.id=null; pcShot=null; ultAim=null;normalAimCancelled=false;normalAimEverDragged=false; }
   function maxHp(char) { return CHARS[char] ? CHARS[char].hp : CHARS.tank.hp; }
   function actionFeedback(text,btnId) {
     const n=++noticeToken;
@@ -1768,6 +1768,11 @@
     ctx.strokeStyle='rgba(119,196,207,.12)';ctx.setLineDash([9,15]);
     ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();ctx.setLineDash([]);
     BrawlStealthV1.drawFields(ctx,bushes,performance.now());
+    if(pcShot&&pcAim&&isPlaying()){
+      const angle=pcAngle(),range=CHARS[local.char]?.range||300;
+      ctx.save();ctx.strokeStyle='rgba(208,242,255,.85)';ctx.lineWidth=2;ctx.setLineDash([9,7]);
+      ctx.beginPath();ctx.moveTo(local.x,local.y);ctx.lineTo(local.x+Math.cos(angle)*range,local.y+Math.sin(angle)*range);ctx.stroke();ctx.restore();
+    }
     for(const w of walls){
       ctx.fillStyle='rgba(3,12,22,.45)';ctx.fillRect(w.x+5,w.y+7,w.w,w.h);
       ctx.fillStyle='#304859';ctx.fillRect(w.x,w.y,w.w,w.h);
@@ -2346,11 +2351,18 @@
     // Mouse actions are independent of touch joysticks: prevent double execution.
     canvas.addEventListener('mousemove',e=>pcPointer(e));
     canvas.addEventListener('mousedown',e=>{
-      if(e.button!==0&&e.button!==2)return;
-      if(!isPlaying()||botPilot||layoutEditing)return;
+      if(e.button!==0&&e.button!==2||!isPlaying()||botPilot||layoutEditing)return;
       e.preventDefault();pcPointer(e);
-      if(e.button===0){if(e.shiftKey)shoot(false);else shoot(false,pcAngle(),pcReach());}
+      if(e.button===0)pcShot={at:performance.now(),x:e.clientX,y:e.clientY};
       else useGadget();
+    });
+    window.addEventListener('mouseup',e=>{
+      if(e.button!==0||!pcShot)return;
+      const held=pcShot;pcShot=null;
+      if(!isPlaying()||botPilot||layoutEditing)return;
+      pcPointer(e);
+      const quick=performance.now()-held.at<175&&Math.hypot(e.clientX-held.x,e.clientY-held.y)<10;
+      if(quick)shoot(false);else shoot(false,pcAngle(),pcReach());
     });
     canvas.addEventListener('contextmenu',e=>{if(isPlaying())e.preventDefault();});
     canvas.addEventListener('pointerdown',pointerDown);
