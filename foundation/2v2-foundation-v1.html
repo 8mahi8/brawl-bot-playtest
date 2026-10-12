@@ -517,22 +517,24 @@ html,body,#app{background:#081720;color:#ecf7f5}
     if(t>=d.slowUntil&&t>d.dotUntil)delete g.debuffs[v];
    }
    if(g.mode!=='area'&&t>=g.gasNextAt){const m=clamp((t-28000)/1000*9,0,380);for(const k of seatKeys){const id=g.seats[k].id,p=targets[id];if(m>0&&(p.x<m||p.x>W-m||p.y<m||p.y>H-m))hit('gas:'+g.gasNextAt+':'+id,'gas',id,10);}g.gasNextAt+=1000;}
-   for(const h of hits){if(!(g.hp[h.victim]>0))continue;g.combatAt[h.victim]=t;if(g.stats[h.owner])g.combatAt[h.owner]=t;const guardian=h.owner==='gas'?null:seatKeys.map(k=>g.seats[k].id).find(id=>{const st=g.stats[id];return st?.char==='tank'&&st.guardUntil>t&&g.hp[id]>0&&(id===h.victim||st.guardTargetId===h.victim&&st.guardTargetLife===g.stats[h.victim].life);});
- const amount=Math.min(guardian?Math.max(1,Math.round(h.amount*.65)):h.amount,g.hp[h.victim]);
- const saved=guardian?Math.max(0,Math.min(h.amount,g.hp[h.victim])-amount):0;
- if(saved>0)g.stats[guardian].guardSaved=(g.stats[guardian].guardSaved||0)+saved;
- g.hp[h.victim]-=amount;
-    if(g.stats[h.owner])g.stats[h.owner].ult=Math.min(100,g.stats[h.owner].ult+amount*.48);
-    g.stats[h.victim].ult=Math.min(100,g.stats[h.victim].ult+amount*(g.stats[h.victim].char==='tank'?.44:.24));g.reveals[h.victim]=t+1500;
-    if(h.enhanced)g.debuffs[h.victim]={life:g.stats[h.victim].life,owner:h.owner,slowUntil:t+BALANCE.bomberSlowMs,dotUntil:t+BALANCE.bomberDotMs,dotNextAt:t+BALANCE.bomberDotEveryMs,dotId:h.key};
-    emit('hit',{owner:h.owner,victim:h.victim,amount,guarded:!!guardian,guardian,saved,x:targets[h.victim].x,y:targets[h.victim].y});
+   for(const h of hits){
+    if(!(g.hp[h.victim]>0))continue;
+    g.combatAt[h.victim]=t;if(g.stats[h.owner])g.combatAt[h.owner]=t;
+    const guardian=h.owner==='gas'?null:seatKeys.map(k=>g.seats[k].id).find(id=>{
+     const st=g.stats[id];
+     return st?.char==='tank'&&st.guardUntil>t&&g.hp[id]>0&&(id===h.victim||(st.guardTargetId===h.victim&&st.guardTargetLife===g.stats[h.victim].life));
+    });
+    const result=BrawlMatchV1.applyHit(g,h,t,BALANCE,{guardian});
+    if(!result)continue;
+    emit('hit',{owner:h.owner,victim:h.victim,amount:result.amount,guarded:!!guardian,guardian,
+     saved:result.saved,x:targets[h.victim].x,y:targets[h.victim].y});
    }
    // Regeneration integrated in the normal authoritative combat tick, not extra writes.
     for(const k of seatKeys){const id=g.seats[k].id,st=g.stats[id],p=targets[id],hp=g.hp[id];
      if(!(hp>0)||hp>=chars[st.char].hp||t-(g.combatAt[id]||0)<3000)continue;
      const margin=g.mode==='area'?0:clamp((t-28000)/1000*9,0,380);
      if(p.x<margin||p.x>W-margin||p.y<margin||p.y>H-margin)continue;
-     g.hp[id]=Math.min(chars[st.char].hp,Math.round((hp+chars[st.char].hp*.12*dt/1000)*100)/100);
+     g.hp[id]=BrawlMatchV1.regenAmount(hp,chars[st.char].hp,dt);
     }
     g.usedHits=bounded(g.usedHits);
    for(const k of seatKeys){const id=g.seats[k].id;
@@ -543,17 +545,7 @@ html,body,#app{background:#081720;color:#ecf7f5}
      const s=g.stats[id];s.life++;s.ammo=3;s.refillAt=0;s.boostUntil=0;s.overdriveUntil=0;s.armed=false;s.guardUntil=0;s.guardTargetId='';s.guardTargetLife=-1;s.guardSaved=0;g.hp[id]=chars[s.char].hp;g.combatAt[id]=t;delete g.respawns[id];delete g.debuffs[id];g.protection[id]=t+BALANCE.areaSpawnShieldMs;delete g.reveals[id];motion(g,id,spawns[k]);targets[id]={...spawns[k]};emit('respawn',{owner:id,x:spawns[k].x,y:spawns[k].y});
     }
    }
-   if(g.mode==='area'){
-    const inside={blue:0,red:0};for(const k of seatKeys){const id=g.seats[k].id,p=targets[id];if(g.hp[id]>0&&!(g.protection[id]>t)&&!flying(g,id)&&Math.hypot(p.x-W/2,p.y-H/2)<=BALANCE.areaRadius)inside[team(k)]++;}
-    const a=g.area,contested=inside.blue>0&&inside.red>0;a.occupants=inside;a.contested=contested;
-    if(!contested){if(inside.blue)a.blueMs=Math.min(BALANCE.areaCaptureMs,a.blueMs+dt);if(inside.red)a.redMs=Math.min(BALANCE.areaCaptureMs,a.redMs+dt);}
-    let winner=null;if(a.blueMs===BALANCE.areaCaptureMs||a.redMs===BALANCE.areaCaptureMs)winner=a.blueMs===a.redMs?'draw':a.blueMs===BALANCE.areaCaptureMs?'blue':'red';
-    else if(t>=BALANCE.areaLimitMs)winner=a.blueMs===a.redMs?'draw':a.blueMs>a.redMs?'blue':'red';
-    if(winner){g.phase='match_end';g.winner=winner;g.endedAt=wallNow;if(winner!=='draw')g.scores[winner]=1;}
-   }else{
-    const live={blue:0,red:0};for(const k of seatKeys)if(g.hp[g.seats[k].id]>0)live[team(k)]++;
-    if(!live.blue||!live.red){const winner=!live.blue&&!live.red?'draw':!live.blue?'red':'blue';if(winner!=='draw')g.scores[winner]++;g.phase=winner!=='draw'&&g.scores[winner]>=2?'match_end':'round_end';g.winner=winner;g.endedAt=wallNow;}
-   }
+   BrawlMatchV1.resolve(g,{seatKeys,teamOf:team,targets,flying,center:{x:W/2,y:H/2},dt,t,wallNow,balance:BALANCE});
    // Action receipts are short lived. Monotonic player seq remains after pruning.
    g.usedActions=Object.fromEntries(Object.entries(g.usedActions).filter(([,r])=>wallNow-r.acceptedAt<3500));
    return g;
@@ -604,6 +596,65 @@ const BrawlProjectileV1=Object.freeze({
  }
 });
 /* END SHARED PROJECTILE PHYSICS */
+/* BEGIN SHARED MATCH STATE */
+// Shared deterministic combat HP bookkeeping and round outcomes.
+// Invoked ONLY inside the existing authoritative BrawlCombatV8 reducer.
+// UI, Firebase room authority, and mode-specific health regeneration are unchanged.
+const BrawlMatchV1=Object.freeze({
+ applyHit(g,h,t,balance,{guardian=null,guardFactor=.65}={}){
+  if(!(g.hp[h.victim]>0))return null;
+  const before=g.hp[h.victim];
+  const amount=Math.min(guardian?Math.max(1,Math.round(h.amount*guardFactor)):h.amount,before);
+  const saved=guardian?Math.max(0,Math.min(h.amount,before)-amount):0;
+  if(saved>0)g.stats[guardian].guardSaved=(g.stats[guardian].guardSaved||0)+saved;
+  g.hp[h.victim]-=amount;
+  if(g.stats[h.owner])g.stats[h.owner].ult=Math.min(100,g.stats[h.owner].ult+amount*.48);
+  g.stats[h.victim].ult=Math.min(100,g.stats[h.victim].ult+amount*(g.stats[h.victim].char==='tank'?.44:.24));
+  g.reveals[h.victim]=t+1500;
+  if(h.enhanced)g.debuffs[h.victim]={
+   life:g.stats[h.victim].life,owner:h.owner,slowUntil:t+balance.bomberSlowMs,
+   dotUntil:t+balance.bomberDotMs,dotNextAt:t+balance.bomberDotEveryMs,dotId:h.key
+  };
+  return {amount,saved,guardian};
+ },
+ resolve(g,{seatKeys,teamOf,targets,flying,center,dt,t,wallNow,balance}){
+  if(g.mode==='area'){
+   const inside={blue:0,red:0};
+   for(const k of seatKeys){
+    const id=g.seats[k].id,p=targets[id];
+    if(g.hp[id]>0&&!(g.protection[id]>t)&&!flying(g,id)&&Math.hypot(p.x-center.x,p.y-center.y)<=balance.areaRadius)
+     inside[teamOf(k)]++;
+   }
+   const a=g.area,contested=inside.blue>0&&inside.red>0;
+   a.occupants=inside;a.contested=contested;
+   if(!contested){
+    if(inside.blue)a.blueMs=Math.min(balance.areaCaptureMs,a.blueMs+dt);
+    if(inside.red)a.redMs=Math.min(balance.areaCaptureMs,a.redMs+dt);
+   }
+   let winner=null;
+   if(a.blueMs===balance.areaCaptureMs||a.redMs===balance.areaCaptureMs)
+    winner=a.blueMs===a.redMs?'draw':a.blueMs===balance.areaCaptureMs?'blue':'red';
+   else if(t>=balance.areaLimitMs)
+    winner=a.blueMs===a.redMs?'draw':a.blueMs>a.redMs?'blue':'red';
+   if(winner){g.phase='match_end';g.winner=winner;g.endedAt=wallNow;if(winner!=='draw')g.scores[winner]=1;}
+   return winner;
+  }
+  const live={blue:0,red:0};
+  for(const k of seatKeys)if(g.hp[g.seats[k].id]>0)live[teamOf(k)]++;
+  if(!live.blue||!live.red){
+   const winner=!live.blue&&!live.red?'draw':!live.blue?'red':'blue';
+   if(winner!=='draw')g.scores[winner]++;
+   g.phase=winner!=='draw'&&g.scores[winner]>=2?'match_end':'round_end';
+   g.winner=winner;g.endedAt=wallNow;return winner;
+  }
+  return null;
+ },
+ regenAmount(hp,maxHp,dtMs,fraction=.12){
+  if(!(hp>0)||hp>=maxHp)return hp;
+  return Math.min(maxHp,Math.round((hp+maxHp*fraction*dtMs/1000)*100)/100);
+ }
+});
+/* END SHARED MATCH STATE */
 /* BEGIN LOCAL CORE */
 /* 通信なし練習用。Firebaseを呼ばず、同じ購読/transaction APIで戦闘経路を共有する。 */
 (function(root){
