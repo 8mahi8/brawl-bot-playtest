@@ -2199,6 +2199,9 @@
     }
     return chosen;
   }
+  // Four predictable scout waypoints: no access to a concealed enemy's position.
+  // Keep the route readable, leaving cover/poison corrections to runBot().
+  const BOT_PATROL=[{x:W*.35,y:H*.34},{x:W*.65,y:H*.34},{x:W*.65,y:H*.66},{x:W*.35,y:H*.66}];
   function runBot(dt,actor,target,offline){
     if(!isPlaying()||game.phase!=='playing')return;
     const brain=botBrain,spec=CHARS[actor.char];
@@ -2206,12 +2209,22 @@
     const speedFactor=level==='easy'?.84:1;
     const reacts=level==='easy'?.75:level==='hard'?.27:.48;
     const visible=targetVisible(actor,target,offline?'host':other);
-    if(visible)brain.lastSeen={x:target.x,y:target.y};
-    const aimTarget=visible?target:(brain.lastSeen||{x:W/2,y:H/2});
+    const seenAt=time();
+    // Stealth fairness: remember only the location we actually saw, briefly.
+    // Do not steer the crosshair or trigger proximity skills from a hidden foe.
+    if(visible)brain.lastSeen={x:target.x,y:target.y,at:seenAt};
+    else if(brain.lastSeen&&(!Number.isFinite(brain.lastSeen.at)||seenAt-brain.lastSeen.at>2400))brain.lastSeen=null;
+    if(!visible&&!brain.lastSeen){
+      if(!Number.isInteger(brain.patrolIndex))brain.patrolIndex=0;
+      const waypoint=BOT_PATROL[brain.patrolIndex];
+      if(Math.hypot(actor.x-waypoint.x,actor.y-waypoint.y)<55)
+        brain.patrolIndex=(brain.patrolIndex+1)%BOT_PATROL.length;
+    }
+    const aimTarget=visible?target:(brain.lastSeen||BOT_PATROL[brain.patrolIndex||0]);
     const dx=aimTarget.x-actor.x,dy=aimTarget.y-actor.y,dist=Math.hypot(dx,dy);
     const ux=dx/(dist||1),uy=dy/(dist||1);
-    const actualDist=Math.hypot(target.x-actor.x,target.y-actor.y);
-    const angle=Math.atan2(target.y-actor.y,target.x-actor.x);
+    const actualDist=visible?Math.hypot(target.x-actor.x,target.y-actor.y):Infinity;
+    const angle=Math.atan2(aimTarget.y-actor.y,aimTarget.x-actor.x);
     brain.fire-=dt;brain.strafeTime-=dt;
     brain.boost=Math.max(0,brain.boost-dt);brain.overdrive=Math.max(0,(brain.overdrive||0)-dt);
     if(brain.strafeTime<=0){brain.strafeTime=level==='hard'? .8:1.5;brain.strafe=Math.random()<.5?-1:1;}

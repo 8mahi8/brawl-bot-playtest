@@ -47,6 +47,8 @@ jobs:
         run: node tests/foundation-match-state-parity.cjs
       - name: Cross-mode V8 abilities, GAD/ULT semantics and rejected actions
         run: node tests/foundation-abilities-parity.cjs
+      - name: 1vs1 BOT stealth memory, scouting and fair ability decisions
+        run: node tests/foundation-1v1-stealth-bot.cjs
       - name: 2vs2 gameplay and clean interface regression
         run: node tests/foundation-2v2-gameplay.cjs
       - name: Install browser runner and Japanese fonts
