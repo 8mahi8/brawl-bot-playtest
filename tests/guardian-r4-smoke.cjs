@@ -88,8 +88,8 @@ check('Guard does not protect the ally after they respawn into a new life',()=>{
  g=core.step(g,positions,200,g.combatRev,'qa');assert.equal(g.hp.p,CHARS.gunner.hp-20);
 });
 check('Guardian does not mitigate gas damage',()=>{
- let g=init();g.clock.t=29000;g.clock.wallAt=29000;g.gasNextAt=29000;g.stats.b.guardUntil=32000;g.stats.b.guardTargetId='p';g.stats.b.guardTargetLife=0;
- const positions=pos();positions.p.x=25;positions.p.y=25;g=core.step(g,positions,29100,g.combatRev,'qa');
+ let g=init();g.clock.t=31000;g.clock.wallAt=31000;g.gasNextAt=31000;g.stats.b.guardUntil=34000;g.stats.b.guardTargetId='p';g.stats.b.guardTargetLife=0;
+ const positions=pos();positions.p.x=19;positions.p.y=19;g=core.step(g,positions,31100,g.combatRev,'qa');
  assert.equal(g.hp.p,CHARS.gunner.hp-10);
 });
 check('Gunner burst timing preserved at 105ms',()=>{
