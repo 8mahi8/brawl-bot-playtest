@@ -709,9 +709,12 @@ const BrawlMatchV1=Object.freeze({
   }
   return null;
  },
- regenAmount(hp,maxHp,dtMs,fraction=.12){
+ regenAmount(hp,maxHp,dtMs,{fraction=.12,precision=2}={}){
   if(!(hp>0)||hp>=maxHp)return hp;
-  return Math.min(maxHp,Math.round((hp+maxHp*fraction*dtMs/1000)*100)/100);
+  const healed=hp+maxHp*fraction*Math.max(0,dtMs)/1000;
+  // Keep legacy 1vs1 local precision while sharing the underlying regen formula.
+  const next=precision===null?healed:Math.round(healed*10**precision)/10**precision;
+  return Math.min(maxHp,next);
  }
 });
 /* END SHARED MATCH STATE */
@@ -1041,7 +1044,7 @@ const BrawlMatchV1=Object.freeze({
         if(now<=t)continue;
         const whoChar=game.chars[who],maximum=maxHp(whoChar);
         if(game.hp[who]<maximum && !isInGas(who==='host'?local:remote))
-          game.hp[who]=Math.min(maximum,game.hp[who]+maximum*REGEN_RATE*Math.min((now-t)/1000,.4));
+          game.hp[who]=BrawlMatchV1.regenAmount(game.hp[who],maximum,Math.min(now-t,400),{fraction:REGEN_RATE,precision:null});
         game.healAt[who]=now;
       }
       return;
@@ -1060,7 +1063,7 @@ const BrawlMatchV1=Object.freeze({
         if(isInGas(pos))continue;
         const t=Math.max(last+REGEN_DELAY,healAt[who]||last+REGEN_DELAY);
         if(now<=t)continue;
-        hp[who]=Math.min(maximum,Math.round((hp[who]+maximum*REGEN_RATE*Math.min((now-t)/1000,.5))*10)/10);
+        hp[who]=BrawlMatchV1.regenAmount(hp[who],maximum,Math.min(now-t,500),{fraction:REGEN_RATE,precision:1});
         healAt[who]=now;changed=true;
       }
       return changed?{...current,hp,healAt}:undefined;
