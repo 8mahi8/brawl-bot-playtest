@@ -2,6 +2,14 @@
 
 更新: 2026-10-12。これは**オフラインでの通信設計・疑似負荷テスト**。Firebaseの本番通信、Google Sites、学校iPad実機には接続・変更していない。
 
+## 公式Firebase RTDBエミュレーター実通信試験が成功（2026-10-12）
+
+- [安全なエミュレーター用Rules/起動手順](./emulator/README.md)、[実行テスト](../tests/network-firebase-emulator.cjs)と[独立CI](../.github/workflows/firebase-emulator-lab.yml)を追加。実際のFirebase RTDB SDKを使い、`/lab/pair`と`/lab/squad`のローカル読み書き・権限判定を検証。
+- **41件PASS**。2人/4人の認証済みテストクライアントが位置・操作を書き込める一方、未参加者・匿名アクセス、他人の位置、重複seq、古いround/life/motionRev/connectionId、ホストUID奪取、勝手なHP変更を拒否。
+- さらに、1vs1・2vs2それぞれで**ホストのRTDBトランザクションが成立し、別クライアントが`value`リスナー経由で更新後のHPを受信**した。
+- [Actions成功](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38249662523)。**実Firebase SDK＋ローカルエミュレーター**の検査であり、インターネット越しの本番RTDBや実Firebase Authのログイン・学校iPadを検証したわけではない。
+- 特権で投入したroom/member/host情報はあくまでテスト用。**安全なルーム作成・ホスト選出/交代・権限を持つサーバーの実装は未完成**。試験Rulesも本番用ではない。
+
 ## 決めた原則
 
 **「共通にできる」だけでは共通にしない。** 共通化は保守コスト・安全性・測定可能性が改善するときだけ。
