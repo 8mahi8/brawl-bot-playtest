@@ -30,9 +30,11 @@ R2から独立したHTMLを新規作成。既存R2、Combat Evolution、1vs1、�
 - ✅ R3のHTML全体のインラインJavaScriptを構文検査した。
 - ✅ 3モジュールの抽出・純粋戦闘エンジンで、援護ガードの発動/資源消費/味方のみ/範囲外/期限切れ/タンクKO/ホットゾーン/復活リセット、BOTの救援/連続使用抑止、ガンナー通常3連射の105ms差、技UIの実在を検査。
 - ✅ 独立テストの**14ケース**をNode互換の隔離実行で通過。加えて作成途中のロジック検証も17アサーション通過。
-- ✅ GitHub Actions の既存 smoke ワークフローへ R3を追加（ワークフローの実行結果は別途照合すること）。
-- ⬜ Safari/iPadでの実操作（技ボタン・ヘルプ・縦幅・フレームレート）を未確認。
-- ⬜ ブラウザでマッチ開始→複数ラウンド→再戦の手動End-to-endを未確認。
+- ✅ 既存のGitHub Actions smoke（旧版・R2・R3）が2026-10-12にすべて成功: [Actions結果](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38202345366)。
+- ✅ **Chromium実ブラウザE2E**: デスクトップ1220×780と横向きタッチ844×390で、BOT対戦開始→ガイド開閉→GAD/ULT練習補充→タンクGAD発動まで成功。両方ともページJavaScript例外0件。自動テストは [tests/tactical-r3-browser-smoke.cjs](./tests/tactical-r3-browser-smoke.cjs)、[Actions成功ログ](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38202613794)（スクリーンショット保存）。
+- ✅ [GitHub Pagesの公開処理](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38202612919) 成功。
+- ⬜ **Safari/学校iPadの実機操作**（技ボタン・ヘルプ・縦幅・FPS）は未確認。Chromiumタッチエミュレーション合格は実機Safari合格を意味しない。
+- ⬜ 複数ラウンド→再戦、長時間・4人分のBOT AI負荷のブラウザ手動End-to-endは未確認（短時間の対戦開始はChromium自動テスト済み）。
 - ⬜ Firebase本番への移植、学校iPad同士の2vs2、安定性・Rules・通信量を未確認。
 - ⬜ **ゲームとして味方を守る選択が面白いか**はユーザーの試遊評価待ち。強すぎる場合は軽減率/半径/継続秒数の調整を検討する。
 
