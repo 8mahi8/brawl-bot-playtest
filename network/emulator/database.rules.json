@@ -1,0 +1,80 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "lab": {
+      "pair": {
+        "$room": {
+          ".read": "auth != null && root.child('lab').child('pair').child($room).child('members').child(auth.uid).val() === true",
+          "members": {
+            ".write": false
+          },
+          "hostUid": {
+            ".write": false
+          },
+          "round": {
+            ".write": false
+          },
+          "positions": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid && root.child('lab').child('pair').child($room).child('members').child(auth.uid).val() === true && newData.hasChildren(['seq','round','x','y']) && newData.child('seq').isNumber() && newData.child('seq').val() >= 0 && (!data.exists() || newData.child('seq').val() > data.child('seq').val()) && newData.child('round').val() === root.child('lab').child('pair').child($room).child('round').val() && newData.child('x').isNumber() && newData.child('y').isNumber() && newData.child('x').val() >= 20 && newData.child('x').val() <= 980 && newData.child('y').val() >= 20 && newData.child('y').val() <= 580",
+              ".validate": "newData.hasChildren(['seq','round','x','y'])"
+            }
+          },
+          "actions": {
+            "$uid": {
+              "$event": {
+                ".write": "auth != null && auth.uid === $uid && root.child('lab').child('pair').child($room).child('members').child(auth.uid).val() === true && !data.exists() && newData.hasChildren(['seq','round','type']) && newData.child('round').val() === root.child('lab').child('pair').child($room).child('round').val()"
+              }
+            }
+          },
+          "game": {
+            ".write": "auth != null && root.child('lab').child('pair').child($room).child('hostUid').val() === auth.uid && newData.hasChildren(['combatRev','round']) && newData.child('round').val() === root.child('lab').child('pair').child($room).child('round').val() && newData.child('combatRev').isNumber() && (!data.exists() || newData.child('combatRev').val() === data.child('combatRev').val() + 1)"
+          }
+        }
+      },
+      "squad": {
+        "$room": {
+          ".read": "auth != null && root.child('lab').child('squad').child($room).child('members').child(auth.uid).val() === true",
+          "members": {
+            ".write": false
+          },
+          "presence": {
+            ".write": false
+          },
+          "life": {
+            ".write": false
+          },
+          "motionRev": {
+            ".write": false
+          },
+          "matchId": {
+            ".write": false
+          },
+          "round": {
+            ".write": false
+          },
+          "hostUid": {
+            ".write": false
+          },
+          "positions": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid && root.child('lab').child('squad').child($room).child('members').child(auth.uid).val() === true && newData.hasChildren(['seq','round','matchId','connectionId','life','motionRev','x','y']) && newData.child('seq').isNumber() && newData.child('seq').val() >= 0 && newData.child('round').val() === root.child('lab').child('squad').child($room).child('round').val() && newData.child('matchId').val() === root.child('lab').child('squad').child($room).child('matchId').val() && newData.child('connectionId').val() === root.child('lab').child('squad').child($room).child('presence').child($uid).child('connectionId').val() && newData.child('life').val() === root.child('lab').child('squad').child($room).child('life').child($uid).val() && newData.child('motionRev').val() === root.child('lab').child('squad').child($room).child('motionRev').child($uid).val() && (!data.exists() || newData.child('connectionId').val() !== data.child('connectionId').val() || newData.child('life').val() !== data.child('life').val() || newData.child('motionRev').val() !== data.child('motionRev').val() || newData.child('seq').val() > data.child('seq').val()) && newData.child('x').isNumber() && newData.child('y').isNumber() && newData.child('x').val() >= 18 && newData.child('x').val() <= 1518 && newData.child('y').val() >= 18 && newData.child('y').val() <= 842",
+              ".validate": "newData.hasChildren(['seq','round','matchId','connectionId','life','motionRev','x','y'])"
+            }
+          },
+          "actions": {
+            "$uid": {
+              "$event": {
+                ".write": "auth != null && auth.uid === $uid && root.child('lab').child('squad').child($room).child('members').child(auth.uid).val() === true && !data.exists() && newData.hasChildren(['seq','round','life','matchId','type']) && newData.child('round').val() === root.child('lab').child('squad').child($room).child('round').val() && newData.child('matchId').val() === root.child('lab').child('squad').child($room).child('matchId').val() && newData.child('life').val() === root.child('lab').child('squad').child($room).child('life').child($uid).val()"
+              }
+            }
+          },
+          "game": {
+            ".write": "auth != null && root.child('lab').child('squad').child($room).child('hostUid').val() === auth.uid && newData.hasChildren(['combatRev','round']) && newData.child('round').val() === root.child('lab').child('squad').child($room).child('round').val() && newData.child('combatRev').isNumber() && (!data.exists() || newData.child('combatRev').val() === data.child('combatRev').val() + 1)"
+          }
+        }
+      }
+    }
+  }
+}
