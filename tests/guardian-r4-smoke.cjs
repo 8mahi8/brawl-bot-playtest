@@ -39,12 +39,12 @@ function impact({mode='ko',guardUntil=2400,tankAlive=true,enemyGuard=false,farTa
 check('R4 script parses and original movement stays intact',()=>{
  assert.equal(CHARS.gunner.speed,102);assert.equal(CHARS.tank.speed,102);assert.equal(CHARS.sniper.speed,102);
 });
-check('Tank gadget consumes one charge, dashes, activates 2.2s guard',()=>{
+check('Tank gadget consumes one charge, dashes, activates 3.2s Guardian Link',()=>{
  let g=init();g=core.accept(g,{eventId:'skill',owner:'b',matchId:'qa',round:1,seq:1,life:0,type:'gadget',angle:0,reach:310,x:SPAWNS.blue2.x,y:SPAWNS.blue2.y,at:200},{},200);
  assert.equal(g.usedActions.skill.status,'accepted');assert.equal(g.stats.b.gadgets,1);
  assert.equal(g.stats.b.guardUntil,3200);assert.equal(g.stats.b.guardTargetId,'p');assert.equal(g.stats.b.guardTargetLife,0);assert.equal(g.motions.b.rev,1);
 });
-check('Nearby ally receives 30% less bullet damage',()=>{
+check('Linked ally receives 35% less bullet damage',()=>{
  const g=impact();assert.equal(g.hp.p,CHARS.gunner.hp-13);
  assert(Object.values(g.events).some(e=>e.type==='hit'&&e.guarded&&e.amount===13&&e.saved===7&&e.guardian==='b'));
 });
