@@ -7,12 +7,13 @@ const games=['1v1','2v2'].map(mode=>{
  const extract=(a,b)=>{const start=script.indexOf(a),end=script.indexOf(b,start);assert(start>=0&&end>start,'missing '+a+' '+mode);return script.slice(start,end)};
  return {mode,script,core:extract('/* BEGIN COMBAT CORE','/* END COMBAT CORE'),
   weapons:extract('/* BEGIN SHARED WEAPON RULES */','/* END SHARED WEAPON RULES */'),
-  physics:extract('/* BEGIN SHARED PROJECTILE PHYSICS */','/* END SHARED PROJECTILE PHYSICS */')};
+  physics:extract('/* BEGIN SHARED PROJECTILE PHYSICS */','/* END SHARED PROJECTILE PHYSICS */'),
+  match:extract('/* BEGIN SHARED MATCH STATE */','/* END SHARED MATCH STATE */')};
 });
 assert.equal(games[0].physics,games[1].physics,'both actual games embed the same physics source');
 for(const g of games){
  const ctx={structuredClone};
- vm.runInNewContext(g.core+'\n'+g.weapons+'\n'+g.physics+
+ vm.runInNewContext(g.core+'\n'+g.weapons+'\n'+g.physics+'\n'+g.match+
    '\nthis.physics=BrawlProjectileV1;this.weaponRules=BrawlWeaponV1;',ctx,{filename:g.mode});
  g.runtime=ctx;
 }
