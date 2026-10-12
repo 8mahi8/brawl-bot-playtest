@@ -10,6 +10,7 @@ on:
       - 'foundation/2v2-foundation-v1.html'
       - 'scripts/build-brawl.cjs'
       - 'scripts/build-open-arena-lab.cjs'
+      - 'scripts/build-tank-balance-lab.cjs'
       - 'tests/foundation-*.cjs'
       - '.github/workflows/foundation-build.yml'
   pull_request:
@@ -38,6 +39,10 @@ jobs:
         run: node scripts/build-brawl.cjs --check
       - name: Independent wide-map build must exactly match foundation baseline
         run: node scripts/build-open-arena-lab.cjs --check
+      - name: Tank candidate builds byte-for-byte and guard/HP mechanics match
+        run: |
+          node scripts/build-tank-balance-lab.cjs --check
+          node tests/foundation-2v2-tank-lab.cjs
       - name: Wide-map cover symmetry and walkable routes
         run: node tests/foundation-2v2-open-arena.cjs
       - name: Prove one shared configuration edit propagates to BOTH builds
@@ -69,6 +74,8 @@ jobs:
         run: node tests/foundation-2v2-area-browser.cjs
       - name: Open Arena LAB desktop KO and tablet HOT ZONE
         run: node tests/foundation-2v2-open-arena-browser.cjs
+      - name: Tank tuning candidate desktop KO and tablet HOT ZONE
+        run: node tests/foundation-2v2-tank-lab-browser.cjs
       - name: Store generated-build screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -77,5 +84,6 @@ jobs:
           path: |
             artifacts/foundation-v1-*.png
             artifacts/open-arena-*.png
+            artifacts/tank-lab-*.png
           if-no-files-found: ignore
           retention-days: 7
