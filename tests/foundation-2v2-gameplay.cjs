@@ -106,6 +106,46 @@ check('Gunner burst timing preserved at 105ms',()=>{
  const bs=Object.values(g.projectiles);assert.equal(bs.length,3);
  assert.equal(bs[1].spawnAt-bs[0].spawnAt,105);assert.equal(bs[2].spawnAt-bs[1].spawnAt,105);
 });
+// AREA is an objective mode, not an endless chase mode. Bots must actually
+// capture/hold while allies screen, and prioritize a visible enemy on the point.
+function areaPlan({actor={x:380,y:430,a:0},ally={x:240,y:280},enemy={x:1250,y:430},enemy2={x:1340,y:490},mode='area'}={}){
+ const ai=bot.create({chars:CHARS,walls:[],bushes:[],spawns:SPAWNS,seatKeys:keys,areaRadius:combat.balance.areaRadius});
+ const g=init(mode);g.clock.t=5000;g.clock.wallAt=5000;
+ const positions=pos();
+ positions.p.x=ally.x;positions.p.y=ally.y;
+ positions.e.x=enemy.x;positions.e.y=enemy.y;
+ positions.f.x=enemy2.x;positions.f.y=enemy2.y;
+ return ai.decide({game:g,positions,owner:'b',actor,brain:{},wallNow:5000});
+}
+check('AREA solo BOT captures instead of following a distant visible enemy',()=>{
+ const plan=areaPlan();
+ assert.equal(plan.brain.tactic,'capture');
+ assert(Math.hypot(plan.brain.goal.x-768,plan.brain.goal.y-430)<combat.balance.areaRadius-20);
+ assert(plan.move.dx>0,'bot heads toward zone');
+});
+check('AREA BOT holding an uncontested point does not chase distant enemies',()=>{
+ const plan=areaPlan({actor:{x:735,y:430,a:0}});
+ assert.equal(plan.brain.tactic,'hold');
+ assert(Math.hypot(plan.brain.goal.x-768,plan.brain.goal.y-430)<combat.balance.areaRadius-20);
+});
+check('AREA BOT prioritizes visible enemies contesting the point over further duels',()=>{
+ const plan=areaPlan({actor:{x:480,y:430,a:0},enemy:{x:770,y:400},enemy2:{x:650,y:430}});
+ assert.equal(plan.targetId,'e','enemy occupying point outranks closer flanker');
+ assert.equal(plan.brain.tactic,'contest');
+});
+check('AREA BOT screens forward if its teammate is already capturing',()=>{
+ const plan=areaPlan({ally:{x:770,y:410}});
+ assert.notEqual(plan.brain.tactic,'capture');
+});
+check('AREA BOT defends itself against a nearby attacker before forcing capture',()=>{
+ const plan=areaPlan({actor:{x:400,y:430,a:0},enemy:{x:525,y:430}});
+ assert.notEqual(plan.brain.tactic,'capture');
+ assert.equal(plan.targetId,'e');
+});
+check('KO BOT remains duel-focused, not affected by capture priority',()=>{
+ const plan=areaPlan({mode:'ko'});
+ assert.notEqual(plan.brain.tactic,'capture');
+});
 check('UI carries explanation, practice gadget and guarded damage cues',()=>{
  for(const s of ['id="abilityGuide"','id="skillInfoPanel"','id="skillInfoToggle"','id="practiceGad"','id="mapExpand"','quietR41:true','#guardMeter,#guardAlert{display:none!important}'])assert(html.includes(s),'missing '+s);
 });
