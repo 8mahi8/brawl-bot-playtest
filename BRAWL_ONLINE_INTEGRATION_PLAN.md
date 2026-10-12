@@ -2,6 +2,17 @@
 
 更新日: 2026-10-12。**このドキュメントの作成はオンライン移植完了を意味しない。**
 
+## 2026-10-12 — 2人用/4人用は通信実装を強制統合しない
+
+方針：ユーザーの要望により**共通化は利益がある箇所だけ**。戦闘ロジックは共有するが、通信については1vs1と2vs2それぞれの権限・人数・切断復帰・更新頻度の要件を優先し、必ずしも同じクラス/実装にしない。
+
+- [別々の通信設計とオンライン元版の調査](./network/README.md)を記録。Driveの1vs1 V2.8と2vs2 ALPHA10を参照し、両方の位置更新が80ms基準、2vs2のホスト管理ループが100ms基準であることを確認。ALPHA10は4席＋connectionId/presence/life/motionRevを用いるが、V2.8の位置payloadはシンプルなhost/guest/round/seq方式。旧版は保護。
+- [1vs1独立通信モデル](./network/lab/one-vs-one.cjs)と[2vs2独立通信モデル](./network/lab/two-vs-two.cjs)を、**実Firebaseに接続しない**隔離ラボとして実装。
+- [接続安全性テスト](./tests/network-mode-isolation.cjs)、[疑似遅延負荷](./tests/network-latency-simulation.cjs)、[公開BOT隔離](./tests/network-public-isolation.cjs)と[専用CI](./.github/workflows/network-mode-lab.yml)を実装。位置の古い/逆順受信、別ルーム、再接続、世代/復活、書き込みのまとめ方を検証。
+- 2秒間・描画16ms・送信80msの模擬処理は位置書き込み1vs1=52件、2vs2=104件（4人で倍）。0/150/300/600msは**人工遅延**であり、実Firebaseの性能・遅延許容値を測った結果ではない。
+- 現行のオンライン・Firebase/Rules・Google Sites・iPad実機は変更していない。**運用版の通信高速化は未実施**。本番用のネットワーク接続先や認証情報を公開GitHubに移さない。
+- 次段階はモード別に遅延/負荷を計測するための隔離実機候補を作り、ホスト戦闘transactionと位置配信を分けて測定する。更新頻度は計測後に決める。
+
 ## 実ファイルの所在と分岐
 - オンライン実装の参照: Google Drive保存済みの `Brawl_V3_2vs2_ALPHA10.html` （`PROTOCOL=3010`、Firebase RTDBを利用するコードがある）。旧オンライン作業物として凍結・保護。
 - 1vs1の保護基準: Google Drive保存済みの `Brawl_V2_8_TEST.html` （`PROTOCOL=28`）。学校Google Sitesの現行公開コードとバージョンが同じかは未確認、勝手に上書きしない。
