@@ -37,6 +37,8 @@ jobs:
         run: node scripts/build-brawl.cjs --check
       - name: Prove one shared configuration edit propagates to BOTH builds
         run: node tests/foundation-build-smoke.cjs
+      - name: Compare actual 1vs1 and 2vs2 weapon behavior before browser QA
+        run: node tests/foundation-weapon-parity.cjs
       - name: 2vs2 gameplay and clean interface regression
         run: node tests/foundation-2v2-gameplay.cjs
       - name: Install browser runner and Japanese fonts
