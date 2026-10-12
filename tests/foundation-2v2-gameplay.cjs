@@ -14,7 +14,9 @@ for(const name of ['SHARED STEALTH V1','COMBAT CORE','BOT CORE']){
  assert(weaponA>=0&&weaponB>weaponA,'generated shared weapon rules present');
  const physicsA=script.indexOf('/* BEGIN SHARED PROJECTILE PHYSICS */'),physicsB=script.indexOf('/* END SHARED PROJECTILE PHYSICS */',physicsA);
  assert(physicsA>=0&&physicsB>physicsA,'shared projectile physics present');
- const moduleCode=script.slice(a,b)+(name==='COMBAT CORE'?'\n'+script.slice(weaponA,weaponB)+'\n'+script.slice(physicsA,physicsB):'');
+ const matchA=script.indexOf('/* BEGIN SHARED MATCH STATE */'),matchB=script.indexOf('/* END SHARED MATCH STATE */',matchA);
+ assert(matchA>=0&&matchB>matchA,'shared match runtime present');
+ const moduleCode=script.slice(a,b)+(name==='COMBAT CORE'?'\n'+script.slice(weaponA,weaponB)+'\n'+script.slice(physicsA,physicsB)+'\n'+script.slice(matchA,matchB):'');
  vm.runInNewContext(moduleCode,env,{filename:name});
 }
 const {BrawlCombatV8:combat,BrawlBotV9:bot}=env;
