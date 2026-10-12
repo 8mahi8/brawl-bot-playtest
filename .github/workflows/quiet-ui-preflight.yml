@@ -27,6 +27,8 @@ jobs:
           node-version: '22'
       - name: Verify defense still works without UI counters
         run: node tests/quiet-ui-r4-1-gameplay.cjs
+      - name: Install Japanese UI fonts for meaningful screenshot review
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk && fc-cache -f
       - name: Install browser QA driver
         run: npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
       - name: Check browser
