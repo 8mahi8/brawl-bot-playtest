@@ -64,6 +64,29 @@ function render(modeName,sourceOverride=null,contractOverride=null){
  const charactersRender=contractOverride?buildCharacterOverride(mode,c):renderCharacters(mode);
  let html=replaceUnique(source,/const BALANCE=\{[\s\S]*?\n \};/,balanceRender,modeName+' BALANCE');
  html=replaceUnique(html,/const CHARS\s*=\s*\{[\s\S]*?\};/,charactersRender,modeName+' CHARS');
+
+ // The shared weapon rules are emitted once inside each standalone game.
+ // Both the legacy 1vs1 event stream and the host-owned 2vs2 reducer use this API.
+ const w=c.common.weaponRules;
+ const weaponSource=read('shared/runtime/weapon-rules.inc.js');
+ const tokens={
+  __TANK_SPREAD__:JSON.stringify(w.tankSpread),
+  __GUNNER_SPREAD__:JSON.stringify(w.gunnerSpread),
+  __GUNNER_BURST_OVERDRIVE_MS__:String(c.common.gunnerBurstOverdriveMs),
+  __GUNNER_BURST_NORMAL_MS__:String(c.common.gunnerBurstNormalMs),
+  __GUNNER_RELOAD_MS__:String(w.gunnerOverdriveReloadMs),
+  __SNIPER_KNOCKBACK__:String(w.sniperGadgetKnockback),
+  __BULLET_SPEED__:String(w.bulletSpeed)
+ };
+ let baked=weaponSource;
+ for(const [k,v]of Object.entries(tokens)){
+  assert(baked.includes(k),'missing weapon token '+k);
+  baked=baked.replaceAll(k,v);
+ }
+ assert(!/__\w+__/.test(baked),'unexpanded weapon rules tokens');
+ html=replaceUnique(html,/\/\* END COMBAT CORE \*\//,
+  '/* END COMBAT CORE */\n/* BEGIN SHARED WEAPON RULES */\n'+baked.trimEnd()+'\n/* END SHARED WEAPON RULES */',modeName+' weapon rules');
+
  // These functions are genuinely shared runtime code, inlined into both builds.
  // The two source templates may render them differently, but cannot implement
  // two different damage curves or hidden-actor detection rules.
