@@ -8,9 +8,10 @@
 | --- | --- | --- |
 | 共通のキャラ性能と戦闘数値 | [共通仕様](../shared/brawl-core-contract.json) | HP/攻撃力/射程/移動速度/リロード、共通バランス数値、回復・ガス・ウルト・3連射の期待値を定義 |
 | モードごとの設定 | [モード設定](../shared/brawl-build-modes.json) | 1vs1/2vs2のソーステンプレート、出力先、マップ固有エリア半径、旧APIのリロード単位、UI外観に使う色・ラベル |
+| モード独自の処理 | [1vs1ソース](../src/modes/1v1.template.html) / [2vs2ソース](../src/modes/2v2.template.html) | 固有のカメラ、戦闘方式、モード/画面。旧試遊版のHTMLとは別に変更できる |
 | 共通の実際の戦闘関数 | [combat-primitives](../shared/runtime/combat-primitives.inc.js) | 両HTMLに同じ `clamp`、タンク散弾の距離減衰、タンクジャンプ時間の計算を埋め込む |
 | 共通の実際の索敵関数 | [stealth-visibility](../shared/runtime/stealth-visibility.inc.js) | 両HTMLに同じ `state/visible` を埋め込む。霧の描画は各モード専用 |
-| ビルド | [build-brawl.cjs](../scripts/build-brawl.cjs) | 共有ソースと2つの既存候補を合成し、スタンドアロンHTMLを生成 |
+| ビルド | [build-brawl.cjs](../scripts/build-brawl.cjs) | 共有ソースと2つの開発用モードテンプレートを合成し、スタンドアロンHTMLを生成 |
 | 生成した1vs1 | [1v1-foundation-v1.html](./1v1-foundation-v1.html) | 1vs1の従来操作とモード挙動を維持した新しいオフライン開発候補 |
 | 生成した2vs2 | [2v2-foundation-v1.html](./2v2-foundation-v1.html) | 2vs2 R4.1の静かなUI、チームリンク、2vs2 KO/AREAを維持した新しいオフライン開発候補 |
 | CI | [foundation-build.yml](../.github/workflows/foundation-build.yml) | 両ビルドの再現性、共有ソースの双方向伝播、実ゲーム回帰、PC/タッチ操作を自動検証 |
@@ -45,7 +46,7 @@ node tests/foundation-2v2-gameplay.cjs
 
 ## まだ共通化していない部分（重要）
 
-**戦闘エンジン全部や描画UIの一本化は未完了。** 現段階ではソーステンプレートとして以前の1vs1／2vs2 HTMLの戦闘処理を使用し、変換対象の共通コードと数値だけを単一ソースにした。
+**戦闘エンジン全部や描画UIの一本化は未完了。** 現段階では旧試遊版から複製した独立した `src/modes/` テンプレート内の戦闘処理を使用し、変換対象の共通コードと数値だけを単一ソースにした。
 
 既知の残差はタンクの散弾角、ガンナー連射中の発射座標、強化リロード、スナイパーの吹き飛ばし、1vs1のBOT行動、UI/カメラ、オンライン同期。これらを現状一致していると扱ってはいけない。
 
