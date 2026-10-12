@@ -649,9 +649,12 @@ const BrawlMatchV1=Object.freeze({
   }
   return null;
  },
- regenAmount(hp,maxHp,dtMs,fraction=.12){
+ regenAmount(hp,maxHp,dtMs,{fraction=.12,precision=2}={}){
   if(!(hp>0)||hp>=maxHp)return hp;
-  return Math.min(maxHp,Math.round((hp+maxHp*fraction*dtMs/1000)*100)/100);
+  const healed=hp+maxHp*fraction*Math.max(0,dtMs)/1000;
+  // Keep legacy 1vs1 local precision while sharing the underlying regen formula.
+  const next=precision===null?healed:Math.round(healed*10**precision)/10**precision;
+  return Math.min(maxHp,next);
  }
 });
 /* END SHARED MATCH STATE */
