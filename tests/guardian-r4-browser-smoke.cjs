@@ -23,13 +23,13 @@ async function run(browser,name,opts){
   await page.waitForFunction(()=>window.__brawlV3QA?.().scene==='game',null,{timeout:20000});
   await page.waitForFunction(()=>{const q=window.__brawlV3QA?.();return q?.game==='playing'&&q?.combat?.clock?.t>=100;},null,{timeout:20000});
   const before=await page.evaluate(()=>window.__brawlV3QA());
-  assert.equal(before.tacticalR4,true,'R4 build loaded');
+  assert.equal(before.guardianR4,true,'R4 build loaded');
   assert.equal(before.mode,'ko','KO mode started');
   assert.equal(Object.keys(before.stats).length,4,'4 combat actors');
   await page.locator('#skillInfoToggle').click();
   assert(await page.locator('#skillInfoPanel').isVisible(),'ability guide opens');
   const guide=await page.locator('#skillInfoText').textContent();
-  assert(guide.includes('ガジェット')||guide.includes('援護ダッシュ'),'tank guide exists');
+  assert(guide.includes('ガーディアンリンク'),'tank guide exists');
   await page.locator('#skillInfoToggle').click();
   assert(!(await page.locator('#skillInfoPanel').isVisible()),'guide closes');
   await page.locator('#botTools').click();
