@@ -92,20 +92,26 @@ async function main(){
   }
   // Prime the Firebase SDK local cache first: compat transaction callbacks
   // see null for an uncached location and returning undefined aborts the commit.
-  await alice.ref(path('pair','p1','game')).once('value');
+  const pairBaseline=(await alice.ref(path('pair','p1','game')).once('value')).val();
   const pairObserved=watchRevision(bob.ref(path('pair','p1','game')),2);
-  const pairTx=await alice.ref(path('pair','p1','game')).transaction(old=>
-   old?{...old,combatRev:old.combatRev+1,hp:{...old.hp,bob:155}}:undefined,undefined,false);
+  const pairTx=await alice.ref(path('pair','p1','game')).transaction(old=>{
+   // SDK may call the updater with null before the local cache hydrates.
+   // A known baseline is a fallback; RTDB retries on a server-side hash conflict.
+   const state=old||pairBaseline;
+   return {...state,combatRev:state.combatRev+1,hp:{...state.hp,bob:155}};
+  },undefined,false);
   assert.equal(pairTx.committed,true,'pair transaction must commit');
   const pairGame=await pairObserved;
   assert.equal(pairGame.combatRev,2);assert.equal(pairGame.hp.bob,155);
   console.log('PASS 1vs1 real RTDB listener delivery + atomic host transaction');n++;
   // Prime the Firebase SDK local cache first: compat transaction callbacks
   // see null for an uncached location and returning undefined aborts the commit.
-  await alice.ref(path('squad','s1','game')).once('value');
+  const squadBaseline=(await alice.ref(path('squad','s1','game')).once('value')).val();
   const squadObserved=watchRevision(dana.ref(path('squad','s1','game')),2);
-  const squadTx=await alice.ref(path('squad','s1','game')).transaction(old=>
-   old?{...old,combatRev:old.combatRev+1,hp:{...old.hp,charlie:75}}:undefined,undefined,false);
+  const squadTx=await alice.ref(path('squad','s1','game')).transaction(old=>{
+   const state=old||squadBaseline;
+   return {...state,combatRev:state.combatRev+1,hp:{...state.hp,charlie:75}};
+  },undefined,false);
   assert.equal(squadTx.committed,true,'squad transaction must commit');
   const squadGame=await squadObserved;
   assert.equal(squadGame.combatRev,2);assert.equal(squadGame.hp.charlie,75);
