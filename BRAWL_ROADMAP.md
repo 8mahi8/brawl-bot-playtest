@@ -31,9 +31,10 @@
 
 ## Combat Evolution — 大型統合候補（2026-10-12）
 - 🟡 新候補: [2v2-combat-evolution-test.html](./2v2-combat-evolution-test.html)。旧版とは別ファイルで開発。
+- 🟡 1vs1比較候補: [1v1-combat-evolution-test.html](./1v1-combat-evolution-test.html)。旧1vs1を保持し、速度・当たり判定・iPadアナログ移動・PC短押し/長押し・霧表現を共通化。
 - 実装済み候補: 拡張対称マップ1536×860、視野変更、全員速度102、被弾半径18、アナログジョイスティック、2vs2 HP自然回復、ガンナー時間差3連射、BOT撤退/回り込み/最終目撃、PC短押しオート射撃・長押し照準、霧の波線除去、回復/ダメージ表示。
 - 確認済み: JavaScript構文、純粋戦闘ロジック（自然回復/射撃/ステルス/低HP撤退）、KO・AREAマップ対称性/経路・4人初期化。
-- ⬜ **学校iPadのブラウザ試遊・オンラインFirebase移植/複数端末テストは未完了。** 1vs1にもまだ統合していない。実装したことと完成したことを混同しない。
+- ⬜ **学校iPadのブラウザ試遊・オンラインFirebase移植/複数端末テストは未完了。** 1vs1には比較候補を作成したが、オンライン本体への反映と実機検証は未完了。実装したことと完成したことを混同しない。
 - 詳細: [COMBAT_EVOLUTION_RELEASE_NOTES.md](./COMBAT_EVOLUTION_RELEASE_NOTES.md)。再現可能なロジックテスト: [tests/combat-evolution-smoke.cjs](./tests/combat-evolution-smoke.cjs)。
 
 ## 開発バックログ（優先度を変えても項目は消さない）
