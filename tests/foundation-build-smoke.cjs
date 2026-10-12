@@ -49,8 +49,8 @@ for(const name of Object.keys(settings.modes)){
  assert.notEqual(changed,sources[name],'damage makes rebuilt output differ '+name);
 }
 // No accidental mode cross-wiring: HP/character changes must not rewrite legacy templates.
-assert.equal(settings.modes['1vs1'].template,'1v1-combat-evolution-test.html');
-assert.equal(settings.modes['2vs2'].template,'2v2-ui-clean-r4-1-test.html');
+assert.equal(settings.modes['1vs1'].template,'src/modes/1v1.template.html');
+assert.equal(settings.modes['2vs2'].template,'src/modes/2v2.template.html');
 assert(sources['2vs2'].includes('quietR41:true'),'quiet playtest carried into generated build');
 assert(sources['1vs1'].includes('window.__brawlV29QA'),'existing 1v1 solo debug hook retained');
 console.log('PASS: one contract change rebakes BOTH actual standalone games');
