@@ -125,7 +125,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
 <div id="app">
  <canvas id="arena" aria-label="4人対戦フィールド"></canvas>
  <div id="mapDock" class="hidden"><canvas id="miniMap" width="272" height="152" aria-label="自分・味方・発見済みの敵と現在のカメラ範囲のミニマップ"></canvas><button id="cameraToggle" type="button">全景表示 / F</button></div>
-  <div id="pcHelp">WASD / 矢印：移動　左クリック：攻撃　Shift＋左クリック：自動照準　右クリック：GAD　Space：ULT</div>
+  <div id="pcHelp">WASD / 矢印：移動　左クリック短押し：自動射撃　長押し：照準して離すと射撃　右クリック：GAD　Space：ULT</div>
  <div id="homeScreen" class="screen">
   <div id="navLine">BOT PRACTICE · PERF TEST · OFFLINE</div>
   <h1>BRAWL <em>2vs2</em><small>COMBAT EVOLUTION · 大型統合候補</small></h1>
@@ -1095,11 +1095,24 @@ function viewCoords(p){return{x:(p.x-view.ox)/view.scale,y:(p.y-view.oy)/view.sc
 function pcPointer(e){if(scene!=='game'||botPilot||!view.scale)return;pcCursor=getStagePos(e);pcAim=viewCoords(pcCursor);pcAim.x=clamp(pcAim.x,0,W);pcAim.y=clamp(pcAim.y,0,H);}
 function pcAngle(){return pcAim?Math.atan2(pcAim.y-local.y,pcAim.x-local.x):local.a;}
 function pcReach(){return pcAim?clamp(Math.hypot(pcAim.x-local.x,pcAim.y-local.y),55,330):310;}
+let pcShot=null;
 canvas.addEventListener('mousemove',pcPointer);
 canvas.addEventListener('mousedown',e=>{
- if(e.button!==0&&e.button!==2||scene!=='game'||botPilot)return;
+ if((e.button!==0&&e.button!==2)||scene!=='game'||botPilot)return;
  e.preventDefault();pcPointer(e);
- if(e.button===0){if(e.shiftKey){const t=enemyCandidate();shootAngle(t?Math.atan2(t.y-local.y,t.x-local.x):pcAngle(),t?Math.hypot(t.x-local.x,t.y-local.y):pcReach());}else shootAngle(pcAngle(),pcReach());}else sendAction('gadget',pcAngle());
+ if(e.button===0)pcShot={at:performance.now(),x:e.clientX,y:e.clientY};
+ else sendAction('gadget',pcAngle());
+});
+window.addEventListener('mouseup',e=>{
+ if(e.button!==0||!pcShot)return;
+ const held=pcShot;pcShot=null;
+ if(scene!=='game'||botPilot)return;
+ pcPointer(e);
+ const quick=performance.now()-held.at<175&&Math.hypot(e.clientX-held.x,e.clientY-held.y)<10;
+ if(quick){
+  const t=enemyCandidate();
+  shootAngle(t?Math.atan2(t.y-local.y,t.x-local.x):pcAngle(),t?Math.hypot(t.x-local.x,t.y-local.y):pcReach());
+ }else shootAngle(pcAngle(),pcReach());
 });
 canvas.addEventListener('contextmenu',e=>{if(scene==='game')e.preventDefault();});
 canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;if(botPilot||!combatReady()||!alive(myId))return;const p=getStagePos(e);e.preventDefault();if(p.x>canvas.getBoundingClientRect().width/2){if(aimPointer){try{canvas.releasePointerCapture(aimPointer.id);}catch(_e){}}aimPointer={id:e.pointerId,ox:p.x,oy:p.y,x:p.x,y:p.y,dragged:false};}else{if(pointer){try{canvas.releasePointerCapture(pointer.id);}catch(_e){}}pointer={id:e.pointerId,ox:p.x,oy:p.y,x:p.x,y:p.y};}canvas.setPointerCapture?.(e.pointerId);});
@@ -1262,6 +1275,13 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  else {ctx.strokeStyle=f.type==='shockwave'?'#bd75ff':f.type==='hit'?'#ffe476':'#ffcc75';ctx.lineWidth=f.type==='jumpWarn'?3:f.type==='hit'?5:4;ctx.beginPath();const max=f.type==='shockwave'?140:f.type==='jumpWarn'?76:40;ctx.arc(f.x,f.y,f.type==='jumpWarn'?76:max*(1-Math.max(0,f.t||0)/.5)+4,0,Math.PI*2);ctx.stroke();}ctx.restore();}}
  ctx.restore();
  drawMinimap(performance.now());
+ if(scene==='game'&&!paused&&pcShot&&pcAim&&!botPilot){
+  const angle=pcAngle(),range=CHARS[game?.stats?.[myId]?.char]?.range||300;
+  ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);
+  ctx.strokeStyle='rgba(208,242,255,.83)';ctx.lineWidth=2;ctx.setLineDash([9,7]);
+  ctx.beginPath();ctx.moveTo(local.x,local.y);ctx.lineTo(local.x+Math.cos(angle)*range,local.y+Math.sin(angle)*range);ctx.stroke();
+  ctx.restore();
+ }
  if(scene==='game'&&!paused){const a=ultPointer?.dragged&&!ultPointer.cancelled?ultPointer:aimPointer?.dragged?aimPointer:null;if(a){const dx=a.x-a.ox,dy=a.y-a.oy,angle=Math.atan2(dy,dx),char=game?.stats?.[myId]?.char;ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);ctx.strokeStyle='#e2c7ff';ctx.setLineDash([8,6]);ctx.lineWidth=3;ctx.beginPath();if(char==='bomber'||a===ultPointer&&char==='tank'){const reach=clamp(Math.hypot(dx,dy)/80*330,55,char==='bomber'?BALANCE.bomberRange:330),p=engine().landing(local,angle,reach);ctx.arc(p.x,p.y,char==='tank'?76:a===ultPointer?90:65,0,Math.PI*2);}else{ctx.moveTo(local.x,local.y);ctx.lineTo(local.x+Math.cos(angle)*CHARS[char].range,local.y+Math.sin(angle)*CHARS[char].range);}ctx.stroke();ctx.restore();}}
  if(scene==='game'&&pointer&&!paused){const x=pointer.ox,y=pointer.oy;const dx=pointer.x-x,dy=pointer.y-y;ctx.strokeStyle='rgba(160,231,251,.6)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,43,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(107,220,245,.5)';ctx.beginPath();ctx.arc(x+clamp(dx,-44,44),y+clamp(dy,-44,44),18,0,7);ctx.fill();}
 }
@@ -1287,7 +1307,7 @@ $('layoutReset').addEventListener('click',()=>{layout=structuredClone(layoutDefa
 $('gadSize').addEventListener('input',e=>{layout.gad.size=Number(e.target.value);applyLayout();});$('ultSize').addEventListener('input',e=>{layout.ult.size=Number(e.target.value);applyLayout();});
 $('mockGad').addEventListener('pointerdown',e=>setLayoutDrag('gad',e));$('mockUlt').addEventListener('pointerdown',e=>setLayoutDrag('ult',e));
 window.addEventListener('resize',()=>{pointer=null;aimPointer=null;ultPointer=null;applyLayout();});
-window.addEventListener('blur',()=>{pointer=null;aimPointer=null;ultPointer=null;pcKeys.clear();pcAim=null;pcCursor=null;});
+window.addEventListener('blur',()=>{pointer=null;aimPointer=null;ultPointer=null;pcShot=null;pcKeys.clear();pcAim=null;pcCursor=null;});
 // Prevent accidental double-tap/pinch zoom in matches, not on menus.
 document.addEventListener('dblclick',e=>{if(scene==='game')e.preventDefault();},{passive:false});
 document.addEventListener('gesturestart',e=>{if(scene==='game')e.preventDefault();},{passive:false});
