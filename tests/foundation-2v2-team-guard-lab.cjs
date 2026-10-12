@@ -11,7 +11,7 @@ for(const entry of [...MODIFICATIONS].reverse()) {
  restored=restored.replace(entry.to,entry.from);
 }
 assert.equal(restored,prior,'EXACTLY the intended GAD modifications only; map and weapons unchanged');
-const source=now.match(/<script>([sS]*?)</script>/)?.[1];
+const source=now.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 assert(source?.length>100000,'app has actual inline game');
 new vm.Script(source,{filename:'team-guard-lab'});
 const env={structuredClone};
@@ -52,7 +52,7 @@ assert.equal(guard.usedActions['tank-gad-1'].status,'accepted','gadget used');
 assert.equal(guard.stats.t.guardTargetId,'a','nearest teammate linked only if near');
 assert.equal(guard.stats.t.guardUntil,3300,'preserves 3.2 second teammate guard');
 assert.equal(guard.stats.t.gadgets,1,'one charge consumed');
-assert.equal(guard.motions.t.x,595,'115 dash retained');
+assert(Math.abs(guard.motions.t.x-595)<1e-7,'115 dash retained');
 let input=within.input;
 input.t={x:595,y:420,motionRev:guard.motions.t.rev,life:0};
 guard.projectiles.p1={id:'p1',owner:'e',ownerLife:0,team:'red',char:'gunner',damage:40,x:595,y:420,vx:0,vy:0,dist:0,range:500,radius:6,spawnAt:0};
@@ -68,8 +68,8 @@ assert.equal(hitEvents.find(x=>x.victim==='a').guarded,true,'ally marked shielde
 const far=start(1400,700),dashOnly=gadget(far.g,far.input);
 assert.equal(dashOnly.stats.t.guardTargetId,'','no map-global guard against distant teammate');
 assert.equal(dashOnly.stats.t.guardUntil,0,'no phantom shield');
-assert.equal(dashOnly.motions.t.x,595,'dash remains useful even without a teammate');
-const uiLookup=source.match(/function guardFor(id,now)[sS]*?return null;}/)?.[0];
+assert(Math.abs(dashOnly.motions.t.x-595)<1e-7,'dash remains useful even without a teammate');
+const uiLookup=source.match(/function guardFor\(id,now\)[\s\S]*?return null;}/)?.[0];
 assert(uiLookup&&uiLookup.includes('source!==id&&st.guardTargetId===id'),'UI shield glows on teammate, not self');
 assert(!now.includes('自分と味方への被ダメージを35%軽減'),'outdated skill description removed');
 assert(now.includes('自分には軽減なし'),'correct Japanese ability guide');
