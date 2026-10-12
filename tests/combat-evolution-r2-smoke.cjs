@@ -118,4 +118,27 @@ check('1vs1 candidate remains present and syntactically valid',()=>{
  new vm.Script(duel.slice(i+8,j),{filename:'1v1-combat-evolution-test.html'});
 });
 
+
+// These checks exercise win-state transitions without claiming a browser rematch was tested.
+check('R2 KO: first round ends, second winning round ends the match',()=>{
+ const core=combat.create({chars:CHARS,walls:[],spawns:SPAWNS,seatKeys});
+ let first=core.initialize('ko-qa',seats,'ko',0);
+ first.hostToken='qa';first.hp.e=0;first.hp.f=0;
+ first=core.step(first,{},100,first.combatRev,'qa');
+ assert.equal(first.phase,'round_end');assert.equal(first.winner,'blue');assert.equal(first.scores.blue,1);
+ let second=core.initialize('ko-qa',seats,'ko',0);
+ second.hostToken='qa';second.round=2;second.scores={...first.scores};second.hp.e=0;second.hp.f=0;
+ second=core.step(second,{},100,second.combatRev,'qa');
+ assert.equal(second.phase,'match_end');assert.equal(second.winner,'blue');assert.equal(second.scores.blue,2);
+});
+check('R2 AREA: valid uncontested capture finishes the match',()=>{
+ const core=combat.create({chars:CHARS,walls:[],spawns:SPAWNS,seatKeys});
+ let g=core.initialize('area-qa',seats,'area',0);
+ g.hostToken='qa';g.area.blueMs=59950;g.hp.e=0;g.hp.f=0;
+ g.clock.t=59900;g.clock.wallAt=100000;
+ const inputs={p:{x:768,y:430,life:0,motionRev:0},b:{x:755,y:432,life:0,motionRev:0}};
+ g=core.step(g,inputs,100100,g.combatRev,'qa');
+ assert.equal(g.phase,'match_end');assert.equal(g.winner,'blue');assert.equal(g.area.blueMs,60000);
+});
+
 console.log('BRAWL R2 regression suite passed. Browser/iPad/online QA still required.');
