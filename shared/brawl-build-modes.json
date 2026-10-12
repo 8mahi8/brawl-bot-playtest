@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "purpose": "Both standalone dev builds inherit character stats and combat BALANCE from shared/brawl-core-contract.json. UI/combat architectures remain mode-specific in source templates.",
+  "purpose": "Both standalone builds use shared contract and shared runtime helpers; mode-specific HTML templates under src/modes preserve legacy candidates.",
   "characterDisplay": {
     "tank": {
       "label": "タンク",
@@ -28,7 +28,7 @@
   },
   "modes": {
     "1vs1": {
-      "template": "1v1-combat-evolution-test.html",
+      "template": "src/modes/1v1.template.html",
       "output": "foundation/1v1-foundation-v1.html",
       "areaRadius": 100,
       "characterOrder": [
@@ -62,7 +62,7 @@
       }
     },
     "2vs2": {
-      "template": "2v2-ui-clean-r4-1-test.html",
+      "template": "src/modes/2v2.template.html",
       "output": "foundation/2v2-foundation-v1.html",
       "areaRadius": 118,
       "characterOrder": [
