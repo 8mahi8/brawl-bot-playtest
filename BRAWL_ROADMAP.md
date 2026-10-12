@@ -52,7 +52,9 @@
 - ✅ タンクGADを味方援護ダッシュへ拡張。発動2.2秒/半径120/30%ダメージ軽減。ダッシュ/通常射撃・移動数値は維持。タンクKO・期限切れ・チーム区別・AREA復活で失効。
 - ✅ ロビーと試合中の4キャラGAD/ULTガイド、ガード範囲と軽減表示、HUD強化状態、GAD補充練習ボタン。
 - ✅ タンクBOTの負傷味方救援判断と、回復中の無駄な能力使用抑制を追加。
-- ✅ [R3回帰テスト](./tests/tactical-abilities-r3-smoke.cjs) 14ケースを隔離実行で通過。既存GitHub Actionsへ追加したが、Actionsのジョブ結果・ブラウザE2E・iPadは別途検証対象。
+- ✅ [R3回帰テスト](./tests/tactical-abilities-r3-smoke.cjs) 14ケース成功。従来版・R2・R3の [GitHub Actions smoke](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38202345366) も成功。
+- ✅ [ChromiumブラウザE2E](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38202613794) 成功（PC 1220×780、横向きタッチ 844×390）。BOT対戦開始、技ガイド開閉、練習補充、GAD発動、JS例外0件。 [GitHub Pages公開](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38202612919) 成功。
+- ⬜ **Safari/学校iPad実機、長時間/再戦、Firebaseオンライン** は未検証。タッチをChromiumで模擬した結果は実機の代わりにはならない。
 - ⬜ 味方防御が強すぎないか、見た目や操作が分かりやすいか、ユーザー試遊で判断。1vs1への自動コピーやFirebaseオンライン本体への反映は未実施。
 - 詳細: [R3リリースメモ](./TACTICAL_ABILITIES_R3_RELEASE_NOTES.md)。
 
