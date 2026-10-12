@@ -37,6 +37,15 @@
 - ⬜ **学校iPadのブラウザ試遊・オンラインFirebase移植/複数端末テストは未完了。** 1vs1には比較候補を作成したが、オンライン本体への反映と実機検証は未完了。実装したことと完成したことを混同しない。
 - 詳細: [COMBAT_EVOLUTION_RELEASE_NOTES.md](./COMBAT_EVOLUTION_RELEASE_NOTES.md)。再現可能なロジックテスト: [tests/combat-evolution-smoke.cjs](./tests/combat-evolution-smoke.cjs)。
 
+## 追記: Combat Evolution R2 回復戦術・品質ゲート（2026-10-12）
+- 🟡 **新2vs2比較候補**: [2v2-combat-evolution-r2-test.html](./2v2-combat-evolution-r2-test.html)。旧Combat Evolutionと旧安定版は保持したまま別HTMLで実装。
+- ✅ 低HP BOTが射撃継続によってHP自然回復を妨げる矛盾を修正。HP38%未満で回復優先、72%以上で復帰、至近距離のみ防御射撃、霧で見失った敵を不正に追跡しない。
+- ✅ 追加された回帰テスト: [tests/combat-evolution-r2-smoke.cjs](./tests/combat-evolution-r2-smoke.cjs)。KOの2ラウンド勝利・AREAの占領勝利、回復判断・1vs1のJS構文も確認対象。
+- ✅ 継続的検証用の [GitHub Actionsワークフロー](./.github/workflows/combat-evolution-smoke.yml) を設置（Actions実行結果は別途確認）。
+- 🟡 [1vs1/2vs2仕様差の監査記録](./BRAWL_MODE_PARITY_AUDIT.md)を作成。タンク散弾角とガンナー連射中の発射座標の差、戦闘コア構造差が残る。
+- ⬜ **ブラウザ通しプレイ・実機iPad・複数端末Firebase通信は依然として未検証/未実装**。新R2候補をオンライン版と呼ばない。
+- 詳細: [COMBAT_EVOLUTION_R2_RELEASE_NOTES.md](./COMBAT_EVOLUTION_R2_RELEASE_NOTES.md)。
+
 ## 開発バックログ（優先度を変えても項目は消さない）
 
 ### P0 — 遊びの駆け引き
