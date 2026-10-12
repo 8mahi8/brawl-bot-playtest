@@ -551,13 +551,22 @@
    const canHit=id=>g.hp[id]>0&&!(g.protection[id]>t)&&!flying(g,id);
    function hit(key,owner,victim,amount,extra={}){if(!g.usedHits[key]&&canHit(victim)){g.usedHits[key]=1;hits.push({key,owner,victim,amount,...extra});}}
    for(const [id,b]of Object.entries(g.projectiles)){
-    let alive=true;const n=Math.max(1,Math.ceil(660*dt/1000/6));
-    for(let i=0;i<n;i++){b.x+=b.vx*dt/1000/n;b.y+=b.vy*dt/1000/n;b.dist+=660*dt/1000/n;
-     if(b.x<0||b.x>W||b.y<0||b.y>H||wall(b.x,b.y,b.radius)||b.dist>=b.range){alive=false;break;}
-     for(const k of seatKeys){const v=g.seats[k].id;if(team(k)===b.team||!canHit(v))continue;const p=targets[v];
-      if(Math.hypot(p.x-b.x,p.y-b.y)<=R+b.radius){hit(b.id,b.owner,v,b.char==='tank'?tankDamage(b.dist):b.char==='sniper'?Math.min(64,36+Math.round(b.dist*.065)):b.damage);alive=false;break;}}
-     if(!alive)break;
-    }if(!alive)delete g.projectiles[id];
+    const alive=BrawlProjectileV1.advance(b,dt/1000,{
+     width:W,height:H,rangeFirst:true,
+     wallHit:(x,y,r)=>wall(x,y,r),
+     targetHit:(bullet)=>{
+      for(const k of seatKeys){
+       const v=g.seats[k].id;if(team(k)===bullet.team||!canHit(v))continue;
+       const p=targets[v];
+       if(BrawlProjectileV1.hitCircle(bullet.x,bullet.y,p.x,p.y,R+bullet.radius)){
+        hit(bullet.id,bullet.owner,v,BrawlProjectileV1.damage(bullet,tankDamage));
+        return true;
+       }
+      }
+      return false;
+     }
+    });
+    if(!alive)delete g.projectiles[id];
    }
    const due=Object.entries(g.scheduled).filter(([,u])=>u.until<=t);
    // All landings are applied before the same-tick area/HP decision.
@@ -626,6 +635,34 @@ const BrawlWeaponV1=Object.freeze({
  bulletSpeed:660
 });
 /* END SHARED WEAPON RULES */
+/* BEGIN SHARED PROJECTILE PHYSICS */
+// Pure bullet physics shared by 1vs1 legacy shooting and both BrawlCombatV8 reducers.
+// No global DOM, no state writes, no Firebase access. Included in both generated standalone HTML builds.
+const BrawlProjectileV1=Object.freeze({
+ hitCircle(x,y,targetX,targetY,totalRadius){
+  return Math.hypot(targetX-x,targetY-y)<=totalRadius;
+ },
+ damage(b,tankFalloff){
+  if(b.char==='tank'&&!b.ult)return tankFalloff(b.dist);
+  if(!b.ult&&(b.char==='sniper'||b.sniper))return Math.min(64,36+Math.round(b.dist*.065));
+  return b.damage;
+ },
+ advance(b,dtSeconds,{width,height,wallHit,targetHit,rangeFirst=true}){
+  if(!Number.isFinite(dtSeconds)||dtSeconds<0)throw Error('Invalid projectile delta time');
+  const distance=Math.hypot(b.vx,b.vy)*dtSeconds;
+  // Substep granularity prevents tunneling through walls and actors between ticks.
+  const steps=Math.max(1,Math.ceil(distance/6)),dx=b.vx*dtSeconds/steps,dy=b.vy*dtSeconds/steps,dd=distance/steps;
+  for(let i=0;i<steps;i++){
+   b.x+=dx;b.y+=dy;b.dist+=dd;
+   if(b.x<0||b.x>width||b.y<0||b.y>height||wallHit(b.x,b.y,b.radius))return false;
+   if(rangeFirst&&b.dist>=b.range)return false;
+   if(targetHit(b))return false;
+   if(!rangeFirst&&b.dist>=b.range)return false;
+  }
+  return true;
+ }
+});
+/* END SHARED PROJECTILE PHYSICS */
 /* BEGIN BOMBER CORE */
 /* Pure 1vs1 bomb reducer: persisted flights and DOT, one atomic HP decision. */
 (function(root){'use strict';
@@ -1541,21 +1578,17 @@ const BrawlWeaponV1=Object.freeze({
     if(age && !moveBullet(b,age))return;
     shots.push(b);
   }
-  function moveBullet(b,dt) {
-    const distance=Math.hypot(b.vx,b.vy)*dt;
-    const n=Math.max(1,Math.ceil(distance/6));
-    for(let k=0;k<n;k++) {
-      b.x+=b.vx*dt/n;b.y+=b.vy*dt/n;b.dist+=distance/n;
-      if(b.x<0||b.x>W||b.y<0||b.y>H||circleWall(b.x,b.y,b.radius))return false;
-      const victim=b.owner==='host'?'guest':'host';
-      const pos=victim===role?local:getRemotePredicted();
-      if(Math.hypot(b.x-pos.x,b.y-pos.y)<RADIUS+b.radius) {
-        if(isHost&&game.phase==='playing')applyDamage(victim,b.char==='tank'?BrawlCombatV8.tankDamage(b.dist):b.sniper?Math.min(64,36+Math.round(b.dist*.065)):b.damage,b.owner,b.x,b.y);
-        return false;
-      }
-      if(b.dist>=b.range)return false;
-    }
-    return true;
+  function moveBullet(b,dt){
+    return BrawlProjectileV1.advance(b,dt,{
+     width:W,height:H,rangeFirst:false,
+     wallHit:(x,y,r)=>circleWall(x,y,r),
+     targetHit:bullet=>{
+      const victim=bullet.owner==='host'?'guest':'host',pos=victim===role?local:getRemotePredicted();
+      if(!BrawlProjectileV1.hitCircle(bullet.x,bullet.y,pos.x,pos.y,RADIUS+bullet.radius))return false;
+      if(isHost&&game.phase==='playing')applyDamage(victim,BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage),bullet.owner,bullet.x,bullet.y);
+      return true;
+     }
+    });
   }
   function applyDamage(victim,amount,owner,x,y) {
     if(solo){applySoloDamage(victim,amount,owner,x,y);return;}
