@@ -39,6 +39,8 @@ jobs:
         run: node tests/foundation-build-smoke.cjs
       - name: Compare actual 1vs1 and 2vs2 weapon behavior before browser QA
         run: node tests/foundation-weapon-parity.cjs
+      - name: Cross-mode shared ammunition and volley creation
+        run: node tests/foundation-combat-actions-parity.cjs
       - name: Cross-mode projectile collision and damage parity
         run: node tests/foundation-projectile-parity.cjs
       - name: 2vs2 gameplay and clean interface regression
