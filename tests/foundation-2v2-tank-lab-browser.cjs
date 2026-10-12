@@ -8,7 +8,7 @@ const url='file://'+path.resolve(__dirname,'../foundation/2v2-open-arena-tank-la
 async function run(browser,touch,mode){const viewport=touch?{width:1024,height:768}:{width:1220,height:780};const context=await browser.newContext({viewport,isMobile:touch,hasTouch:touch,deviceScaleFactor:touch?2:1});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.goto(url,{waitUntil:'load'});
-  assert((await page.locator('h1').textContent()).includes('TANK 160HP'),'candidate correctly labeled');
+  assert((await page.locator('h1').first().textContent()).includes('TANK 160HP'),'candidate correctly labeled');
   await page.locator('#soloBtn').click();
   await page.waitForFunction(()=>window.__brawlV3QA?.().scene==='lobby',{timeout:10000});
   if(mode==='area')await page.locator('#modePick [data-mode="area"]').click();
