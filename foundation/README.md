@@ -31,6 +31,12 @@
 - **[実ブラウザQA](../tests/foundation-2v2-area-browser.cjs)** はPCとタブレット相当タッチ画面のChromiumでホットゾーンBOT試合を開始し、ゾーン戦術と実移動、正しいHUD、JavaScriptエラーなしを検査。[成功したCI](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38254213811)。
 - 今回の改善対象は生成版の[2vs2オフラインBOT練習](./2v2-foundation-v1.html)のみ。旧版は保護。これは**長時間プレイで面白さを検証した証拠ではない**。学校iPad Safari実機・友達との対戦評価も未実施。
 
+## 1vs1 BOT — 公平なステルス索敵（2026-10-12）
+
+従来の1vs1 BOTは「不可視の相手を追跡しない」一方、**向きと一部GAD発動の判断**では現在の隠れた相手の位置を参照していた。現在の生成版では可視中だけ位置を記憶し、見失った後2.4秒を過ぎると記憶を捨てて4地点の巡回探索を開始する。射撃は元から可視性を要する。攻撃的なGADに不可視の相手の距離を使わない。
+
+[1vs1 BOT判定回帰](../tests/foundation-1v1-stealth-bot.cjs)は相手の不可視位置を変えてもエイム/技が影響されないこと、目撃記憶の期限、巡回切替、可視スナイパー技をテストする。[総合CI](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38256207368)ではPC・タッチの実ブラウザ試遊も回帰した。実際の面白さとSafari実機品質は引き続き未確認。2vs2のBOT戦術・旧安定版・オンライン版は変更していない。
+
 ## ネットワーク設計の分離（V1.4以降）
 
 **オンライン通信はゲーム共通エンジンへ無条件に合流させない。** [モード別ネットワークの隔離ラボ](../network/README.md)を作成し、1vs1（host/guest）と2vs2（4席、presence/connectionId、ホストの戦闘tick）の違いを保護した。模擬送受信・遅延・切断/復帰の検証を独立CIで継続する。両Foundation HTMLは引き続きBOT専用でFirebase無効、実オンライン移植は行っていない。
