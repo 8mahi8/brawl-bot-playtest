@@ -130,7 +130,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
 <body>
 <div id="app">
  <canvas id="arena" aria-label="4人対戦フィールド"></canvas>
- <div id="mapDock" class="hidden"><canvas id="miniMap" width="272" height="152" aria-label="自分・味方・発見済みの敵と現在のカメラ範囲のミニマップ"></canvas><button id="cameraToggle" type="button">全景表示 / F</button></div>
+ <div id="mapDock" class="hidden compact"><button id="mapExpand" type="button" aria-label="ミニマップを開閉" aria-expanded="false">MAP <span id="mapArrow">＋</span></button><canvas id="miniMap" width="272" height="152" aria-label="自分・味方・発見済みの敵と現在のカメラ範囲のミニマップ"></canvas><button id="cameraToggle" type="button">全景表示 / F</button></div>
   <div id="pcHelp">WASD / 矢印：移動　左クリック短押し：自動射撃　長押し：照準して離すと射撃　右クリック：GAD　Space：ULT</div>
  <div id="homeScreen" class="screen">
   <div id="navLine">BOT PRACTICE · PERF TEST · OFFLINE</div>
@@ -714,17 +714,35 @@ const ABILITY_GUIDE={
  bomber:{title:'ボマー · 行動を制限する爆撃',gad:'特殊爆弾：次の爆弾にスロー＋継続ダメージを付与。発動中は重ね掛け不可。',ult:'三連爆撃：指定地点に時間差3回の範囲爆発。移動を強制する。'}
 };
 function abilityText(char){const a=ABILITY_GUIDE[char]||ABILITY_GUIDE.tank;return a.title+'\nGAD｜'+a.gad+'\nULT｜'+a.ult;}
-const layoutDefault={gad:{x:.77,y:.78,size:66},ult:{x:.89,y:.64,size:70}};
-let layout=structuredClone(layoutDefault);try{const v=JSON.parse(safeLocalGet('brawl-v3-2v2-layout')||'null');if(v&&v.gad&&v.ult)for(const k of ['gad','ult']){layout[k]={x:clamp(Number(v[k].x)||layoutDefault[k].x,.07,.93),y:clamp(Number(v[k].y)||layoutDefault[k].y,.12,.91),size:clamp(Number(v[k].size)||layoutDefault[k].size,44,100)}}}catch(_){}
+const layoutDefault={gad:{x:.77,y:.84,size:66},ult:{x:.90,y:.66,size:70}};
+let layout=structuredClone(layoutDefault);try{const v=JSON.parse(safeLocalGet('brawl-v3-2v2-r4-layout')||'null');if(v&&v.gad&&v.ult)for(const k of ['gad','ult']){layout[k]={x:clamp(Number(v[k].x)||layoutDefault[k].x,.07,.93),y:clamp(Number(v[k].y)||layoutDefault[k].y,.12,.91),size:clamp(Number(v[k].size)||layoutDefault[k].size,44,100)}}}catch(_){}
 let fit=clamp(Number(safeLocalGet('brawl-v3-2v2-offline-fit-v1'))||100,40,100);
 function applyFit(){ $('app').style.height=fit+'%';$('fitRange').value=fit;$('fitVal').textContent=fit+'%';$('fitButton').textContent='縦幅'+fit+'% ⚙';applyLayout();}
 function applyLayout(){for(const k of ['gad','ult']){const el=$(k==='gad'?'mockGad':'mockUlt'),p=layout[k],stage=$('app');const sw=stage.clientWidth,sh=stage.clientHeight;
   const size=Math.min(p.size,Math.max(30,Math.min(sw,sh)*.30));el.style.width=size+'px';el.style.height=size+'px';el.style.left=clamp(p.x*sw,size/2+4,sw-size/2-4)+'px';el.style.top=clamp(p.y*sh,size/2+4,sh-size/2-4)+'px';}
  for(const k of ['gad','ult']){const e=$(k==='gad'?'gadAction':'ultAction'),p=layout[k],sw=$('app').clientWidth,sh=$('app').clientHeight,sz=Math.min(p.size,Math.max(30,Math.min(sw,sh)*.30));e.style.width=sz+'px';e.style.height=sz+'px';e.style.left=clamp(p.x*sw,sz/2+4,sw-sz/2-4)+'px';e.style.top=clamp(p.y*sh,sz/2+4,sh-sz/2-4)+'px';}
- $('gadSize').value=layout.gad.size;$('ultSize').value=layout.ult.size;$('gadVal').textContent=layout.gad.size;$('ultVal').textContent=layout.ult.size;
+ protectActionButtons();$('gadSize').value=layout.gad.size;$('ultSize').value=layout.ult.size;$('gadVal').textContent=layout.gad.size;$('ultVal').textContent=layout.ult.size;
 }
+
+let mapPreference=null;
+function mapCompact(on){$('mapDock').classList.toggle('compact',on);$('mapExpand').setAttribute('aria-expanded',String(!on));$('mapArrow').textContent=on?'＋':'−';}
+function uiOverlap(a,b,pad=9){return a.left<b.right+pad&&a.right>b.left-pad&&a.top<b.bottom+pad&&a.bottom>b.top-pad;}
+function protectActionButtons(){
+ if(scene!=='game')return;
+ const d=$('mapDock'),small=$('app').clientHeight<365||$('app').clientWidth<590,open=mapPreference===null?!small:mapPreference;
+ mapCompact(!open);
+ if(open&&['gadAction','ultAction'].some(id=>uiOverlap(d.getBoundingClientRect(),$(id).getBoundingClientRect(),12)))mapCompact(true);
+}
+$('mapExpand').addEventListener('click',()=>{
+ const requested=$('mapDock').classList.contains('compact');mapPreference=requested;protectActionButtons();
+ if(requested&&$('mapDock').classList.contains('compact')){
+  $('skillToast').textContent='画面が狭いためMAPを折りたたみました';
+  $('skillToast').classList.remove('hidden');gadgetToastExpiry=performance.now()+1300;
+ }
+});
+
 function showScene(s){scene=s;$('app').dataset.scene=s;$('mapDock').classList.toggle('hidden',s!=='game');renderBotSetup();$('networkStatus').classList.toggle('hidden',s!=='game');for(const n of ['home','lobby'])$(n+'Screen').classList.toggle('hidden',s!==n);
- $('hud').classList.toggle('hidden',s!=='game');$('moveHint').classList.toggle('hidden',s!=='game');if(s!=='game'){$('skillToast').classList.add('hidden');gadgetToastExpiry=0;}$('returnBtn').classList.toggle('hidden',s!=='game');$('pauseBanner').classList.toggle('hidden',s!=='game'||!paused);$('layoutScreen').classList.toggle('hidden',s!=='layout');$('gadAction').classList.toggle('hidden',s!=='game');$('ultAction').classList.toggle('hidden',s!=='game');$('skillInfoToggle').classList.toggle('hidden',s!=='game');if(s!=='game'){$('skillInfoPanel').classList.add('hidden');$('skillInfoToggle').setAttribute('aria-expanded','false');}$('rematchPanel').classList.toggle('hidden',s!=='game'||game?.phase!=='match_end');if(s==='layout'||s==='game')applyLayout();}
+ $('hud').classList.toggle('hidden',s!=='game');$('moveHint').classList.toggle('hidden',s!=='game');if(s!=='game'){$('skillToast').classList.add('hidden');gadgetToastExpiry=0;}$('returnBtn').classList.toggle('hidden',s!=='game');$('pauseBanner').classList.toggle('hidden',s!=='game'||!paused);$('layoutScreen').classList.toggle('hidden',s!=='layout');$('gadAction').classList.toggle('hidden',s!=='game');$('ultAction').classList.toggle('hidden',s!=='game');$('skillInfoToggle').classList.toggle('hidden',s!=='game');if(s!=='game'){$('skillInfoPanel').classList.add('hidden');$('skillInfoToggle').setAttribute('aria-expanded','false');}$('rematchPanel').classList.toggle('hidden',s!=='game'||game?.phase!=='match_end');if(s==='layout'||s==='game')applyLayout();if(s==='game')protectActionButtons();}
 function status(msg){$(scene==='lobby'?'lobbyStatus':'homeStatus').textContent=msg;}
 function serverNow(){return Date.now()+clockOffset;}
 async function ensureDB(){throw Error('この公開試遊版ではオンライン通信を無効化しています。BOT練習を利用してください。');}function serverStamp(){return solo?Date.now():firebase.database.ServerValue.TIMESTAMP||Date.now();}
@@ -1382,7 +1400,7 @@ $('charPick').addEventListener('click',e=>{const char=e.target.closest('button[d
 $('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(roomId);$('copyBtn').textContent='コピー済み';setTimeout(()=>$('copyBtn').textContent='コピー',1000);}catch(_){$('roomCode').style.userSelect='text';$('lobbyStatus').textContent='ルームIDを長押ししてコピーしてね';}});
 $('fitButton').addEventListener('click',()=>{$('fitPanel').classList.toggle('hidden');});$('fitClose').addEventListener('click',()=>{$('fitPanel').classList.add('hidden');});
 $('fitRange').addEventListener('input',e=>{fit=Number(e.target.value);safeLocalSet('brawl-v3-2v2-offline-fit-v1',fit);applyFit();});
-$('layoutBtn').addEventListener('click',()=>{showScene('layout');});$('layoutDone').addEventListener('click',()=>{safeLocalSet('brawl-v3-2v2-layout',JSON.stringify(layout));showScene('home');});
+$('layoutBtn').addEventListener('click',()=>{showScene('layout');});$('layoutDone').addEventListener('click',()=>{safeLocalSet('brawl-v3-2v2-r4-layout',JSON.stringify(layout));showScene('home');});
 $('layoutReset').addEventListener('click',()=>{layout=structuredClone(layoutDefault);applyLayout();});
 $('gadSize').addEventListener('input',e=>{layout.gad.size=Number(e.target.value);applyLayout();});$('ultSize').addEventListener('input',e=>{layout.ult.size=Number(e.target.value);applyLayout();});
 $('mockGad').addEventListener('pointerdown',e=>setLayoutDrag('gad',e));$('mockUlt').addEventListener('pointerdown',e=>setLayoutDrag('ult',e));
@@ -1465,7 +1483,7 @@ const rememberedRoom=safeSessGet('brawl-v3-lastroom');
 if(/^\d{5}$/.test(rememberedRoom||'')){$('roomInput').value=rememberedRoom;$('homeStatus').textContent='前回のルームIDを入力済み。復帰する場合は「ルームに参加」を押してね。';}
 applyFit();showScene('home');requestAnimationFrame(frame);
 // Read-only diagnostics used by the local mock test harness; no live-server controls.
-window.__brawlV3QA=()=>({tacticalR3:true,guardianR4:true,solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
+window.__brawlV3QA=()=>({tacticalR3:true,guardianR4:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
 })();
 </script>
 </body></html>
