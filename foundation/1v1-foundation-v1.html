@@ -517,7 +517,10 @@
     if(char==='bomber'){
      const dst=landing(pos,a.angle,Math.min(a.reach||BALANCE.bomberRange,BALANCE.bomberRange)); // bombs may land beside/on walls, unlike jumps
      g.scheduled[a.eventId]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key:a.eventId,x:dst.x,y:dst.y,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,damage:BALANCE.bomberDamage,radius:BALANCE.bomberRadius,enhanced:!!s.armed};s.armed=false;
-    }else for(const b of burst({...a,x:pos.x,y:pos.y},s,g))g.projectiles[b.id]=b;
+    }else{
+     const shots=burst({...a,x:pos.x,y:pos.y},s,g);
+     shots.forEach((b,i)=>{g.projectiles[b.id]={...b,spawnAt:t+(char==='gunner'?i*BrawlWeaponV1.gapMs(s.overdriveUntil>t):0)};});
+    }
    }else if(a.type==='gadget'){
     if(s.gadgets<1||char==='bomber'&&s.armed)return reject('gadget');
     s.gadgets--;if(g.mode==='area')s.gadgetReadyAt=t+(chars[char].gadgetRechargeMs||BALANCE.areaGadgetRechargeMs);
@@ -543,7 +546,9 @@
    const canHit=id=>g.hp[id]>0&&!(g.protection[id]>t)&&!flying(g,id);
    function hit(key,owner,victim,amount,extra={}){if(!g.usedHits[key]&&canHit(victim)){g.usedHits[key]=1;hits.push({key,owner,victim,amount,...extra});}}
    for(const [id,b]of Object.entries(g.projectiles)){
-    const alive=BrawlProjectileV1.advance(b,dt/1000,{
+    if(b.spawnAt>t)continue;
+    const activeMs=b.spawnAt>oldT?Math.max(0,t-b.spawnAt):dt;
+    const alive=BrawlProjectileV1.advance(b,activeMs/1000,{
      width:W,height:H,rangeFirst:true,
      wallHit:(x,y,r)=>wall(x,y,r),
      targetHit:(bullet)=>{
