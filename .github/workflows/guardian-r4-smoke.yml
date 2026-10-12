@@ -1,0 +1,36 @@
+name: BRAWL R4 Guardian and UI checks
+on:
+  push:
+    paths:
+      - '2v2-ui-guardian-r4-test.html'
+      - 'tests/guardian-r4-smoke.cjs'
+      - 'tests/guardian-r4-browser-smoke.cjs'
+      - '.github/workflows/guardian-r4-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Guard reducer and gameplay regression
+        run: node tests/guardian-r4-smoke.cjs
+      - name: Browser driver
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+      - name: Locate Chromium
+        run: command -v google-chrome || command -v chromium || command -v chromium-browser
+      - name: Desktop and three phone sizes with tap hit-testing
+        run: node tests/guardian-r4-browser-smoke.cjs
+      - name: Save R4 screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardian-r4-qa-screenshots
+          path: artifacts/r4-*.png
+          if-no-files-found: ignore
+          retention-days: 5
