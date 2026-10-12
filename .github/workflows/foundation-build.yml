@@ -43,6 +43,8 @@ jobs:
         run: node tests/foundation-combat-actions-parity.cjs
       - name: Cross-mode projectile collision and damage parity
         run: node tests/foundation-projectile-parity.cjs
+      - name: Shared HP, shield, KO and AREA match resolution across both modes
+        run: node tests/foundation-match-state-parity.cjs
       - name: 2vs2 gameplay and clean interface regression
         run: node tests/foundation-2v2-gameplay.cjs
       - name: Install browser runner and Japanese fonts
