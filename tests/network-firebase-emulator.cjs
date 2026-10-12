@@ -77,6 +77,33 @@ async function main(){
   });
   await no('squad stale connection after rotation',alice.ref(path('squad','s1','positions/alice')).set(sp(900)));
   await ok('squad new connection/life can reset sequence',alice.ref(path('squad','s1','positions/alice')).set(sp(1,{connectionId:'conn2',life:1})));
+
+  // Genuine SDK listeners and RTDB transactions, not the earlier synthetic bus.
+  function watchRevision(ref,minRevision){
+   return new Promise((resolve,reject)=>{
+    const deadline=setTimeout(()=>{ref.off('value',onValue);reject(Error('Firebase listener did not receive revision '+minRevision));},7000);
+    const onValue=snap=>{
+     const value=snap.val();
+     if(!value||value.combatRev<minRevision)return;
+     clearTimeout(deadline);ref.off('value',onValue);resolve(value);
+    };
+    ref.on('value',onValue,error=>{clearTimeout(deadline);reject(error);});
+   });
+  }
+  const pairObserved=watchRevision(bob.ref(path('pair','p1','game')),2);
+  const pairTx=await alice.ref(path('pair','p1','game')).transaction(old=>
+   old?{...old,combatRev:old.combatRev+1,hp:{...old.hp,bob:155}}:undefined,undefined,false);
+  assert.equal(pairTx.committed,true,'pair transaction must commit');
+  const pairGame=await pairObserved;
+  assert.equal(pairGame.combatRev,2);assert.equal(pairGame.hp.bob,155);
+  console.log('PASS 1vs1 real RTDB listener delivery + atomic host transaction');n++;
+  const squadObserved=watchRevision(dana.ref(path('squad','s1','game')),2);
+  const squadTx=await alice.ref(path('squad','s1','game')).transaction(old=>
+   old?{...old,combatRev:old.combatRev+1,hp:{...old.hp,charlie:75}}:undefined,undefined,false);
+  assert.equal(squadTx.committed,true,'squad transaction must commit');
+  const squadGame=await squadObserved;
+  assert.equal(squadGame.combatRev,2);assert.equal(squadGame.hp.charlie,75);
+  console.log('PASS 2vs2 real RTDB listener delivery + atomic host transaction');n++;
   await no('live path denied',alice.ref('rooms/live').set({game:{hp:0}}));
   console.log('PASS '+n+' real RTDB emulator Auth/Rules read-write assertions');
   console.log('LOCAL EMULATOR ONLY: privileged fixture setup is not a host election implementation; no live DB involved.');
