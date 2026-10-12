@@ -244,10 +244,10 @@ html,body,#app{background:#081720;color:#ecf7f5}
   <div id="hint">チームを変えるには空いている席の「移動」を押してね。4人全員がREADYすると自動で開始。</div>
   <button id="leaveBtn" class="btn inline secondary">ルームから退出</button>
  </div>
- <div id="hud" class="hidden"><div class="hudCard ally"><div id="myLabel" class="hudName">YOU / タンク</div><div id="mySeat" class="hudSub">BLUE1</div><div class="hudHp"><i id="myHpFill"></i></div><div id="myHP" class="hudValue">180 / 180</div><div id="myReload" class="reloadStrip" aria-label="リロード進捗"><i></i><i></i><i></i></div><div id="myAmmo" class="hudSub">弾 3 / 3</div><div class="hudUlt"><i id="myUltFill"></i></div><div id="myUlt" class="hudSub">ULT 0% · GAD 2</div><div id="myBuff" class="hudSub"></div><div id="guardMeter" class="hidden"></div><div id="allySummary" class="teamRows"></div></div><div id="gameBanner">2vs2 · KNOCKOUT<small id="roundInfo">ROUND 1 · BLUE 0 - 0 RED</small></div><div class="hudCard enemy" id="teamList"><div id="enemyLabel" class="hudName">ENEMY TEAM</div><div id="enemyTeam" class="hudSub">RED</div><div id="enemySummary" class="teamRows"></div></div></div>
+ <div id="hud" class="hidden"><div class="hudCard ally"><div id="myLabel" class="hudName">YOU / タンク</div><div id="mySeat" class="hudSub">BLUE1</div><div class="hudHp"><i id="myHpFill"></i></div><div id="myHP" class="hudValue">180 / 180</div><div id="myReload" class="reloadStrip" aria-label="リロード進捗"><i></i><i></i><i></i></div><div id="myAmmo" class="hudSub">弾 3 / 3</div><div class="hudUlt"><i id="myUltFill"></i></div><div id="myUlt" class="hudSub">ULT 0% · GAD 2</div><div id="myBuff" class="hudSub"></div><div id="allySummary" class="teamRows"></div></div><div id="gameBanner">2vs2 · KNOCKOUT<small id="roundInfo">ROUND 1 · BLUE 0 - 0 RED</small></div><div class="hudCard enemy" id="teamList"><div id="enemyLabel" class="hudName">ENEMY TEAM</div><div id="enemyTeam" class="hudSub">RED</div><div id="enemySummary" class="teamRows"></div></div></div>
  <button id="botTools" class="hidden">BOT設定 ⚙</button><div id="networkStatus" class="hidden"></div>
  <div id="pauseBanner" class="hidden"></div>
- <div id="moveHint" class="hidden">左ドラッグ 移動 · 右タップ 自動射撃 · 右ドラッグ 手動射撃</div><button id="gadAction" class="battleAction hidden" disabled>GAD</button><button id="ultAction" class="battleAction hidden" disabled>ULT</button><div id="skillToast" class="hidden" aria-live="polite"></div><div id="guardAlert" class="hidden" aria-live="polite"></div><button id="skillInfoToggle" class="hidden" type="button" aria-expanded="false" aria-controls="skillInfoPanel">技の説明 ?</button><div id="skillInfoPanel" class="hidden" role="region" aria-label="現在のキャラのガジェットとウルト"><strong id="skillInfoTitle">技の説明</strong><p id="skillInfoText"></p></div>
+ <div id="moveHint" class="hidden">左ドラッグ 移動 · 右タップ 自動射撃 · 右ドラッグ 手動射撃</div><button id="gadAction" class="battleAction hidden" disabled>GAD</button><button id="ultAction" class="battleAction hidden" disabled>ULT</button><div id="skillToast" class="hidden" aria-live="polite"></div><button id="skillInfoToggle" class="hidden" type="button" aria-expanded="false" aria-controls="skillInfoPanel">技の説明 ?</button><div id="skillInfoPanel" class="hidden" role="region" aria-label="現在のキャラのガジェットとウルト"><strong id="skillInfoTitle">技の説明</strong><p id="skillInfoText"></p></div>
  <div id="rematchPanel" class="hidden"><strong id="finalBanner">MATCH END</strong><button id="rematchBtn" class="btn primary inline">もう一度戦う（4人で承認）</button><div id="rematchStatus" class="minor">再戦の準備待ち</div></div>
  <button id="returnBtn" class="hidden">退出</button>
  <div id="layoutScreen" class="hidden"><div id="layoutHelp"><strong>BUTTON LAYOUT PREVIEW</strong>ガジェット・ウルトをドラッグで移動<br>
@@ -863,10 +863,8 @@ function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;co
  $('myLabel').textContent=(botPilot?'BOT / ':'YOU / ')+(CHARS[activeChar]?.label||'タンク');$('mySeat').textContent=mySeat().toUpperCase()+' · '+myTeam().toUpperCase();
  $('myHP').textContent=Number.isFinite(hp)?Math.ceil(hp)+' / '+CHARS[activeChar].hp:'HP -';$('myHpFill').style.width=clamp((hp||0)/CHARS[activeChar].hp*100,0,100)+'%';
  const loaded=vm.ammo.ammo;$('myAmmo').textContent='弾 '+loaded+' / 3';[...$('myReload').children].forEach((el,i)=>{const fill=i<loaded?1:i===loaded?vm.ammo.progress:0;el.style.background=`linear-gradient(to right,#f4f9ff ${Math.round(fill*100)}%,#203646 ${Math.round(fill*100)}%)`;});
- $('myUlt').textContent='ULT '+Math.floor(vm.ult)+'% · GAD '+vm.gadgets;$('myUltFill').style.width=clamp(vm.ult,0,100)+'%';const guard=guardFor(myId,hudNow);
- $('myBuff').textContent=guard?(guard.id===myId?'守護リンク':'味方のシールド')+' '+Math.max(0,(guard.until-hudNow)/1000).toFixed(1)+'秒':me?.overdriveUntil>hudNow?'オーバードライブ中':me?.boostUntil>hudNow?'加速中':me?.armed?'強化爆弾準備中':'';
- $('guardMeter').classList.toggle('hidden',!guard);
- if(guard)$('guardMeter').textContent=guard.id===myId?'防御したダメージ '+Math.round(guard.saved):'味方のガードが有効';
+ $('myUlt').textContent='ULT '+Math.floor(vm.ult)+'% · GAD '+vm.gadgets;$('myUltFill').style.width=clamp(vm.ult,0,100)+'%';/* Guardian is communicated in-world instead of HUD text. */
+ $('myBuff').textContent=me?.overdriveUntil>hudNow?'オーバードライブ中':me?.boostUntil>hudNow?'加速中':me?.armed?'強化爆弾準備中':'';
  $('allySummary').textContent=vm.allies.map(p=>'ALLY '+p.seat.toUpperCase().slice(-1)+' · '+(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO')).join('  ');
  $('enemyLabel').textContent='ENEMY TEAM';$('enemyTeam').textContent=(myTeam()==='blue'?'RED':'BLUE')+' TEAM';
  $('enemySummary').textContent=vm.enemies.map(p=>p.known?'ENEMY '+p.seat.toUpperCase().slice(-1)+' · '+(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO'):'ENEMY '+p.seat.toUpperCase().slice(-1)+' · ?').join('  ');
@@ -1084,14 +1082,9 @@ function gadgetReceipts(){
   $('skillToast').classList.remove('hidden');gadgetToastExpiry=performance.now()+2200;
  }
 }
-let guardAlertExpiry=0;
-function renderCombatEvents(){for(const [id,e]of Object.entries(game?.events||{})){
+function renderCombatEvents(){for(const [id,e] of Object.entries(game?.events||{})){
  if(seenEffects.has(id))continue;boundedRemember(seenEffects,id);if(combatNow()-e.at>350)continue;
- if(e.type==='hit'&&e.saved>0&&(e.guardian===myId||e.victim===myId)){
- $('guardAlert').textContent=e.guardian===myId&&e.victim!==myId?'味方を守った！ +'+Math.round(e.saved)+' 防御':'シールド発動！ +'+Math.round(e.saved)+' 防御';
- $('guardAlert').classList.remove('hidden');guardAlertExpiry=performance.now()+1800;
- }
- fx.push({...e,type:e.type==='jump'?'impact':e.type,t:.5});
+ fx.push({...e,type:e.type==='jump'?'impact':e.type,t:.35});
 }}
 async function claimHost(){if(claimBusy||!isAuthoritative()||game?.hostToken===myConnection||presence[myId]?.[game?.hostToken])return;claimBusy=true;const match=game.matchId,token=myConnection;try{await room.child('game').transaction(g=>g?.matchId===match&&!presence[myId]?.[g.hostToken]?{...g,hostToken:token}:undefined,undefined,false);}finally{claimBusy=false;}}
 function inputSnapshot(){const input=structuredClone(positions);input[myId]={...local,matchId:game?.matchId,round:game?.round,motionRev:appliedMotionRev,life:game?.stats?.[myId]?.life||0};return input;}
@@ -1472,7 +1465,7 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  if(scene==='game'&&!paused){const a=ultPointer?.dragged&&!ultPointer.cancelled?ultPointer:aimPointer?.dragged?aimPointer:null;if(a){const dx=a.x-a.ox,dy=a.y-a.oy,angle=Math.atan2(dy,dx),char=game?.stats?.[myId]?.char;ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);ctx.strokeStyle='#e2c7ff';ctx.setLineDash([8,6]);ctx.lineWidth=3;ctx.beginPath();if(char==='bomber'||a===ultPointer&&char==='tank'){const reach=clamp(Math.hypot(dx,dy)/80*330,55,char==='bomber'?BALANCE.bomberRange:330),p=engine().landing(local,angle,reach);ctx.arc(p.x,p.y,char==='tank'?76:a===ultPointer?90:65,0,Math.PI*2);}else{ctx.moveTo(local.x,local.y);ctx.lineTo(local.x+Math.cos(angle)*CHARS[char].range,local.y+Math.sin(angle)*CHARS[char].range);}ctx.stroke();ctx.restore();}}
  if(scene==='game'&&pointer&&!paused){const x=pointer.ox,y=pointer.oy;const dx=pointer.x-x,dy=pointer.y-y;ctx.strokeStyle='rgba(160,231,251,.6)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,43,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(107,220,245,.5)';ctx.beginPath();ctx.arc(x+clamp(dx,-44,44),y+clamp(dy,-44,44),18,0,7);ctx.fill();}
 }
-function frame(now){const dt=clamp((now-(lastFrame||now))/1000,0,.06);lastFrame=now;if(guardAlertExpiry&&now>guardAlertExpiry){guardAlertExpiry=0;$('guardAlert').classList.add('hidden');}if(gadgetToastExpiry&&now>gadgetToastExpiry){gadgetToastExpiry=0;$('skillToast').classList.add('hidden');}if(dt>0)fps=fps*.9+.1/dt;update(dt);updateBots(dt);if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}draw(dt);requestAnimationFrame(frame);}
+function frame(now){const dt=clamp((now-(lastFrame||now))/1000,0,.06);lastFrame=now;if(gadgetToastExpiry&&now>gadgetToastExpiry){gadgetToastExpiry=0;$('skillToast').classList.add('hidden');}if(dt>0)fps=fps*.9+.1/dt;update(dt);updateBots(dt);if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}draw(dt);requestAnimationFrame(frame);}
 
 function setLayoutDrag(k,e){if(scene!=='layout')return;e.preventDefault();const el=$(k==='gad'?'mockGad':'mockUlt');let active=e.pointerId;el.setPointerCapture?.(active);
  const move=ev=>{if(ev.pointerId!==active)return;const stage=$('app').getBoundingClientRect(),sz=layout[k].size;
