@@ -77,7 +77,13 @@ check('Regen prevents healing after KO, caps at max and rounds to hundredths',ap
  assert.equal(api.regenAmount(0,100,1000),0);
  assert.equal(api.regenAmount(98,100,1000),100);
  assert.equal(api.regenAmount(50,100,125),51.5);
+ assert.equal(api.regenAmount(50,100,125,{precision:null}),51.5);
+ assert.equal(api.regenAmount(50.123,100,125,{precision:1}),51.6);
+ assert.equal(api.regenAmount(30,100,400,{precision:null}),34.8);
+ assert.equal(api.regenAmount(30,100,500,{precision:1}),36);
 });
+assert(scripts[0].includes('BrawlMatchV1.regenAmount(game.hp[who],maximum,Math.min(now-t,400)'),'1vs1 solo actually uses shared HP regeneration');
+assert(scripts[0].includes('BrawlMatchV1.regenAmount(hp[who],maximum,Math.min(now-t,500)'),'1vs1 candidate online transaction uses shared regen arithmetic');
 for(const [i,s] of scripts.entries()){
  assert.equal((s.match(/BrawlMatchV1\.applyHit\(g,/g)||[]).length,1,modes[i]+' uses single damage manager');
  assert.equal((s.match(/BrawlMatchV1\.resolve\(g,/g)||[]).length,1,modes[i]+' uses single match resolver');
