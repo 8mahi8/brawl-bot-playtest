@@ -1,0 +1,33 @@
+name: BRAWL R3 offline browser smoke
+on:
+  push:
+    paths:
+      - '2v2-tactical-abilities-r3-test.html'
+      - 'tests/tactical-r3-browser-smoke.cjs'
+      - '.github/workflows/tactical-r3-browser-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install minimal browser driver
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+      - name: Check Chrome binary
+        run: command -v google-chrome || command -v chromium || command -v chromium-browser
+      - name: Desktop and touch landscape playthrough
+        run: node tests/tactical-r3-browser-smoke.cjs
+      - name: Save offline smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r3-offline-browser-smoke
+          path: artifacts/*.png
+          if-no-files-found: ignore
+          retention-days: 5
