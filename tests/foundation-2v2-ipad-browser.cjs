@@ -35,6 +35,27 @@ async function play(browser,mode){
   v=await inspect();const gadgets=v.q.stats[v.q.myId].gadgets;
   await page.locator('#gadAction').tap();
   await page.waitForFunction(gad=>{const q=window.__brawlV3QA?.();return q?.stats?.[q.myId]?.gadgets<gad;},gadgets,{timeout:7000});
+  // Real Chromium multi-touch sequence: move with LEFT while aiming + shooting with RIGHT.
+  // WebKit still tests real single-finger taps above; CDP exists only on Chromium.
+  if(type==='chromium'){
+   const cdp=await ctx.newCDPSession(page), box=await page.locator('#arena').boundingBox();
+   const left={id:1,x:box.x+box.width*.21,y:box.y+box.height*.68};
+   const right={id:2,x:box.x+box.width*.64,y:box.y+box.height*.66};
+   const startX=(await page.evaluate(()=>window.__brawlV3QA().local.x));
+   const oldSeq=(await page.evaluate(()=>{const q=window.__brawlV3QA();return q.stats[q.myId].lastActionSeq;}));
+   const moved={...left,x:left.x+82},aimed={...right,x:right.x+66,y:right.y-12};
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[left]});
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[left,right]});
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[moved,aimed]});
+   await page.waitForTimeout(420);
+   const during=await page.evaluate(()=>window.__brawlV3QA().local.x);
+   assert(during>startX+8,'simultaneous left finger actually moves player');
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[moved]});
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+   await page.waitForFunction(old=>{const q=window.__brawlV3QA();return q.stats[q.myId].lastActionSeq>old;},oldSeq,{timeout:7000});
+   await cdp.detach();
+   console.log('PASS genuine dual-touch MOVE + AIM/SHOOT in '+mode);
+  }
   assert.equal(errors.length,0,'JS exceptions '+errors.join(' | '));
   await page.screenshot({path:path.join(folder,'ipad-'+type+'-'+mode+'-landscape.png'),fullPage:true});
   await page.setViewportSize({width:768,height:1024});await page.waitForTimeout(260);v=await inspect();
