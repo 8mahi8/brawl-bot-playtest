@@ -280,9 +280,9 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
    if(q.ammo>=3){q.ammo=3;q.refillAt=0;return q;}
    if(q.refillAt>0&&t>=q.refillAt){const n=Math.floor((t-q.refillAt)/rate)+1;q.ammo=Math.min(3,q.ammo+n);q.refillAt=q.ammo===3?0:q.refillAt+n*rate;}return q;
   }
-  function initialize(matchId,seats,mode,startAt){const hp={},stats={},motions={};
-   for(const k of seatKeys){const p=seats[k];hp[p.id]=chars[p.char].hp;stats[p.id]={char:p.char,ammo:3,refillAt:0,ult:0,gadgets:mode==='area'?1:2,gadgetReadyAt:0,boostUntil:0,overdriveUntil:0,lastShotAt:0,lastActionSeq:0,life:0,armed:false};motions[p.id]={rev:0,...spawns[k]};}
-   return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
+  function initialize(matchId,seats,mode,startAt){const hp={},stats={},motions={},combatAt={};
+   for(const k of seatKeys){const p=seats[k];hp[p.id]=chars[p.char].hp;combatAt[p.id]=0;stats[p.id]={char:p.char,ammo:3,refillAt:0,ult:0,gadgets:mode==='area'?1:2,gadgetReadyAt:0,boostUntil:0,overdriveUntil:0,lastShotAt:0,lastActionSeq:0,life:0,armed:false};motions[p.id]={rev:0,...spawns[k]};}
+   return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},combatAt,events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
   }
   function burst(a,s,g){const spread=s.char==='tank'?[-.2,-.1,0,.1,.2]:s.char==='gunner'?[-.075,0,.075]:[0],seat=seatOf(g,a.owner);
    return spread.map((d,i)=>({id:a.eventId+':'+i,owner:a.owner,ownerLife:s.life,team:team(seat),x:a.x+Math.cos(a.angle)*28,y:a.y+Math.sin(a.angle)*28,vx:Math.cos(a.angle+d)*660,vy:Math.sin(a.angle+d)*660,dist:0,range:chars[s.char].range,radius:s.char==='sniper'?5:6,damage:chars[s.char].damage,char:s.char}));
@@ -329,7 +329,7 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
     }else s.overdriveUntil=t+5000;
     s.ult=0;
    }else return reject('type');
-   s.lastActionSeq=a.seq;g.stats[a.owner]=s;g.protection[a.owner]=0;g.usedActions=bounded({...g.usedActions,[a.eventId]:receipt(a,now,'accepted')});g.reveals[a.owner]=t+1500;return g;
+   s.lastActionSeq=a.seq;g.stats[a.owner]=s;g.combatAt[a.owner]=t;g.protection[a.owner]=0;g.usedActions=bounded({...g.usedActions,[a.eventId]:receipt(a,now,'accepted')});g.reveals[a.owner]=t+1500;return g;
   }
   function step(state,input,wallNow,expectedRev,token){if(!state||state.phase!=='playing'||state.combatRev!==expectedRev||state.hostToken!==token||wallNow<state.startAt)return state;
    const elapsed=Math.floor(wallNow-state.clock.wallAt);if(elapsed<50)return state;
@@ -370,13 +370,20 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
     if(t>=d.slowUntil&&t>d.dotUntil)delete g.debuffs[v];
    }
    if(g.mode!=='area'&&t>=g.gasNextAt){const m=clamp((t-28000)/1000*9,0,380);for(const k of seatKeys){const id=g.seats[k].id,p=targets[id];if(m>0&&(p.x<m||p.x>W-m||p.y<m||p.y>H-m))hit('gas:'+g.gasNextAt+':'+id,'gas',id,10);}g.gasNextAt+=1000;}
-   for(const h of hits){if(!(g.hp[h.victim]>0))continue;const amount=Math.min(h.amount,g.hp[h.victim]);g.hp[h.victim]-=amount;
+   for(const h of hits){if(!(g.hp[h.victim]>0))continue;g.combatAt[h.victim]=t;if(g.stats[h.owner])g.combatAt[h.owner]=t;const amount=Math.min(h.amount,g.hp[h.victim]);g.hp[h.victim]-=amount;
     if(g.stats[h.owner])g.stats[h.owner].ult=Math.min(100,g.stats[h.owner].ult+amount*.48);
     g.stats[h.victim].ult=Math.min(100,g.stats[h.victim].ult+amount*(g.stats[h.victim].char==='tank'?.44:.24));g.reveals[h.victim]=t+1500;
     if(h.enhanced)g.debuffs[h.victim]={life:g.stats[h.victim].life,owner:h.owner,slowUntil:t+BALANCE.bomberSlowMs,dotUntil:t+BALANCE.bomberDotMs,dotNextAt:t+BALANCE.bomberDotEveryMs,dotId:h.key};
     emit('hit',{owner:h.owner,victim:h.victim,amount,x:targets[h.victim].x,y:targets[h.victim].y});
    }
-   g.usedHits=bounded(g.usedHits);
+   // Regeneration integrated in the normal authoritative combat tick, not extra writes.
+    for(const k of seatKeys){const id=g.seats[k].id,st=g.stats[id],p=targets[id],hp=g.hp[id];
+     if(!(hp>0)||hp>=chars[st.char].hp||t-(g.combatAt[id]||0)<3000)continue;
+     const margin=g.mode==='area'?0:clamp((t-28000)/1000*9,0,380);
+     if(p.x<margin||p.x>W-margin||p.y<margin||p.y>H-margin)continue;
+     g.hp[id]=Math.min(chars[st.char].hp,Math.round((hp+chars[st.char].hp*.12*dt/1000)*100)/100);
+    }
+    g.usedHits=bounded(g.usedHits);
    for(const k of seatKeys){const id=g.seats[k].id;
     if(g.hp[id]===0){delete g.debuffs[id];for(const [key,u]of Object.entries(g.scheduled))if(u.owner===id&&u.kind==='jump')delete g.scheduled[key];
      if(g.mode==='area'&&!g.respawns[id])g.respawns[id]=t+BALANCE.areaRespawnMs;
