@@ -64,7 +64,24 @@
     "gunnerBurstOverdriveMs": 57,
     "ultGainDealt": 0.48,
     "ultGainTakenDefault": 0.24,
-    "ultGainTakenTank": 0.44
+    "ultGainTakenTank": 0.44,
+    "weaponRules": {
+      "tankSpread": [
+        -0.2,
+        -0.1,
+        0,
+        0.1,
+        0.2
+      ],
+      "gunnerSpread": [
+        -0.075,
+        0,
+        0.075
+      ],
+      "gunnerOverdriveReloadMs": 750,
+      "sniperGadgetKnockback": 120,
+      "bulletSpeed": 660
+    }
   },
   "deliberateModeDifferences": {
     "numberOfPlayers": "1vs1 2 players; 2vs2 4 players",
