@@ -1,5 +1,7 @@
 # BRAWL 2vs2 BOT練習｜GitHub Pages配布用
 
+**学校iPad・Safari向け候補:** [ブラウザで遊ぶ](https://8mahi8.github.io/brawl-bot-playtest/foundation/2v2-ipad-safari.html) · [iPad操作案内](./IPAD_PLAY.md)。横向き推奨。ログイン／インストール不要、BOT練習のみ。
+
 - `index.html` は元の `Brawl_V3_2vs2_ALPHA10.html` を基にした、通信なしのBOT練習専用版です。
 - 元版・戦闘処理・BOTロジックは保持し、オンライン対戦用UIを非表示にしました。
 - オンライン接続を行う `ensureDB` は意図的に拒否する実装へ変更。Firebase本番DBのURLは含めていません。

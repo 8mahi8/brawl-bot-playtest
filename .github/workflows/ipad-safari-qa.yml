@@ -1,0 +1,40 @@
+name: BRAWL iPad WebKit regression
+on:
+  push:
+    paths:
+      - 'foundation/2v2-ipad-safari.html'
+      - 'scripts/build-ipad-safari.cjs'
+      - 'tests/foundation-2v2-ipad-*.cjs'
+      - '.github/workflows/ipad-safari-qa.yml'
+  pull_request:
+    paths:
+      - 'foundation/2v2-ipad-safari.html'
+      - 'scripts/build-ipad-safari.cjs'
+      - 'tests/foundation-2v2-ipad-*.cjs'
+      - '.github/workflows/ipad-safari-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  webkit-ipad:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright and WebKit dependencies
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+          npx playwright-core install --with-deps webkit
+      - name: Safari WebKit KO and AREA on iPad viewports
+        run: node tests/foundation-2v2-ipad-browser.cjs webkit
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brawl-ipad-webkit
+          path: artifacts/ipad-webkit-*.png
+          if-no-files-found: ignore
+          retention-days: 7

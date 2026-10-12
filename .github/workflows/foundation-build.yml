@@ -12,6 +12,8 @@ on:
       - 'scripts/build-open-arena-lab.cjs'
       - 'scripts/build-tank-balance-lab.cjs'
       - 'scripts/build-team-guard-lab.cjs'
+      - 'scripts/build-ipad-safari.cjs'
+      - 'foundation/2v2-ipad-safari.html'
       - 'tests/foundation-*.cjs'
       - '.github/workflows/foundation-build.yml'
   pull_request:
@@ -48,6 +50,10 @@ jobs:
         run: |
           node scripts/build-team-guard-lab.cjs --check
           node tests/foundation-2v2-team-guard-lab.cjs
+      - name: iPad Safari build and preserved combat behavior
+        run: |
+          node scripts/build-ipad-safari.cjs --check
+          node tests/foundation-2v2-ipad-standalone.cjs
       - name: Wide-map cover symmetry and walkable routes
         run: node tests/foundation-2v2-open-arena.cjs
       - name: Prove one shared configuration edit propagates to BOTH builds
@@ -83,6 +89,8 @@ jobs:
         run: node tests/foundation-2v2-tank-lab-browser.cjs
       - name: Team Guard LAB desktop KO and tablet AREA
         run: node tests/foundation-2v2-team-guard-browser.cjs
+      - name: iPad Safari Chromium touch on KO and AREA
+        run: node tests/foundation-2v2-ipad-browser.cjs chromium
       - name: Store generated-build screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,5 +101,6 @@ jobs:
             artifacts/open-arena-*.png
             artifacts/tank-lab-*.png
             artifacts/team-guard-*.png
+            artifacts/ipad-chromium-*.png
           if-no-files-found: ignore
           retention-days: 7
