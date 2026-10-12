@@ -105,7 +105,7 @@ function run(mode,{delayMs=150}={}){
  // damage code, not a stand-in damage calculator.
  host=engine.step(host,hostInputs,300,host.combatRev,oldToken);
  assert.equal(host.combatRev,1,mode+' host tick increments one revision');
- assert(host.hp.e<initialHp,mode+' projectile must damage connected opponent');
+ assert.equal(initialHp-host.hp.e,10,mode+' only first gunner burst pellet may land in the first 100ms; both modes stagger the rest');
  assert(Object.values(host.events).some(e=>e.type==='hit'&&e.victim==='e'),'host emits a hit event');
  const confirmed=structuredClone(host);
  // New snapshot can arrive before a delayed older one. Client read models
@@ -123,6 +123,10 @@ function run(mode,{delayMs=150}={}){
  assert.equal(wrongRev.combatRev,host.combatRev,'outdated reducer revision cannot commit');
  const advanced=engine.step(host,hostInputs,400,host.combatRev,newToken);
  assert.equal(advanced.combatRev,2,'current lease can continue match');
+ assert.equal(initialHp-advanced.hp.e,20,mode+' second gunner burst hit lands at ~105ms');
+ const third=engine.step(advanced,hostInputs,500,advanced.combatRev,newToken);
+ assert.equal(third.combatRev,3);
+ assert.equal(initialHp-third.hp.e,30,mode+' third gunner burst hit lands at ~210ms');
  // Delayed packets from old connection/life/round are discarded. 1v1 V2.8
  // only validates role/round/generation, not a connectionId.
  if(isSquad){
