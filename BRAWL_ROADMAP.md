@@ -58,6 +58,16 @@
 - ⬜ 味方防御が強すぎないか、見た目や操作が分かりやすいか、ユーザー試遊で判断。1vs1への自動コピーやFirebaseオンライン本体への反映は未実施。
 - 詳細: [R3リリースメモ](./TACTICAL_ABILITIES_R3_RELEASE_NOTES.md)。
 
+## Guardian Link R4 — UI全面見直しと守る実感（2026-10-12）
+- **ユーザー指摘（優先）**: R3の援護ガードは「守ってる感がなくてよく分からない」。ミニマップがULTを隠して押せない。UI全体がダサく・見づらく・洗練されていない。戦闘調整より体験の再設計。
+- 🟡 [2vs2 Guardian Link R4](./2v2-ui-guardian-r4-test.html) 独立候補。R2/R3と旧安定版は保持。
+- ✅ 発動時に味方1人と3.2秒リンク、距離が離れても本人と味方の被ダメージ35%軽減。SHIELDリング・リンク・実際に防いだダメージ数値と画面通知、HUD累計防御量を実装。ガス除外・復活/KO・期限切れを処理。
+- ✅ HUD/ロビー/技ボタン/ミニマップ/設定パネルを新デザイン体系に変更。ミニマップ開閉と、ULT/GADを優先した干渉時自動折りたたみ。R4独立操作配置キー。
+- ✅ [17件のR4ロジックテスト](./tests/guardian-r4-smoke.cjs) と [PC＋タッチ横/縦/小型横の4画面ブラウザ試遊・操作ボタンの実ヒットテスト](./tests/guardian-r4-browser-smoke.cjs) が [GitHub Actions](https://github.com/8mahi8/brawl-bot-playtest/actions/runs/38203620501) で成功。
+- ⬜ **学校iPad Safari実機**の重なり、タップ、視認性、好み、FPSを評価。デザインの採用はユーザー試遊による。
+- ⬜ オンライン4人接続・Google Sites・Firebaseへの反映は未完了。
+- [R4設計と検証記録](./GUARDIAN_R4_RELEASE_NOTES.md)。
+
 ## 開発バックログ（優先度を変えても項目は消さない）
 
 ### P0 — 遊びの駆け引き
