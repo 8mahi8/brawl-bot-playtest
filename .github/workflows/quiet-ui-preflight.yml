@@ -5,6 +5,7 @@ on:
       - '2v2-ui-clean-r4-1-test.html'
       - 'tests/quiet-ui-r4-1-browser.cjs'
       - 'tests/quiet-ui-r4-1-gameplay.cjs'
+      - 'tests/quiet-ui-review-snapshot.cjs'
       - '.github/workflows/quiet-ui-preflight.yml'
   pull_request:
     paths:
@@ -32,6 +33,8 @@ jobs:
         run: command -v google-chrome || command -v chromium || command -v chromium-browser
       - name: Verify visual clutter, layout bounds, buttons and full BOT playthrough on 4 viewports
         run: node tests/quiet-ui-r4-1-browser.cjs
+      - name: Capture full UI preview pixels for design review
+        run: node tests/quiet-ui-review-snapshot.cjs
       - name: Save screenshots for review
         if: always()
         uses: actions/upload-artifact@v4
