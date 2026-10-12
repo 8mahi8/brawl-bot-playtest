@@ -210,25 +210,21 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
  }
  function drawFields(ctx,zones,t=0){
   const g=fieldGeometry(zones);if(!g.zones.length)return;
-  // One combined fill + one combined clip prevents doubled opacity and seams.
+  // Single union fill & clip, no doubled opacity between overlapping fields.
   ctx.save();ctx.beginPath();
   for(const z of g.zones)ctx.rect(z.x,z.y,z.w,z.h);
   ctx.fillStyle='rgba(33,106,117,.42)';ctx.fill();
   ctx.clip();
-  // Low-contrast, continuous mist lines clipped to the ENTIRE union, not each tile.
-  // Never stroke the saved wave path again after restoring the clip.
-  const drift=Math.sin(t/1650)*3,w=g.maxX-g.minX;
-  for(let y=g.minY+25;y<g.maxY+13;y+=45){
-   ctx.beginPath();ctx.moveTo(g.minX-12,y+drift);
-   ctx.bezierCurveTo(g.minX+w*.22,y-9-drift,g.minX+w*.68,y+11+drift,g.maxX+12,y-2+drift);
-   ctx.strokeStyle='rgba(116,219,216,.13)';ctx.lineWidth=7;ctx.stroke();
+  // Soft fog pockets replace the problematic bright animated waves.
+  // Static texture is cheaper and fully clipped to the union on school iPads.
+  ctx.fillStyle='rgba(143,226,215,.045)';
+  for(let y=g.minY+42;y<g.maxY;y+=112)for(let x=g.minX+58;x<g.maxX;x+=158){
+   ctx.beginPath();ctx.ellipse(x+(y%43),y+(x%39),72,20,-.21,0,Math.PI*2);ctx.fill();
   }
   ctx.restore();
-  // IMPORTANT: restore() does not restore a Canvas path.
-  // Start a fresh path and stroke ONLY exterior outline segments.
   ctx.save();ctx.beginPath();
-  for(const s of g.segments){ctx.moveTo(s[0],s[1]);ctx.lineTo(s[2],s[3]);}
-  ctx.strokeStyle='rgba(103,217,211,.88)';ctx.lineWidth=1.8;ctx.lineJoin='round';ctx.stroke();
+  for(const e of g.segments){ctx.moveTo(e[0],e[1]);ctx.lineTo(e[2],e[3]);}
+  ctx.strokeStyle='rgba(103,217,211,.78)';ctx.lineWidth=1.6;ctx.stroke();
   ctx.restore();
  }
  function indicator(ctx,p,mode){
