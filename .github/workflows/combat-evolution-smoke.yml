@@ -1,0 +1,32 @@
+name: BRAWL Combat Evolution smoke
+
+on:
+  push:
+    paths:
+      - '1v1-combat-evolution-test.html'
+      - '2v2-combat-evolution-test.html'
+      - '2v2-combat-evolution-r2-test.html'
+      - 'tests/**'
+      - '.github/workflows/combat-evolution-smoke.yml'
+  pull_request:
+    paths:
+      - '1v1-combat-evolution-test.html'
+      - '2v2-combat-evolution-test.html'
+      - '2v2-combat-evolution-r2-test.html'
+      - 'tests/**'
+      - '.github/workflows/combat-evolution-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify original Combat Evolution
+        run: node tests/combat-evolution-smoke.cjs
+      - name: Verify R2 candidate and 1vs1 JS syntax
+        run: node tests/combat-evolution-r2-smoke.cjs
