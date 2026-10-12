@@ -4,6 +4,7 @@ on:
     paths:
       - 'shared/brawl-core-contract.json'
       - 'shared/brawl-build-modes.json'
+      - 'shared/runtime/**'
       - '1v1-combat-evolution-test.html'
       - '2v2-ui-clean-r4-1-test.html'
       - 'foundation/1v1-foundation-v1.html'
@@ -15,6 +16,7 @@ on:
     paths:
       - 'shared/brawl-core-contract.json'
       - 'shared/brawl-build-modes.json'
+      - 'shared/runtime/**'
       - '1v1-combat-evolution-test.html'
       - '2v2-ui-clean-r4-1-test.html'
       - 'foundation/**'
