@@ -824,10 +824,7 @@ function protectActionButtons(){
 }
 $('mapExpand').addEventListener('click',()=>{
  const requested=$('mapDock').classList.contains('compact');mapPreference=requested;protectActionButtons();
- if(requested&&$('mapDock').classList.contains('compact')){
-  $('skillToast').textContent='画面が狭いためMAPを折りたたみました';
-  $('skillToast').classList.remove('hidden');gadgetToastExpiry=performance.now()+1300;
- }
+ /* Map stays compact silently when space is insufficient. */
 });
 
 function showScene(s){scene=s;$('app').dataset.scene=s;$('mapDock').classList.toggle('hidden',s!=='game');renderBotSetup();$('networkStatus').classList.toggle('hidden',s!=='game');for(const n of ['home','lobby'])$(n+'Screen').classList.toggle('hidden',s!==n);
