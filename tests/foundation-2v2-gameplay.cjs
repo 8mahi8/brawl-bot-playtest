@@ -10,7 +10,10 @@ const env={structuredClone};
 for(const name of ['SHARED STEALTH V1','COMBAT CORE','BOT CORE']){
  const a=script.indexOf('/* BEGIN '+name),b=script.indexOf('/* END '+name,a);
  assert(a>=0&&b>a,'module '+name);
- vm.runInNewContext(script.slice(a,b),env,{filename:name});
+ const weaponA=script.indexOf('/* BEGIN SHARED WEAPON RULES */'),weaponB=script.indexOf('/* END SHARED WEAPON RULES */',weaponA);
+ assert(weaponA>=0&&weaponB>weaponA,'generated shared weapon rules present');
+ const moduleCode=script.slice(a,b)+(name==='COMBAT CORE'?'\n'+script.slice(weaponA,weaponB):'');
+ vm.runInNewContext(moduleCode,env,{filename:name});
 }
 const {BrawlCombatV8:combat,BrawlBotV9:bot}=env;
 assert(combat&&bot,'required modules');
