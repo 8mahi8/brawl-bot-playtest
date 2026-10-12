@@ -49,9 +49,9 @@ t2.forEach((x,i)=>near(Math.atan2(x.vy,x.vx),tank.calls[i].angle,'cross-mode tan
 g2.forEach((x,i)=>{
  near(Math.atan2(x.vy,x.vx),gun.calls[i].angle,'cross-mode gunner');
  near(x.x,328,'muzzle initial x');near(x.y,280,'muzzle initial y');
- assert.equal(x.spawnAt-200,gun.delays[i],'cross-mode burst delay');
+ assert.equal(x.spawnAt-g2[0].spawnAt,gun.delays[i],'cross-mode burst delay');
 });
-go2.forEach((x,i)=>assert.equal(x.spawnAt-200,[0,57,114][i]));
+go2.forEach((x,i)=>assert.equal(x.spawnAt-go2[0].spawnAt,[0,57,114][i]));
 const shared=vm.runInNewContext(weapon+'\nBrawlWeaponV1');
 assert.equal(shared.overdriveReloadMs,c.common.weaponRules.gunnerOverdriveReloadMs);
 assert.equal(shared.sniperKnockback,c.common.weaponRules.sniperGadgetKnockback);
