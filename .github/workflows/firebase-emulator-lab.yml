@@ -1,0 +1,37 @@
+name: BRAWL Firebase Emulator security lab
+on:
+  push:
+    paths:
+      - 'network/emulator/**'
+      - 'tests/network-firebase-emulator.cjs'
+      - 'firebase.brawl-lab.json'
+      - '.github/workflows/firebase-emulator-lab.yml'
+  pull_request:
+    paths:
+      - 'network/emulator/**'
+      - 'tests/network-firebase-emulator.cjs'
+      - 'firebase.brawl-lab.json'
+      - '.github/workflows/firebase-emulator-lab.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rules-and-connections:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      FIREBASE_CLI_DISABLE_TELEMETRY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install emulator and official Firebase rules-unit-testing SDK
+        run: npm install --no-save --package-lock=false firebase-tools@14.24.0 @firebase/rules-unit-testing@4.0.1
+      - name: Local RTDB emulator only, no Firebase deploy or live credentials
+        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-lab --config firebase.brawl-lab.json "node tests/network-firebase-emulator.cjs"
