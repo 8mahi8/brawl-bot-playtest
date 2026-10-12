@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "note": "Canonical shared-rule contract for comparison; existing standalone HTML builds do not yet import this file. Do NOT describe this as a completed runtime single-source refactor.",
+  "sourceCandidates": [
+    "1v1-combat-evolution-test.html",
+    "2v2-ui-guardian-r4-test.html"
+  ],
+  "common": {
+    "playerRadius": 18,
+    "stealthDetectRadius": 130,
+    "movementSpeed": 102,
+    "characters": {
+      "tank": {
+        "hp": 180,
+        "baseDamage": 11,
+        "range": 160,
+        "reloadMs": 833.3333333333334
+      },
+      "gunner": {
+        "hp": 100,
+        "baseDamage": 10,
+        "range": 280,
+        "reloadMs": 1250
+      },
+      "sniper": {
+        "hp": 70,
+        "baseDamage": 36,
+        "range": 455,
+        "reloadMs": 1833.3333333333333
+      },
+      "bomber": {
+        "hp": 90,
+        "baseDamage": 28,
+        "range": 300,
+        "reloadMs": 1500
+      }
+    },
+    "balance": {
+      "tankNearDamage": 11,
+      "tankFarDamage": 5,
+      "tankFalloffStart": 30,
+      "tankFalloffEnd": 160,
+      "tankJumpMinMs": 600,
+      "tankJumpMaxMs": 1200,
+      "tankJumpRange": 330,
+      "bomberDamage": 28,
+      "bomberRange": 300,
+      "bomberRadius": 56,
+      "bomberFlightMs": 800,
+      "bomberUltDamage": 18,
+      "bomberUltRadius": 82,
+      "bomberUltGap": 400,
+      "bomberSlowMs": 1500,
+      "bomberSlowFactor": 0.65,
+      "bomberDotMs": 3000,
+      "bomberDotDamage": 3,
+      "bomberDotEveryMs": 1000
+    },
+    "regenDelayMs": 3000,
+    "regenFractionPerSecond": 0.12,
+    "gasDelayMs": 28000,
+    "gasSpeed": 9,
+    "gunnerBurstNormalMs": 105,
+    "gunnerBurstOverdriveMs": 57,
+    "ultGainDealt": 0.48,
+    "ultGainTakenDefault": 0.24,
+    "ultGainTakenTank": 0.44
+  },
+  "deliberateModeDifferences": {
+    "numberOfPlayers": "1vs1 2 players; 2vs2 4 players",
+    "maps": "1vs1 1000x600 fixed camera; 2vs2 1536x860 chase/overview camera",
+    "knockoutGasCap": "1vs1 225; 2vs2 380: map-dependent",
+    "objectives": "1vs1 KO only; 2vs2 KO and AREA",
+    "networkNamespaces": "1vs1 rooms protocol 30; 2vs2 rooms2v2 protocol 3011; offline test candidates have network disabled",
+    "tankGuardianAbility": "2vs2 R4 links teammate; 1vs1 has no teammate. Do not copy team link unconditionally"
+  },
+  "mismatchesToResolveBeforeClaimingParity": [
+    "Tank basic attack fan 1vs1 ±.23/.115 versus 2vs2 ±.20/.10",
+    "Gunner burst 2nd/3rd bullet spawn location: 1vs1 moving origin; 2vs2 fixed initial origin",
+    "Gunner overdrive reload approx 694ms in 1vs1 versus 750ms in 2vs2",
+    "Sniper GAD knockback solo 1vs1 160 versus 2vs2 120",
+    "Tank GAD dash/invulnerability mechanics differ across modes",
+    "Runtime engine separate: 1vs1 legacy functions versus 2vs2 host-reducer",
+    "Solo bot tactics/path and rendering/UI are separate implementations",
+    "1vs1 HP regeneration independent host call versus 2vs2 combat tick"
+  ]
+}
