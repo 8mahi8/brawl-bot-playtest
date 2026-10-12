@@ -394,26 +394,16 @@
  }
  function drawFields(ctx,zones,t=0){
   const g=fieldGeometry(zones);if(!g.zones.length)return;
-  // One combined fill + one combined clip prevents doubled opacity and seams.
   ctx.save();ctx.beginPath();
   for(const z of g.zones)ctx.rect(z.x,z.y,z.w,z.h);
-  ctx.fillStyle='rgba(33,106,117,.42)';ctx.fill();
-  ctx.clip();
-  // Low-contrast, continuous mist lines clipped to the ENTIRE union, not each tile.
-  // Never stroke the saved wave path again after restoring the clip.
-  const drift=Math.sin(t/1650)*3,w=g.maxX-g.minX;
-  for(let y=g.minY+25;y<g.maxY+13;y+=45){
-   ctx.beginPath();ctx.moveTo(g.minX-12,y+drift);
-   ctx.bezierCurveTo(g.minX+w*.22,y-9-drift,g.minX+w*.68,y+11+drift,g.maxX+12,y-2+drift);
-   ctx.strokeStyle='rgba(116,219,216,.13)';ctx.lineWidth=7;ctx.stroke();
+  ctx.fillStyle='rgba(33,106,117,.42)';ctx.fill();ctx.clip();
+  ctx.fillStyle='rgba(143,226,215,.045)';
+  for(let y=g.minY+42;y<g.maxY;y+=112)for(let x=g.minX+58;x<g.maxX;x+=158){
+   ctx.beginPath();ctx.ellipse(x+(y%43),y+(x%39),72,20,-.21,0,Math.PI*2);ctx.fill();
   }
-  ctx.restore();
-  // IMPORTANT: restore() does not restore a Canvas path.
-  // Start a fresh path and stroke ONLY exterior outline segments.
-  ctx.save();ctx.beginPath();
-  for(const s of g.segments){ctx.moveTo(s[0],s[1]);ctx.lineTo(s[2],s[3]);}
-  ctx.strokeStyle='rgba(103,217,211,.88)';ctx.lineWidth=1.8;ctx.lineJoin='round';ctx.stroke();
-  ctx.restore();
+  ctx.restore();ctx.save();ctx.beginPath();
+  for(const e of g.segments){ctx.moveTo(e[0],e[1]);ctx.lineTo(e[2],e[3]);}
+  ctx.strokeStyle='rgba(103,217,211,.78)';ctx.lineWidth=1.6;ctx.stroke();ctx.restore();
  }
  function indicator(ctx,p,mode){
   if(mode==='visible')return;
@@ -448,7 +438,7 @@
  const tankDamage=d=>Math.round(BALANCE.tankNearDamage-(BALANCE.tankNearDamage-BALANCE.tankFarDamage)*clamp((d-BALANCE.tankFalloffStart)/(BALANCE.tankFalloffEnd-BALANCE.tankFalloffStart),0,1));
  const jumpDuration=d=>Math.round(BALANCE.tankJumpMinMs+(BALANCE.tankJumpMaxMs-BALANCE.tankJumpMinMs)*clamp(d/BALANCE.tankJumpRange,0,1));
  function create(cfg){
-  const {chars,walls,spawns,seatKeys}=cfg,W=1000,H=600,R=20;
+  const {chars,walls,spawns,seatKeys}=cfg,W=1000,H=600,R=18;
   const team=k=>k.startsWith('blue')?'blue':'red';
   const seatOf=(g,id)=>seatKeys.find(k=>g.seats[k]?.id===id);
   const wall=(x,y,r=R)=>walls.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);
@@ -631,23 +621,23 @@
 'use strict';
 (() => {
   const FIREBASE_DB_URL = ''; // This public bot-only demo has no online endpoint.
-  const W = 1000, H = 600, RADIUS = 20;
+  const W = 1000, H = 600, RADIUS = 18;
   // Google Sites clips the iframe outside our reach. Make the game itself fit
   // a smaller safe area when that happens. UI/Canvas/pointer input share it.
   const FIT_STORAGE_KEY='brawl-v29-bot-only-screen-fit'; // Preserve the user's V2.3 screen-fit preference
   let fitPercent=100;
   try {const saved=Number(localStorage.getItem(FIT_STORAGE_KEY));
     if(Number.isFinite(saved)&&saved>=40&&saved<=100)fitPercent=saved;}catch(_e){}
-  const SEND_MS = 80, STEP = 1 / 60, PROTOCOL = 29; // V2.9 combat presentation and synchronized laser timing
+  const SEND_MS = 80, STEP = 1 / 60, PROTOCOL = 30; // V2.9 combat presentation and synchronized laser timing
   const GAS_DELAY = 28, GAS_SPEED = 9, GAS_CAP = 225;
   const REGEN_DELAY = 3000, REGEN_RATE = .12;
   const BALANCE=BrawlCombatV8.balance;
   // キャラ設定: reloadのみ秒。その他の時間はBALANCEのms。
   const CHARS = {
-    tank:   { label:'タンク', hp:180, speed:120, color:'#ffa941', range:BALANCE.tankFalloffEnd, damage:BALANCE.tankNearDamage, reload:50/60, ultDamage:60, ultRange:160, ultRadius:40 },
-    gunner: { label:'ガンナー', hp:100, speed:120, color:'#39dced', range:280, damage:10, reload:75/60, ultDamage:40, ultRange:320, ultRadius:15 },
-    bomber: { label:'ボマー', hp:90, speed:120, color:'#ff7954', range:BALANCE.bomberRange, damage:BALANCE.bomberDamage, reload:1.5, ultDamage:BALANCE.bomberUltDamage, ultRange:BALANCE.bomberRange, ultRadius:BALANCE.bomberUltRadius },
-    sniper: { label:'スナイパー', hp:70, speed:120, color:'#c07aff', range:455, damage:36, reload:110/60, ultDamage:60, ultRange:600, ultRadius:20 }
+    tank:   { label:'タンク', hp:180, speed:102, color:'#ffa941', range:BALANCE.tankFalloffEnd, damage:BALANCE.tankNearDamage, reload:50/60, ultDamage:60, ultRange:160, ultRadius:40 },
+    gunner: { label:'ガンナー', hp:100, speed:102, color:'#39dced', range:280, damage:10, reload:75/60, ultDamage:40, ultRange:320, ultRadius:15 },
+    bomber: { label:'ボマー', hp:90, speed:102, color:'#ff7954', range:BALANCE.bomberRange, damage:BALANCE.bomberDamage, reload:1.5, ultDamage:BALANCE.bomberUltDamage, ultRange:BALANCE.bomberRange, ultRadius:BALANCE.bomberUltRadius },
+    sniper: { label:'スナイパー', hp:70, speed:102, color:'#c07aff', range:455, damage:36, reload:110/60, ultDamage:60, ultRange:600, ultRadius:20 }
   };
   const bomberCore=BrawlBomberV29.create(BALANCE);let bombBusy=false,lastBombTick=0,bomberGadgetBusy=false;const seenBombFX=new Set();
   // Three-lane mirrored 1v1 Knockout arena, designed for this game (not a copied map).
@@ -1602,7 +1592,7 @@
       const dx=left.x-left.ox,dy=left.y-left.oy,mag=Math.hypot(dx,dy);
       if(mag>5){
         const speed=CHARS[local.char].speed*(local.char==='gunner'&&local.boost>0?1.5:1)*(game.debuffs?.[role]?.slowUntil>time()?BALANCE.bomberSlowFactor:1);
-        moveWithWall(local,dx/mag*speed*dt,dy/mag*speed*dt);
+        const intensity=clamp((mag-8)/42,0,1);moveWithWall(local,dx/mag*speed*dt*intensity,dy/mag*speed*dt*intensity);
         if(right.id===null)local.angle=Math.atan2(dy,dx);
       }
     }
