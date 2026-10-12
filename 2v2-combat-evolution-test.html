@@ -301,7 +301,9 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
     if(char==='bomber'){
      const dst=landing(pos,a.angle,Math.min(a.reach||BALANCE.bomberRange,BALANCE.bomberRange)); // bombs may land beside/on walls, unlike jumps
      g.scheduled[a.eventId]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key:a.eventId,x:dst.x,y:dst.y,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,damage:BALANCE.bomberDamage,radius:BALANCE.bomberRadius,enhanced:!!s.armed};s.armed=false;
-    }else for(const b of burst({...a,x:pos.x,y:pos.y},s,g))g.projectiles[b.id]=b;
+    }else{const shots=burst({...a,x:pos.x,y:pos.y},s,g);
+       shots.forEach((b,i)=>{g.projectiles[b.id]={...b,spawnAt:t+(char==='gunner'?i*(s.overdriveUntil>t?57:105):0)};});
+      }
    }else if(a.type==='gadget'){
     if(s.gadgets<1||char==='bomber'&&s.armed)return reject('gadget');
     s.gadgets--;if(g.mode==='area')s.gadgetReadyAt=t+(chars[char].gadgetRechargeMs||BALANCE.areaGadgetRechargeMs);
@@ -339,8 +341,10 @@ p{margin:5px 0}.sub{font-size:12px;color:#a8c1d0;text-align:center;max-width:510
    const canHit=id=>g.hp[id]>0&&!(g.protection[id]>t)&&!flying(g,id);
    function hit(key,owner,victim,amount,extra={}){if(!g.usedHits[key]&&canHit(victim)){g.usedHits[key]=1;hits.push({key,owner,victim,amount,...extra});}}
    for(const [id,b]of Object.entries(g.projectiles)){
-    let alive=true;const n=Math.max(1,Math.ceil(660*dt/1000/6));
-    for(let i=0;i<n;i++){b.x+=b.vx*dt/1000/n;b.y+=b.vy*dt/1000/n;b.dist+=660*dt/1000/n;
+    if(b.spawnAt>t)continue;
+    const activeMs=b.spawnAt>oldT?Math.max(0,t-b.spawnAt):dt;
+    let alive=true;const n=Math.max(1,Math.ceil(660*activeMs/1000/6));
+    for(let i=0;i<n;i++){b.x+=b.vx*activeMs/1000/n;b.y+=b.vy*activeMs/1000/n;b.dist+=660*activeMs/1000/n;
      if(b.x<0||b.x>W||b.y<0||b.y>H||wall(b.x,b.y,b.radius)||b.dist>=b.range){alive=false;break;}
      for(const k of seatKeys){const v=g.seats[k].id;if(team(k)===b.team||!canHit(v))continue;const p=targets[v];
       if(Math.hypot(p.x-b.x,p.y-b.y)<=R+b.radius){hit(b.id,b.owner,v,b.char==='tank'?tankDamage(b.dist):b.char==='sniper'?Math.min(64,36+Math.round(b.dist*.065)):b.damage);alive=false;break;}}
@@ -953,7 +957,7 @@ function shootAngle(angle,reach=300){if(botPilot||!combatReady()||!alive(myId)||
  submitAction(attack,'射撃送信失敗 ');
 }
 function bulletSpecs(action,char){const s=CHARS[char];if(!s||char==='bomber')return[];const specs=char==='tank'?[-.20,-.10,0,.10,.20]:char==='gunner'?[-.075,0,.075]:[0];
- return specs.map((d,i)=>({id:action.eventId+':'+i,owner:action.owner,team:teamOfSeat(playerSeat(action.owner)),x:action.x+Math.cos(action.angle)*28,y:action.y+Math.sin(action.angle)*28,vx:Math.cos(action.angle+d)*660,vy:Math.sin(action.angle+d)*660,range:s.range,dist:0,radius:char==='sniper'?5:6,damage:s.damage,sniper:char==='sniper',life:0}));
+ return specs.map((d,i)=>({id:action.eventId+':'+i,owner:action.owner,team:teamOfSeat(playerSeat(action.owner)),x:action.x+Math.cos(action.angle)*28,y:action.y+Math.sin(action.angle)*28,vx:Math.cos(action.angle+d)*660,vy:Math.sin(action.angle+d)*660,range:s.range,dist:0,radius:char==='sniper'?5:6,damage:s.damage,sniper:char==='sniper',life:0,spawnAt:performance.now()+(char==='gunner'?i*(game?.stats?.[action.owner]?.overdriveUntil>combatNow()?57:105):0)}));
 }
 function boundedRemember(set,id){set.add(id);if(set.size>ACTION_LIMIT)set.delete(set.values().next().value);}
 function validActionRequest(a){return !!a&&typeof a.eventId==='string'&&a.eventId.length<=128&&typeof a.owner==='string'&&typeof a.matchId==='string'&&Number.isSafeInteger(a.round)&&a.round>0&&Number.isSafeInteger(a.seq)&&a.seq>0&&['shot','gadget','ultimate'].includes(a.type)&&Number.isFinite(a.angle)&&Math.abs(a.angle)<=Math.PI*2&&Number.isFinite(a.x)&&a.x>=R&&a.x<=W-R&&Number.isFinite(a.y)&&a.y>=R&&a.y<=H-R&&Number.isFinite(a.at)&&Number.isSafeInteger(a.life)&&typeof a.connectionId==='string'&&Number.isFinite(a.reach)&&a.reach>=55&&a.reach<=330;}
@@ -1008,7 +1012,10 @@ async function processHostQueue(){if(!combatReady()||!isAuthoritative()||hostPro
  }}catch(e){if(activeAction)queuedActions.delete(activeAction.eventId);console.warn('Host action',e);}finally{hostProcessing=false;}}
 
 function projectileStep(list,dt,authoritative){const hits=[];
- for(let j=list.length-1;j>=0;j--){const b=list[j];let aliveBullet=true;const n=Math.max(1,Math.ceil(660*dt/7)),step=dt/n;
+ for(let j=list.length-1;j>=0;j--){const b=list[j];
+  const now=performance.now();if(b.spawnAt>now)continue;
+  const activeSec=b.spawnAt>now-dt*1000?Math.max(0,(now-b.spawnAt)/1000):dt;
+  let aliveBullet=true;const n=Math.max(1,Math.ceil(660*activeSec/7)),step=activeSec/n;
   for(let i=0;i<n;i++){b.x+=b.vx*step;b.y+=b.vy*step;b.dist+=660*step;
    if(b.x<0||b.x>W||b.y<0||b.y>H||WALLS.some(w=>b.x+b.radius>w.x&&b.x-b.radius<w.x+w.w&&b.y+b.radius>w.y&&b.y-b.radius<w.y+w.h)||b.dist>=b.range){aliveBullet=false;break;}
    if(authoritative){for(const k of SEATS){if(teamOfSeat(k)===b.team)continue;const p=lobby?.seats?.[k];if(!p||!(game?.hp?.[p.id]>0))continue;const pos=targetPoint(p.id);if(Math.hypot(b.x-pos.x,b.y-pos.y)<=R+b.radius){const damage=b.sniper?Math.min(64,36+Math.round(b.dist*.065)):b.damage;hits.push({key:b.id,victim:p.id,owner:b.owner,amount:damage,x:b.x,y:b.y});aliveBullet=false;break;}}
@@ -1197,7 +1204,9 @@ const remotes={};
   const authoritative=Object.values(game?.projectiles||{}),ids=new Set(authoritative.map(b=>b.id));
   const weight=1-Math.exp(-40*Math.max(0,dt));
   for(const bullet of authoritative){
-   const targetX=bullet.x+bullet.vx*ahead,targetY=bullet.y+bullet.vy*ahead;
+   if((bullet.spawnAt||0)>(game?.clock?.t||0)+ahead*1000)continue;
+   const liveAhead=Math.max(0,ahead-Math.max(0,(bullet.spawnAt||0)-(game?.clock?.t||0))/1000);
+   const targetX=bullet.x+bullet.vx*liveAhead,targetY=bullet.y+bullet.vy*liveAhead;
    let p=bulletVisuals.get(bullet.id);
    if(!p){p={x:targetX,y:targetY};bulletVisuals.set(bullet.id,p);}
    else{p.x+=(targetX-p.x)*weight;p.y+=(targetY-p.y)*weight;}
@@ -1208,7 +1217,7 @@ const remotes={};
   for(const id of bulletVisuals.keys())if(!ids.has(id))bulletVisuals.delete(id);
   // Local shooter prediction already advances at requestAnimationFrame speed.
   for(const bullet of clientBullets){
-   if(ids.has(bullet.id))continue;
+   if(ids.has(bullet.id)||bullet.spawnAt>performance.now())continue;
    ctx.strokeStyle=bullet.team==='blue'?'#9ce6ff':'#ffbdc8';
    ctx.lineWidth=bullet.sniper?4:3;
    ctx.beginPath();ctx.arc(bullet.x,bullet.y,bullet.sniper?6:4,0,Math.PI*2);ctx.stroke();
