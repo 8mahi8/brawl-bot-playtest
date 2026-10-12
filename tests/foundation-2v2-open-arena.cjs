@@ -12,7 +12,7 @@ const lines=source.split('\n');
 const get=k=>{
  const line=lines.find(s=>s.startsWith('const '+k+'='));
  assert(line,'missing map '+k);
- return vm.runInNewContext(line.slice(('const '+k+'=').length).replace(/;$/, ''),{Math});
+ return vm.runInNewContext('('+line.slice(('const '+k+'=').length).replace(/;$/, '')+')',{Math});
 };
 const wallSets=[get('KO_WALLS'),get('AREA_WALLS')],bushSets=[get('KO_BUSHES'),get('AREA_BUSHES')],spawn=get('SPAWNS');
 function touch(p,w,r=22){const x=Math.max(w.x,Math.min(p.x,w.x+w.w)),y=Math.max(w.y,Math.min(p.y,w.y+w.h));return Math.hypot(x-p.x,y-p.y)<r;}

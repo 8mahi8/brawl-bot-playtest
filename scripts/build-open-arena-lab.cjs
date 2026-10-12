@@ -30,7 +30,7 @@ function buildOpenArena(base){
  html=openArenaExactly(html,'Math.max(Math.min(sw/1130,sh/680),sw/W,sh/H)','Math.max(Math.min(sw/'+cfg.followW+',sh/'+cfg.followH+'),sw/W,sh/H)','follow camera zoom');
  html=openArenaExactly(html,'window.__brawlV3QA=()=>({tacticalR3:true','window.__brawlV3QA=()=>({openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true','read-only QA');
  html=openArenaExactly(html,'<title>BRAWL 2vs2 | Shared Foundation V1</title>','<title>BRAWL 2vs2 | Open Arena LAB</title>','title');
- html=openArenaExactly(html,'<!DOCTYPE html>','<!DOCTYPE html>\\n<!-- OPEN ARENA LAB: independent test candidate, generated from baseline by scripts/build-open-arena-lab.cjs. Do NOT edit directly. -->','declaration');
+ html=openArenaExactly(html,'<!DOCTYPE html>','<!DOCTYPE html>\n<!-- OPEN ARENA LAB: independent test candidate, generated from baseline by scripts/build-open-arena-lab.cjs. Do NOT edit directly. -->','declaration');
  return html;
 }
 
