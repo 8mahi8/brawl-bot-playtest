@@ -267,7 +267,7 @@ html,body{height:100%;height:100dvh;overscroll-behavior:none}
   <div id="hint">チームを変えるには空いている席の「移動」を押してね。4人全員がREADYすると自動で開始。</div>
   <button id="leaveBtn" class="btn inline secondary">ルームから退出</button>
  </div>
- <div id="hud" class="hidden"><div class="hudCard ally"><div id="myLabel" class="hudName">YOU / タンク</div><div id="mySeat" class="hudSub">BLUE1</div><div class="hudHp"><i id="myHpFill"></i></div><div id="myHP" class="hudValue">180 / 180</div><div id="myReload" class="reloadStrip" aria-label="リロード進捗"><i></i><i></i><i></i></div><div id="myAmmo" class="hudSub">弾 3 / 3</div><div class="hudUlt"><i id="myUltFill"></i></div><div id="myUlt" class="hudSub">ULT 0% · GAD 2</div><div id="myBuff" class="hudSub"></div><div id="allySummary" class="teamRows"></div></div><div id="gameBanner">2vs2 · KNOCKOUT<small id="roundInfo">ROUND 1 · BLUE 0 - 0 RED</small></div><div class="hudCard enemy" id="teamList"><div id="enemyLabel" class="hudName">ENEMY TEAM</div><div id="enemyTeam" class="hudSub">RED</div><div id="enemySummary" class="teamRows"></div></div></div>
+ <div id="hud" class="hidden"><div class="hudCard ally"><div id="myLabel" class="hudName">YOU / タンク</div><div id="mySeat" class="hudSub">BLUE1</div><div class="hudHp"><i id="myHpFill"></i></div><div id="myHP" class="hudValue">160 / 160</div><div id="myReload" class="reloadStrip" aria-label="リロード進捗"><i></i><i></i><i></i></div><div id="myAmmo" class="hudSub">弾 3 / 3</div><div class="hudUlt"><i id="myUltFill"></i></div><div id="myUlt" class="hudSub">ULT 0% · GAD 2</div><div id="myBuff" class="hudSub"></div><div id="allySummary" class="teamRows"></div></div><div id="gameBanner">2vs2 · KNOCKOUT<small id="roundInfo">ROUND 1 · BLUE 0 - 0 RED</small></div><div class="hudCard enemy" id="teamList"><div id="enemyLabel" class="hudName">ENEMY TEAM</div><div id="enemyTeam" class="hudSub">RED</div><div id="enemySummary" class="teamRows"></div></div></div>
  <button id="botTools" class="hidden">BOT設定 ⚙</button><div id="networkStatus" class="hidden"></div>
  <div id="pauseBanner" class="hidden"></div>
  <div id="moveHint" class="hidden">左ドラッグ 移動 · 右タップ 自動射撃 · 右ドラッグ 手動射撃</div><button id="gadAction" class="battleAction hidden" disabled>GAD</button><button id="ultAction" class="battleAction hidden" disabled>ULT</button><div id="skillToast" class="hidden" aria-live="polite"></div><button id="skillInfoToggle" class="hidden" type="button" aria-expanded="false" aria-controls="skillInfoPanel">技の説明 ?</button><div id="skillInfoPanel" class="hidden" role="region" aria-label="現在のキャラのガジェットとウルト"><strong id="skillInfoTitle">技の説明</strong><p id="skillInfoText"></p></div>
@@ -902,7 +902,8 @@ const BrawlAbilityV1=Object.freeze({
    if(wounded)brain.recovering=true;
    else if(brain.recovering&&g.hp[owner]/spec.hp>=.72&&effectiveAmmo>0)brain.recovering=false;
    const pressured=!!target&&d<Math.max(185,spec.range*.8);
-   const withdrawing=!!target&&(brain.recovering&&d<550||empty&&pressured);
+   const lastStand=g.mode==='ko'&&!friend&&visible.length>=2&&g.hp[owner]/spec.hp<.70;
+    const withdrawing=!!target&&(brain.recovering&&d<550||empty&&pressured||lastStand&&d<350);
    const desired=s.char==='tank'?105:s.char==='sniper'?350:s.char==='bomber'?245:225;
    let goal={x:W/2+(team(mine)==='blue'?-84:84),y:mine.endsWith('1')?H/2-155:H/2+155};
    brain.tactic='advance';
@@ -1354,8 +1355,10 @@ function gadgetReceipts(){
   $('skillToast').classList.remove('hidden');gadgetToastExpiry=performance.now()+2200;
  }
 }
+let hitConfirmUntil=0;
 function renderCombatEvents(){for(const [id,e] of Object.entries(game?.events||{})){
  if(seenEffects.has(id))continue;boundedRemember(seenEffects,id);if(combatNow()-e.at>350)continue;
+ if(e.type==='hit'&&e.owner===myId)hitConfirmUntil=performance.now()+180;
  fx.push({...e,type:e.type==='jump'?'impact':e.type,t:.35});
 }}
 async function claimHost(){if(claimBusy||!isAuthoritative()||game?.hostToken===myConnection||presence[myId]?.[game?.hostToken])return;claimBusy=true;const match=game.matchId,token=myConnection;try{await room.child('game').transaction(g=>g?.matchId===match&&!presence[myId]?.[g.hostToken]?{...g,hostToken:token}:undefined,undefined,false);}finally{claimBusy=false;}}
@@ -1369,9 +1372,21 @@ function outsideGas(p,margin){return p.x<margin||p.x>W-margin||p.y<margin||p.y>H
 function alive(id){return (game?.hp?.[id]??0)>0;}
 function combatReady(){return !(solo&&document.hidden)&&scene==='game'&&clockReady&&lobbyReady&&gameReady&&presenceReady&&game?.matchId===lobby?.matchId&&roundResetKey===game.matchId+':'+game.round&&positionsReady&&effectsReady&&!pageSuspended&&connected&&game?.phase==='playing'&&!paused&&serverNow()>=game.startAt;}
 function targetPoint(id){if(id===myId)return {...local};return engine().point(game,id,positions);}
+function shotLineBlocked(x1,y1,x2,y2,radius=6){
+ return WALLS.some(w=>{
+  let lo=0,hi=1;
+  for(const [p,d,min,max] of [[x1,x2-x1,w.x-radius,w.x+w.w+radius],[y1,y2-y1,w.y-radius,w.y+w.h+radius]]){
+   if(Math.abs(d)<1e-8){if(p<min||p>max)return false;continue;}
+   let a=(min-p)/d,b=(max-p)/d;if(a>b)[a,b]=[b,a];
+   lo=Math.max(lo,a);hi=Math.min(hi,b);if(lo>hi)return false;
+  }
+  return lo<=hi&&hi>=0&&lo<=1;
+ });
+}
 function enemyCandidate(){if(!lobby||!game)return null;const mine=myTeam();let selected=null,dist=Infinity;
  for(const k of SEATS){if(teamOfSeat(k)===mine)continue;const seat=lobby.seats?.[k];if(!seat||!alive(seat.id))continue;const pos=targetPoint(seat.id);const d=Math.hypot(pos.x-local.x,pos.y-local.y);
  if(!canSeeEnemy(pos,seat.id))continue;
+ if(game?.stats?.[myId]?.char!=='bomber'&&shotLineBlocked(local.x,local.y,pos.x,pos.y))continue;
  if(d<dist){dist=d;selected=pos;}
  }return selected;
 }
@@ -1569,7 +1584,10 @@ $('gadAction').addEventListener('pointerdown',e=>{if(e.pointerType==='touch'||e.
 $('gadAction').addEventListener('click',e=>{if(e.detail===0||performance.now()-lastGadgetPointerAt>700)sendAction('gadget',local.a);});
  $('ultAction').addEventListener('pointerdown',e=>{if(botPilot||!combatReady()||!alive(myId)||!(game.stats?.[myId]?.ult>=100))return;e.preventDefault();ultPointer={id:e.pointerId,x:e.clientX,y:e.clientY,ox:e.clientX,oy:e.clientY,dragged:false,cancelled:false};$('ultAction').setPointerCapture?.(e.pointerId);});
  $('ultAction').addEventListener('pointermove',e=>{if(ultPointer?.id!==e.pointerId)return;ultPointer.x=e.clientX;ultPointer.y=e.clientY;const dist=Math.hypot(e.clientX-ultPointer.ox,e.clientY-ultPointer.oy);if(dist>32)ultPointer.dragged=true;ultPointer.cancelled=ultPointer.dragged&&dist<20;});
- $('ultAction').addEventListener('pointerup',e=>{if(ultPointer?.id!==e.pointerId)return;const aim=ultPointer;ultPointer=null;if(aim.cancelled)return;const angle=aim.dragged?Math.atan2(aim.y-aim.oy,aim.x-aim.ox):local.a;const d=aim.dragged?clamp(Math.hypot(aim.x-aim.ox,aim.y-aim.oy)/80*330,55,330):310;sendAction('ultimate',angle,d);});
+ $('ultAction').addEventListener('pointerup',e=>{if(ultPointer?.id!==e.pointerId)return;const aim=ultPointer;ultPointer=null;if(aim.cancelled)return;const target=aim.dragged?null:enemyCandidate();
+ const angle=aim.dragged?Math.atan2(aim.y-aim.oy,aim.x-aim.ox):target?Math.atan2(target.y-local.y,target.x-local.x):local.a;
+ const d=aim.dragged?clamp(Math.hypot(aim.x-aim.ox,aim.y-aim.oy)/80*330,55,330):target?clamp(Math.hypot(target.x-local.x,target.y-local.y),55,330):310;
+ sendAction('ultimate',angle,d);});
  $('ultAction').addEventListener('pointercancel',()=>{ultPointer=null;});
  $('rematchBtn').addEventListener('click',requestRematch);
  window.addEventListener('keydown',e=>{
@@ -1758,6 +1776,12 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  }
  }ctx.restore();}}
  ctx.restore();
+ if(scene==='game'&&performance.now()<hitConfirmUntil){
+  const cx=view.ox+local.x*view.scale,cy=view.oy+local.y*view.scale;
+  ctx.save();ctx.strokeStyle='#fff4a7';ctx.lineWidth=2.5;ctx.beginPath();
+  for(const [dx,dy] of [[-1,-1],[1,-1],[-1,1],[1,1]]){ctx.moveTo(cx+dx*12,cy+dy*12);ctx.lineTo(cx+dx*19,cy+dy*19);}
+  ctx.stroke();ctx.restore();
+ }
  drawMinimap(performance.now());
  if(scene==='game'&&!paused&&pcShot&&pcAim&&!botPilot){
   const angle=pcAngle(),range=CHARS[game?.stats?.[myId]?.char]?.range||300;
