@@ -2,11 +2,11 @@
   "rules": {
     ".read": false,
     ".write": false,
-    "brawl_v2_duel_rooms": {
+    "rooms": {
       ".read": true,
       ".write": true
     },
-    "brawl_v2_squad_rooms": {
+    "rooms2v2": {
       ".read": true,
       ".write": true
     }
