@@ -105,9 +105,16 @@ async function run(browser,spec,count,botIndex=-1){
    console.log('PASS duel remote position replicated to second WebKit tab: x '+before+' -> '+after);
   }
   if(spec.mode==='squad'){
-   const q=await snap(clients[0],spec);assert.equal(Object.keys(q.combat.stats).length,4);
+   const shooter=clients[0],observer=clients[1],q=await snap(shooter,spec);
+   assert.equal(Object.keys(q.combat.stats).length,4);
    assert(q.stats&&q.combat.matchId,'four authoritative players');
-   console.log('PASS squad 4 individual RTDB participants and combat snapshot');
+   const hostId=q.myId,before=q.stats[hostId].lastActionSeq;
+   const startupWait=Math.max(250,Math.min(3500,q.combat.startAt-Date.now()+450));
+   await delay(startupWait);
+   await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
+   await shooter.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,{k:spec.qa,id:hostId,seq:before},{timeout:10000});
+   await observer.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,{k:spec.qa,id:hostId,seq:before},{timeout:10000});
+   console.log('PASS squad 4 participants: real touch shot reaches authoritative battle state and second client');
   }
   for(const c of clients)assert.deepEqual(c.issues.filter(x=>x.startsWith('JS ')),[],'browser runtime '+c.who);
  }catch(error){
