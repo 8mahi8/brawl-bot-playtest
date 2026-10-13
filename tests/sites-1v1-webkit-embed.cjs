@@ -22,7 +22,7 @@ const variants=[
       page.on('pageerror',e=>errors.push(e.message));
       const src=fs.readFileSync(path.join(root,item.path),'utf8');
       try{
-        await page.goto('about:blank');
+        await page.setContent('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body></body></html>');
         await page.evaluate(({source,policy})=>{
           const frame=document.createElement('iframe');
           frame.setAttribute('sandbox',policy);
@@ -39,6 +39,8 @@ const variants=[
           const diag=await f.locator('#brawlDiag').innerText();
           assert.match(diag,/JS OK/, 'diagnostic should confirm loaded JS: '+diag);
         }
+        const hit=await f.locator('#soloBtn').evaluate(el=>{const r=el.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;return {rect:{x:r.x,y:r.y,w:r.width,h:r.height},hit:document.elementFromPoint(x,y)?.id||document.elementFromPoint(x,y)?.tagName,viewport:{w:innerWidth,h:innerHeight}};});
+        console.log('HIT '+item.label+' ['+sandbox+']: '+JSON.stringify(hit));
         await f.locator('#soloBtn').tap({timeout:10000});
         await f.locator('#charScreen:not(.hidden)').waitFor({timeout:10000});
         if(item.label==='diagnostic'){
