@@ -12,7 +12,8 @@ window.__brawlKoScoutProbe=()=>{
  g.hp[myId]=0;g.reveals={};g.protection={};
  const place=(id,x,y)=>({x,y,a:0,vx:0,vy:0,life:g.stats[id].life,motionRev:g.motions[id].rev,matchId:g.matchId,round:g.round});
  const p={};
- p[bot]=place(bot,W/2-84,H/2+155);
+ // Use traversable tile: the old nominal center goal (876,715) lies inside a KO wall.
+ p[bot]=place(bot,940,700);
  p[e1]=place(e1,1210,155);
  p[e2]=place(e2,1380,155);
  const actor={...p[bot]},plans=[];let brain={};
