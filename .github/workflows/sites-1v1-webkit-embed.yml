@@ -5,14 +5,14 @@ on:
       - 'sites/1vs1-ipad-bot-embed.html'
       - 'sites/2vs2-ipad-bot-embed.html'
       - 'tests/sites-2v2-webkit-embed.cjs'
-      - 'sites/2vs2-ipad-bot-embed.html'
-      - 'tests/sites-2v2-webkit-embed.cjs'
       - 'sites/1vs1-ipad-diagnostic-v2.html'
       - 'tests/sites-1v1-webkit-embed.cjs'
       - '.github/workflows/sites-1v1-webkit-embed.yml'
   pull_request:
     paths:
       - 'sites/1vs1-ipad-bot-embed.html'
+      - 'sites/2vs2-ipad-bot-embed.html'
+      - 'tests/sites-2v2-webkit-embed.cjs'
       - 'sites/1vs1-ipad-diagnostic-v2.html'
       - 'tests/sites-1v1-webkit-embed.cjs'
       - '.github/workflows/sites-1v1-webkit-embed.yml'
