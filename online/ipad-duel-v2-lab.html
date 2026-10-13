@@ -1373,7 +1373,7 @@ const BrawlAbilityV1=Object.freeze({
       let won=false;
       for(let attempt=0;attempt<15;attempt++) {
         const code=String(Math.floor(10000+Math.random()*90000));
-        const candidate=db.ref('brawl_v2_duel_rooms/'+code);
+        const candidate=db.ref('rooms/'+code);
         const value={ v:PROTOCOL, createdAt:firebase.database.ServerValue.TIMESTAMP,
           players:{host:{online:true,ready:false,char:'tank',rematch:false,back:false,session:sessionId}},
           botConfig:{char:'gunner',level:'normal'},
@@ -1398,7 +1398,7 @@ const BrawlAbilityV1=Object.freeze({
       role='guest';other='host';isHost=false;botPilot=!!asBot;botReadyRequested=false;botRematchRequested=false;
       $('joinBtn').disabled=true; $('joinBotBtn').disabled=true;
       alertStatus('接続中…');
-      const candidate=db.ref('brawl_v2_duel_rooms/'+code);
+      const candidate=db.ref('rooms/'+code);
       const meta=(await candidate.once('value')).val();
       if(!meta || meta.v!==PROTOCOL)throw new Error('互換性のあるルームが見つかりません');
       if(!meta.players||!meta.players.host||!meta.players.host.online)throw new Error('ホストが接続していません');
