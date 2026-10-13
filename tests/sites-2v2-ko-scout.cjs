@@ -57,6 +57,7 @@ const source=html.replace('window.__brawlV3QA=()=>',probe+'window.__brawlV3QA=()
    throw Error('KO match failed to start');
   });
   const plans=await f.locator('#app').evaluate(()=>window.__brawlKoScoutProbe());
+  console.log('SCOUT-PLANS '+JSON.stringify(plans));
   assert.equal(plans.length,3);
   for(const p of plans){
    assert.equal(p.targetId,null,'hidden enemies must NOT be revealed to bot');
