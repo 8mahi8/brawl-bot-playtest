@@ -6,8 +6,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>BRAWL 1vs1 | Online Lab</title>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <style>
     :root {color-scheme:dark;--accent:#54e7f2;--pink:#ff547e;--bg:#0c1520}
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
@@ -1042,10 +1040,27 @@ const BrawlAbilityV1=Object.freeze({
     if(sendTimer) clearInterval(sendTimer);
     sendTimer=null;
   }
-  function ensureFirebase() {
-    FIREBASE_DB_URL=window.BrawlOnlineConfig.get();
+  let onlineSdkPromise=null;
+  async function ensureFirebase() {
     if(db)return;
-    if(typeof firebase==='undefined')throw new Error('Firebase SDKを読み込めません。学校のネットワークでブロックされている可能性があります。');
+    FIREBASE_DB_URL=window.BrawlOnlineConfig.get();
+    if(!window.firebase?.database){
+      if(!onlineSdkPromise)onlineSdkPromise=(async()=>{
+        for(const name of ['firebase-app-compat.js','firebase-database-compat.js']){
+          if(name==='firebase-app-compat.js' && window.firebase?.initializeApp)continue;
+          if(name==='firebase-database-compat.js' && window.firebase?.database)continue;
+          await new Promise((resolve,reject)=>{
+            const tag=document.createElement('script');
+            const timeout=setTimeout(()=>{tag.remove();reject(Error('Firebase SDKの読み込みがタイムアウトしました'));},12000);
+            tag.onload=()=>{clearTimeout(timeout);resolve();};
+            tag.onerror=()=>{clearTimeout(timeout);tag.remove();reject(Error('Firebase SDKが読み込めません。学校のネットワークを確認してね'));};
+            tag.src='https://www.gstatic.com/firebasejs/10.8.0/'+name;document.head.appendChild(tag);
+          });
+        }
+      })();
+      try{await onlineSdkPromise;}catch(error){onlineSdkPromise=null;throw error;}
+    }
+    if(!window.firebase?.database)throw Error('Firebase SDKが利用できません');
     if(!firebase.apps.length)firebase.initializeApp({databaseURL:FIREBASE_DB_URL});
     db=firebase.database();
     db.ref('.info/serverTimeOffset').on('value',snap=>{offset=snap.val() || 0;});
@@ -1302,7 +1317,7 @@ const BrawlAbilityV1=Object.freeze({
   async function createRoom() {
     if(ref){alertStatus('すでにルームに参加しています');return;}
     try {
-      ensureFirebase();
+      await ensureFirebase();
       role='host';other='guest';isHost=true;botConfig={char:'gunner',level:'normal'};
       $('createBtn').disabled=true;
       alertStatus('ルームを作成中…');
@@ -1330,7 +1345,7 @@ const BrawlAbilityV1=Object.freeze({
     const code=$('roomInput').value.trim();
     if(!/^\d{5}$/.test(code)){alertStatus('5桁の数字を入力してね');return;}
     try{
-      ensureFirebase();
+      await ensureFirebase();
       role='guest';other='host';isHost=false;botPilot=!!asBot;botReadyRequested=false;botRematchRequested=false;
       $('joinBtn').disabled=true; $('joinBotBtn').disabled=true;
       alertStatus('接続中…');
