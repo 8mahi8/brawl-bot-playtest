@@ -1,0 +1,32 @@
+name: BRAWL online-ready iPad V2 lab (no cloud writes)
+on:
+  push:
+    paths:
+      - 'online/ipad-duel-v2-lab.html'
+      - 'online/ipad-squad-v2-lab.html'
+      - 'tests/online-ipad-v2-smoke.cjs'
+      - '.github/workflows/online-ipad-v2-lab.yml'
+  pull_request:
+    paths:
+      - 'online/ipad-duel-v2-lab.html'
+      - 'online/ipad-squad-v2-lab.html'
+      - 'tests/online-ipad-v2-smoke.cjs'
+      - '.github/workflows/online-ipad-v2-lab.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  online-ready-iframe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Safari-like WebKit
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+          npx playwright-core install --with-deps webkit
+      - name: Test both online-ready pages without Firebase cloud access
+        run: node tests/online-ipad-v2-smoke.cjs
