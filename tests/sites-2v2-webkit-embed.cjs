@@ -6,7 +6,8 @@ const {webkit}=require('playwright-core');
 const variants=[
  {label:'original',path:'sites/2vs2-ipad-bot-embed.html'},
  {label:'diagnostic',path:'sites/2vs2-ipad-diagnostic-v1.html'},
- {label:'scout',path:'sites/2vs2-ipad-ko-scout-v1.html'}
+ {label:'scout',path:'sites/2vs2-ipad-ko-scout-v1.html'},
+ {label:'polish',path:'sites/2vs2-ipad-playtest-v2.html'}
 ];
 (async()=>{
  const browser=await webkit.launch({headless:true});
@@ -33,9 +34,9 @@ const variants=[
     await f.locator('#readyBtn').tap({timeout:12000});
     await f.locator('#app[data-scene="game"]').waitFor({timeout:20000});
     await page.waitForTimeout(1700);
-    if(variant.label==='diagnostic'||variant.label==='scout'){
+    if(variant.label==='diagnostic'||variant.label==='scout'||variant.label==='polish'){
       const diag=await f.locator('#brawlDiag2v2').innerText();
-      if(variant.label==='scout'){
+      if(variant.label==='scout'||variant.label==='polish'){
         assert.match(diag,/phase=playing|phase=round_end|phase=match_end/,'scout diagnostic must report match lifecycle: '+diag);
       }else{
         assert.match(diag,/scene=game/,'2vs2 diagnostic must report scene=game: '+diag);
@@ -45,6 +46,18 @@ const variants=[
     const q=await f.locator('#app').evaluate(()=>window.__brawlV3QA?.());
     assert(q&&q.solo&&q.scene==='game','2vs2 BOT game state');
     assert.equal(q.mode,mode,'selected game mode');
+    if(variant.label==='polish'){
+      assert(q.combat.battleStats,'host must keep authoritative result totals');
+      const ui=await f.locator('#app').evaluate(()=>{
+        const css=x=>getComputedStyle(document.querySelector(x)).display;
+        const btn=document.querySelector('#gadAction'),ult=document.querySelector('#ultAction');
+        const check=el=>{const r=el.getBoundingClientRect();return {visible:r.width>30&&r.height>30,inside:r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1}};
+        return {diag:css('#brawlDiag2v2'),guide:css('#moveHint'),stats:!!document.querySelector('#resultStats'),gad:check(btn),ult:check(ult)};
+      });
+      assert.equal(ui.diag,'none','diagnostic must not cover game');
+      assert.equal(ui.guide,'none','unneeded gesture legend hidden');
+      assert(ui.stats&&ui.gad.visible&&ui.gad.inside&&ui.ult.visible&&ui.ult.inside,'key controls on-screen: '+JSON.stringify(ui));
+    }
     assert.equal(errors.length,0,'2vs2 uncaught JS '+errors.join(' | '));
     console.log('PASS 2vs2 WebKit iframe '+variant.label+' '+mode+' ['+policy+'] starts real offline match');
    }finally{await ctx.close();}
