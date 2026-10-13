@@ -1,0 +1,7 @@
+{
+  "emulators": {
+    "database": {"host": "127.0.0.1", "port": 9000},
+    "ui": {"enabled": false}
+  },
+  "database": {"rules": "network/emulator/ONLINE_E2E_TEST_ONLY.rules.json"}
+}
