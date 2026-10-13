@@ -1,0 +1,29 @@
+name: BRAWL KO bot scout regression
+on:
+  push:
+    paths:
+      - 'sites/2vs2-ipad-ko-scout-v1.html'
+      - 'tests/sites-2v2-ko-scout.cjs'
+      - '.github/workflows/sites-ko-scout.yml'
+  pull_request:
+    paths:
+      - 'sites/2vs2-ipad-ko-scout-v1.html'
+      - 'tests/sites-2v2-ko-scout.cjs'
+      - '.github/workflows/sites-ko-scout.yml'
+permissions:
+  contents: read
+jobs:
+  ko-scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install WebKit
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+          npx playwright-core install --with-deps webkit
+      - name: Verify knocked-out human does not stall BOTs
+        run: node tests/sites-2v2-ko-scout.cjs

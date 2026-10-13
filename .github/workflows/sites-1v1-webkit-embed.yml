@@ -8,6 +8,8 @@ on:
       - 'sites/1vs1-ipad-diagnostic-v2.html'
       - 'sites/1vs1-ipad-stable-v1.html'
       - 'sites/2vs2-ipad-diagnostic-v1.html'
+      - 'sites/2vs2-ipad-ko-scout-v1.html'
+      - 'tests/sites-2v2-ko-scout.cjs'
       - 'tests/sites-ipad-candidate-parity.cjs'
       - 'tests/sites-1v1-webkit-embed.cjs'
       - '.github/workflows/sites-1v1-webkit-embed.yml'
@@ -19,6 +21,8 @@ on:
       - 'sites/1vs1-ipad-diagnostic-v2.html'
       - 'sites/1vs1-ipad-stable-v1.html'
       - 'sites/2vs2-ipad-diagnostic-v1.html'
+      - 'sites/2vs2-ipad-ko-scout-v1.html'
+      - 'tests/sites-2v2-ko-scout.cjs'
       - 'tests/sites-ipad-candidate-parity.cjs'
       - 'tests/sites-1v1-webkit-embed.cjs'
       - '.github/workflows/sites-1v1-webkit-embed.yml'
@@ -44,3 +48,5 @@ jobs:
         run: node tests/sites-1v1-webkit-embed.cjs
       - name: Test original and diagnostic 2vs2 KO and AREA in WebKit iPad iframes
         run: node tests/sites-2v2-webkit-embed.cjs
+      - name: KO spectator and concealed-opponent regression
+        run: node tests/sites-2v2-ko-scout.cjs
