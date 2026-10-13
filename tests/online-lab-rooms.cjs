@@ -62,7 +62,7 @@ async function open(browser,mode,initial){
     await host.page.locator('#createBtn').click();
     await host.page.waitForFunction(mode=>{
        const code=document.querySelector('#roomCode')?.textContent||'';
-       return /^\\d{5}$/.test(code) && (mode==='1v1'? !document.querySelector('#roomCodeWrap').classList.contains('hidden') : document.querySelector('#app').dataset.scene==='lobby');
+       return /^\d{5}$/.test(code) && (mode==='1v1'? !document.querySelector('#roomCodeWrap').classList.contains('hidden') : document.querySelector('#app').dataset.scene==='lobby');
     },mode,{timeout:12000});
     const code=(await host.page.locator('#roomCode').innerText()).trim();
     const state=await host.page.evaluate(()=>window.__mockRTDB.dump());
