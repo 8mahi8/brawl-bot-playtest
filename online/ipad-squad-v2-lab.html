@@ -1323,7 +1323,7 @@ async function joinRoom(asBot=false){if(connecting||joined||leaveBusy)return;con
  }catch(e){$('homeStatus').textContent='参加失敗：'+errorText(e);room=null;roomId='';myId='';joined=false;}
  finally{connecting=false;$('joinBtn').disabled=false;}}
 async function mutateLobby(f){if(!room||!myId||!lobby||working)return false;working=true;
- try{const res=await room.child('lobby').transaction(cur=>{if(!cur||cur.status!=='waiting')return;
+ try{const fallback=lobby;const res=await room.child('lobby').transaction(cur=>{cur=cur||fallback;if(!cur||cur.status!=='waiting')return;
   const seat=SEATS.find(k=>cur.seats?.[k]?.id===myId);if(!seat)return;
   return f(cur,seat);
  },undefined,false);return res.committed;
@@ -1335,8 +1335,11 @@ async function toggleReady(){await mutateLobby((lobby,current)=>({...lobby,seats
 async function tryStart(){if(hostBusy||!joined||!connected||!clockReady||!lobbyReady||!presenceReady||!lobby||lobby.status!=='waiting'||lobby.ownerId!==myId||!allReady())return;
  hostBusy=true;const activeRoom=room,owner=myId,matchId=sessionId();try{
   // Only lifecycle transitions use a room transaction; no root subscription.
+  // Firebase may first call a room transaction updater with null despite existing child listeners.
+  const baseline=(await activeRoom.once('value')).val();
   // A lost response cannot leave a half-created match in a locked lobby.
   await activeRoom.transaction(cur=>{
+   cur=cur||baseline;
    const l=cur?.lobby;
    if(!cur||cur.v!==PROTOCOL||l?.status!=='waiting'||l.ownerId!==owner||!['lobby','aborted'].includes(cur.game?.phase))return;
    if(!SEATS.every(k=>l.seats?.[k]?.ready&&Object.keys(cur.presence?.[l.seats[k].id]||{}).length))return;
@@ -1587,7 +1590,9 @@ let rematchBusy=false;
 async function considerRematch(){if(rematchBusy||!isAuthoritative()||game?.phase!=='match_end'||!lobby||!SEATS.every(k=>lobby.rematch?.[lobby.seats[k]?.id]&&isOnline(lobby.seats[k].id)))return;
  rematchBusy=true;const activeRoom=room,owner=myId,oldMatch=game.matchId,newMatch=sessionId();
  try{
+  const baseline=(await activeRoom.once('value')).val();
   await activeRoom.transaction(cur=>{
+   cur=cur||baseline;
    const l=cur?.lobby;
    if(!cur||cur.v!==PROTOCOL||l?.ownerId!==owner||l.status!=='playing'||l.matchId!==oldMatch||cur.game?.phase!=='match_end'||cur.game.matchId!==oldMatch)return;
    if(!SEATS.every(k=>l.rematch?.[l.seats?.[k]?.id]&&Object.keys(cur.presence?.[l.seats[k].id]||{}).length))return;
