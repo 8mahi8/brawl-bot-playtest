@@ -1,0 +1,14 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "brawl_v2_duel_rooms": {
+      ".read": true,
+      ".write": true
+    },
+    "brawl_v2_squad_rooms": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
