@@ -32,7 +32,6 @@ window.__brawlKoRuntimeProbe=()=>({
  roundResetKey,round:game?.round,matchId:game?.matchId,rafLastFrame:lastFrame,rafAge:performance.now()-lastFrame,documentHidden:document.hidden,fps,
  now:serverNow(),startAt:game?.startAt
 });
-window.__brawlKoForceFrame=()=>frame(performance.now());
 window.__brawlKoKillHuman=()=>room.child('game').transaction(g=>{
  if(!g||g.phase!=='playing')return;
  return {...g,hp:{...g.hp,[myId]:0}};
@@ -84,12 +83,7 @@ const source=html.replace('window.__brawlV3QA=()=>',probe+'window.__brawlV3QA=()
   assert.equal(after.hp[after.myId],0,'human must be knocked out');
   assert.equal(after.game,'playing','remaining bots should keep the KO round alive');
   assert(after.combat.combatRev>before.combat.combatRev,'combat host must advance after human death');
-  // WebKit headless can throttle requestAnimationFrame inside opaque sandbox iframes.
-  // Force one display frame in the test harness to verify the BOT update path
-  // rather than treating a browser-automation throttle as a gameplay stall.
-  await f.locator('#app').evaluate(()=>window.__brawlKoForceFrame());
-  const forced=await f.locator('#app').evaluate(()=>window.__brawlV3QA());
-  assert(Object.keys(forced.botActors).length>=3,'all 3 BOT actors should be runnable after human KO');
+  assert(Object.keys(after.botActors).length>=3,'all 3 BOTs must update naturally after human KO (no forced frames)');
   assert.deepEqual(errors,[],'unexpected WebKit JS errors');
   console.log('PASS KO spectator: human HP=0, combat progresses, 3 bot actors remain; concealed enemies lead to patrol not permanent idle');
   await ctx.close();
