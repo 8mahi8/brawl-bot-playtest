@@ -933,7 +933,7 @@ const BrawlAbilityV1=Object.freeze({
   let lastAutoTarget=null;
   let lastGasDamage=0, lastNow=null, accumulated=0, lastRender=0, fps=60;
   let serverHP={host:180,guest:180};
-  // 1vs1 responsive hit feedback: UI-only prediction for a guest's own shots.
+  // 1vs1 responsive hit feedback: UI-only prediction for the local shooter's own shots.
   // Real HP, KOs, scores and damage stay host-authoritative in Firebase.
   const HP_PREVIEW_MS=1700;
   let pendingHpPreview=[];
@@ -942,7 +942,7 @@ const BrawlAbilityV1=Object.freeze({
     pendingHpPreview=pendingHpPreview.filter(p=>p.round===game?.round&&p.amount>0.01&&now-p.at<HP_PREVIEW_MS);
   }
   function previewOwnBulletDamage(b,damage) {
-    if(solo||isHost||botPilot||b.owner!==role||!game||game.phase!=='playing'||!game.hp||!other)return;
+    if(solo||botPilot||b.owner!==role||!game||game.phase!=='playing'||!game.hp||!other)return;
     const hp=game.hp[other];
     if(!Number.isFinite(hp)||hp<=1||!Number.isFinite(damage)||damage<=0)return;
     // If the authoritative result arrived before this local collision, do not double-count.
@@ -955,7 +955,7 @@ const BrawlAbilityV1=Object.freeze({
     updateHUD();
   }
   function reconcileHpPreview(previous,next) {
-    if(solo||isHost||!previous||previous.round!==next.round||next.phase!=='playing'){
+    if(solo||!previous||previous.round!==next.round||next.phase!=='playing'){
       pendingHpPreview=[];return;
     }
     pruneHpPreview();
@@ -1075,7 +1075,7 @@ const BrawlAbilityV1=Object.freeze({
     // Render a fast local preview until the host's authoritative HP update arrives.
     pruneHpPreview();
     const officialEnemyHP=(game && game.hp && Number.isFinite(game.hp[other])) ? game.hp[other] : maxHp(remote.char);
-    const previewDamage=!solo&&!isHost?pendingHpPreview.reduce((sum,p)=>sum+p.amount,0):0;
+    const previewDamage=!solo?pendingHpPreview.reduce((sum,p)=>sum+p.amount,0):0;
     const enemyHP=Math.max(officialEnemyHP>0?1:0,officialEnemyHP-previewDamage);
     const mineHP=(game && game.hp && Number.isFinite(game.hp[role])) ? game.hp[role] : local.hp;
     local.hp=mineHP;
@@ -1807,8 +1807,8 @@ const BrawlAbilityV1=Object.freeze({
       const victim=bullet.owner==='host'?'guest':'host',pos=victim===role?local:getRemotePredicted();
       if(!BrawlProjectileV1.hitCircle(bullet.x,bullet.y,pos.x,pos.y,RADIUS+bullet.radius))return false;
       const damage=BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage);
+      if(bullet.owner===role&&victim===other)previewOwnBulletDamage(bullet,damage);
       if(isHost&&game.phase==='playing')applyDamage(victim,damage,bullet.owner,bullet.x,bullet.y);
-      else if(!isHost&&bullet.owner===role&&victim===other)previewOwnBulletDamage(bullet,damage);
       return true;
      }
     });
