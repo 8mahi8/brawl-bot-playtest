@@ -25,6 +25,13 @@ window.__brawlKoScoutProbe=()=>{
  }
  return plans;
 };
+window.__brawlKoRuntimeProbe=()=>({
+ controlled:controlledBotIds(),freeze:$('botFreeze').checked,ready:combatReady(),
+ solo,joined,connected,clockReady,lobbyReady,gameReady,presenceReady,
+ positionsReady,effectsReady,pageSuspended,paused,phase:game?.phase,
+ roundResetKey,round:game?.round,matchId:game?.matchId,
+ now:serverNow(),startAt:game?.startAt
+});
 window.__brawlKoKillHuman=()=>room.child('game').transaction(g=>{
  if(!g||g.phase!=='playing')return;
  return {...g,hp:{...g.hp,[myId]:0}};
@@ -71,6 +78,9 @@ const source=html.replace('window.__brawlV3QA=()=>',probe+'window.__brawlV3QA=()
   await f.locator('#app').evaluate(()=>window.__brawlKoKillHuman());
   await page.waitForTimeout(2300);
   const after=await f.locator('#app').evaluate(()=>window.__brawlV3QA());
+  const rt=await f.locator('#app').evaluate(()=>window.__brawlKoRuntimeProbe());
+  console.log('AFTER-KO '+JSON.stringify({phase:after.game,revBefore:before.combat.combatRev,revAfter:after.combat.combatRev,botActors:Object.keys(after.botActors),hp:after.hp,runtime:rt,errors}));
+  assert.deepEqual(errors,[],'unexpected WebKit JS errors');
   assert.equal(after.hp[after.myId],0,'human must be knocked out');
   assert.equal(after.game,'playing','remaining bots should keep the KO round alive');
   assert(after.combat.combatRev>before.combat.combatRev,'combat host must advance after human death');
