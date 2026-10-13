@@ -4,8 +4,8 @@
 
 ## 候補HTML（ゲーム全体を内蔵）
 
-- [1vs1](./ipad-duel-v2-lab.html) — sites/1vs1-ipad-playtest-v2.html由来。タンク160HP、キャラ別射線、オートエイム、ソロ戦績の改善を引き継ぎ、既存のhost/guest通信を復帰。新プロトコル31と専用ルーム `brawl_v2_duel_rooms`。
-- [2vs2](./ipad-squad-v2-lab.html) — `sites/2vs2-ipad-playtest-v2.html`由来。タンク160HP/味方防御、KO巡回BOT、射線、リザルト、観戦カメラを引き継ぎ、4席/READY/位置/攻撃/ゲーム時計の通信を復帰。新プロトコル3012と専用ルーム `brawl_v2_squad_rooms`。
+- [1vs1](./ipad-duel-v2-lab.html) — sites/1vs1-ipad-playtest-v2.html由来。タンク160HP、キャラ別射線、オートエイム、ソロ戦績の改善を引き継ぎ、既存のhost/guest通信を復帰。新プロトコル31と専用ルーム `rooms`。
+- [2vs2](./ipad-squad-v2-lab.html) — `sites/2vs2-ipad-playtest-v2.html`由来。タンク160HP/味方防御、KO巡回BOT、射線、リザルト、観戦カメラを引き継ぎ、4席/READY/位置/攻撃/ゲーム時計の通信を復帰。新プロトコル3012と専用ルーム `rooms2v2`。
 - どちらもFirebase SDKは**オンラインを選ぶときだけ**読み込む。実FirebaseのURLはHTMLに含めない。Google Sitesの貼り付け用完成版ではない。操作チュートリアルやSFXは追加しない。
 - オンライン設定欄は**隔離テスト用のFirebase RTDB URL入力**。ルーム作成・参加は共通URLが必要。ページURLのクエリでDB接続先を渡す方式は採用しない。
 
@@ -13,7 +13,7 @@
 
 - [x] 実際に学校iPadで動いたHTMLのゲーム本体から、オンライン候補を別ファイル化
 - [x] BOTと友達通信を同じUI/キャラ仕様上で選べる候補
-- [x] 2人用/4人用のルーム・プロトコル分離（古い実験データと混線を防止）
+- [x] 2人用/4人用のルーム分離と通信プロトコル版数による互換性チェック（古い対戦には参加できない）
 - [x] 接続先未設定なら処理を止める。BOTはFirebaseなしで動く
 - [ ] Firebase Auth + RTDB Rulesを使った**安全なクラウド接続環境**の整備。今の旧クライアントはUIDの認証にまだ未対応。現在のエミュレーター用Rulesはそのまま本番転用できない
 - [ ] 別ブラウザ2人で作成→参加→READY→KO対戦→戦績一致→再戦の実測
