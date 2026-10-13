@@ -11,7 +11,7 @@
     "movementSpeed": 102,
     "characters": {
       "tank": {
-        "hp": 180,
+        "hp": 160,
         "baseDamage": 11,
         "range": 160,
         "reloadMs": 833.3333333333334
