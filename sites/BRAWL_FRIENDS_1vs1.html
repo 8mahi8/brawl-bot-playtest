@@ -933,6 +933,42 @@ const BrawlAbilityV1=Object.freeze({
   let lastAutoTarget=null;
   let lastGasDamage=0, lastNow=null, accumulated=0, lastRender=0, fps=60;
   let serverHP={host:180,guest:180};
+  // 1vs1 responsive hit feedback: UI-only prediction for a guest's own shots.
+  // Real HP, KOs, scores and damage stay host-authoritative in Firebase.
+  const HP_PREVIEW_MS=1700;
+  let pendingHpPreview=[];
+  function pruneHpPreview() {
+    const now=performance.now();
+    pendingHpPreview=pendingHpPreview.filter(p=>p.round===game?.round&&p.amount>0.01&&now-p.at<HP_PREVIEW_MS);
+  }
+  function previewOwnBulletDamage(b,damage) {
+    if(solo||isHost||botPilot||b.owner!==role||!game||game.phase!=='playing'||!game.hp||!other)return;
+    const hp=game.hp[other];
+    if(!Number.isFinite(hp)||hp<=1||!Number.isFinite(damage)||damage<=0)return;
+    // If the authoritative result arrived before this local collision, do not double-count.
+    if(Number.isFinite(b.enemyHpAtSpawn)&&hp<b.enemyHpAtSpawn-0.5)return;
+    pruneHpPreview();
+    const already=pendingHpPreview.reduce((sum,p)=>sum+p.amount,0);
+    const predicted=Math.min(damage,Math.max(0,hp-already-1));
+    if(predicted<=0)return;
+    pendingHpPreview.push({round:game.round,at:performance.now(),amount:predicted});
+    updateHUD();
+  }
+  function reconcileHpPreview(previous,next) {
+    if(solo||isHost||!previous||previous.round!==next.round||next.phase!=='playing'){
+      pendingHpPreview=[];return;
+    }
+    pruneHpPreview();
+    const oldHp=previous.hp?.[other],newHp=next.hp?.[other];
+    if(!Number.isFinite(oldHp)||!Number.isFinite(newHp))return;
+    let confirmed=Math.max(0,oldHp-newHp);
+    for(const p of pendingHpPreview){
+      if(confirmed<=0)break;
+      const applied=Math.min(p.amount,confirmed);
+      p.amount-=applied;confirmed-=applied;
+    }
+    pendingHpPreview=pendingHpPreview.filter(p=>p.amount>0.01);
+  }
   let dying=false;
   let left={id:null,ox:0,oy:0,x:0,y:0}, right={id:null,ox:0,oy:0,x:0,y:0};
   let noticeToken=0;
@@ -1036,7 +1072,11 @@ const BrawlAbilityV1=Object.freeze({
     setTimeout(()=>$('copyCodeBtn').textContent='コピー',1600);
   }
   function updateHUD() {
-    const enemyHP=(game && game.hp && Number.isFinite(game.hp[other])) ? game.hp[other] : maxHp(remote.char);
+    // Render a fast local preview until the host's authoritative HP update arrives.
+    pruneHpPreview();
+    const officialEnemyHP=(game && game.hp && Number.isFinite(game.hp[other])) ? game.hp[other] : maxHp(remote.char);
+    const previewDamage=!solo&&!isHost?pendingHpPreview.reduce((sum,p)=>sum+p.amount,0):0;
+    const enemyHP=Math.max(officialEnemyHP>0?1:0,officialEnemyHP-previewDamage);
     const mineHP=(game && game.hp && Number.isFinite(game.hp[role])) ? game.hp[role] : local.hp;
     local.hp=mineHP;
     $('myHp').style.width=clamp(100*mineHP/maxHp(local.char),0,100)+'%';
@@ -1228,6 +1268,7 @@ const BrawlAbilityV1=Object.freeze({
       const next=snap.val();if(!next){if(!leaving)handleRoomClosed();return;}
       const previous=game;
       game=next;
+      reconcileHpPreview(previous,next);
       if(game.resources){const r=sanitizeResources(game.resources)[role];local.ult=r.ult;local.gadgets=r.gadgets;}renderBombEvents();
       if(game.hp)serverHP={host:game.hp.host,guest:game.hp.guest};
       if(game.phase==='select') {
@@ -1327,6 +1368,7 @@ const BrawlAbilityV1=Object.freeze({
     returningToSelect=false;
     const oldRole=role;
     ref=null;role=null;other=null;game=null;players={};roomId='';ready=false;botPilot=false;botReadyRequested=false;botRematchRequested=false;
+    pendingHpPreview=[];
     showNormalLobby(oldRole==='guest'?'ホストがルームを終了しました':'ルームが終了しました');
   }
   async function leaveRoom() {
@@ -1343,6 +1385,7 @@ const BrawlAbilityV1=Object.freeze({
       else await currentRef.update({ 'players/guest':null,'players/host/ready':false });
     } catch(e){console.warn('leaveRoom',e);}
     ref=null;role=null;other=null;game=null;players={};roomId='';ready=false;botPilot=false;botReadyRequested=false;botRematchRequested=false;
+    pendingHpPreview=[];
     leaving=false;showBotTool();
     showNormalLobby();
   }
@@ -1435,6 +1478,7 @@ const BrawlAbilityV1=Object.freeze({
     finally{startPending=false;}
   }
   function startLocalRound() {
+    pendingHpPreview=[];
     botRematchRequested=false;
     clearControls();shots=[];fx=[];
     const carry=sanitizeResources(game.resources);
@@ -1745,7 +1789,8 @@ const BrawlAbilityV1=Object.freeze({
     shotReveal[p.owner]=time()+REVEAL_MS;
     if(isHost&&!solo&&p.owner!==role)markAttack(p.owner);
     const s=CHARS[currentChar(p.owner)];
-    const b={id:p.id,owner:p.owner,x:p.x+Math.cos(p.angle)*28,y:p.y+Math.sin(p.angle)*28,
+    const b={id:p.id,owner:p.owner,enemyHpAtSpawn:game.hp?.[p.owner==='host'?'guest':'host'],
+      x:p.x+Math.cos(p.angle)*28,y:p.y+Math.sin(p.angle)*28,
       vx:Math.cos(p.angle)*(p.ult?960:BrawlWeaponV1.bulletSpeed),vy:Math.sin(p.angle)*(p.ult?960:BrawlWeaponV1.bulletSpeed),
       dist:0,range:p.ult?s.ultRange:s.range,
       damage:p.ult?s.ultDamage:s.damage,radius:p.ult?s.ultRadius:(s===CHARS.sniper?5:6),ult:!!p.ult,
@@ -1761,7 +1806,9 @@ const BrawlAbilityV1=Object.freeze({
      targetHit:bullet=>{
       const victim=bullet.owner==='host'?'guest':'host',pos=victim===role?local:getRemotePredicted();
       if(!BrawlProjectileV1.hitCircle(bullet.x,bullet.y,pos.x,pos.y,RADIUS+bullet.radius))return false;
-      if(isHost&&game.phase==='playing')applyDamage(victim,BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage),bullet.owner,bullet.x,bullet.y);
+      const damage=BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage);
+      if(isHost&&game.phase==='playing')applyDamage(victim,damage,bullet.owner,bullet.x,bullet.y);
+      else if(!isHost&&bullet.owner===role&&victim===other)previewOwnBulletDamage(bullet,damage);
       return true;
      }
     });
