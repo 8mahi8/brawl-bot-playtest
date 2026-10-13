@@ -90,8 +90,13 @@ async function run(browser,spec,count,botIndex=-1){
   await startMatch(clients,spec,botIndex);
   console.log('PASS '+spec.mode+' '+count+' clients'+(botIndex>0?' with BOT guest':'')+': ONLINE room '+id+' all connected, READY, game start; Tank 160 when applicable');
   if(spec.mode==='duel'&&botIndex<0){
-   const shooter=clients[0],other=clients[1],before=(await snap(other,spec)).remote?.targetX;
-   await shooter.page.keyboard.down('d');await delay(450);await shooter.page.keyboard.up('d');
+   const shooter=clients[0],other=clients[1];
+   const startAt=(await snap(shooter,spec)).game.startAt;
+   await delay(Math.max(200,Math.min(5000,startAt-Date.now()+350)));
+   const before=(await snap(other,spec)).remote?.targetX,hostBefore=(await snap(shooter,spec)).local.x;
+   await shooter.page.keyboard.down('d');await delay(620);await shooter.page.keyboard.up('d');
+   const hostAfter=(await snap(shooter,spec)).local.x;
+   assert(hostAfter>hostBefore+5,'actual local keyboard movement must work: '+hostBefore+' to '+hostAfter);
    await other.page.waitForFunction(({key,x})=>window[key]?.()?.remote?.targetX>x+5,{key:spec.qa,x:before},{timeout:9000});
    const after=(await snap(other,spec)).remote?.targetX;
    assert(after>before+5,'real RTDB position update must arrive at other browser');
