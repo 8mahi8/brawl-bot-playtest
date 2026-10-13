@@ -9,9 +9,6 @@ on:
       - 'sites/1vs1-ipad-stable-v1.html'
       - 'sites/2vs2-ipad-diagnostic-v1.html'
       - 'tests/sites-ipad-candidate-parity.cjs'
-      - 'sites/1vs1-ipad-stable-v1.html'
-      - 'sites/2vs2-ipad-diagnostic-v1.html'
-      - 'tests/sites-ipad-candidate-parity.cjs'
       - 'tests/sites-1v1-webkit-embed.cjs'
       - '.github/workflows/sites-1v1-webkit-embed.yml'
   pull_request:
@@ -20,6 +17,9 @@ on:
       - 'sites/2vs2-ipad-bot-embed.html'
       - 'tests/sites-2v2-webkit-embed.cjs'
       - 'sites/1vs1-ipad-diagnostic-v2.html'
+      - 'sites/1vs1-ipad-stable-v1.html'
+      - 'sites/2vs2-ipad-diagnostic-v1.html'
+      - 'tests/sites-ipad-candidate-parity.cjs'
       - 'tests/sites-1v1-webkit-embed.cjs'
       - '.github/workflows/sites-1v1-webkit-embed.yml'
   workflow_dispatch:
