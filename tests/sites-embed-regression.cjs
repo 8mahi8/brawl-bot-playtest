@@ -53,7 +53,7 @@ for(const v of variants){
    await page.locator('#readyBtn').click();
    await page.waitForFunction(({key,mode})=>{const q=window[key]();return mode==='1vs1'?q.scene==='game'&&q.game?.phase==='playing':q.scene==='game'&&q.game==='playing';},{key:v.qa,mode:v.mode},{timeout:16000});
    assert.equal(errors.length,0,'uncaught JS: '+errors.join(' / '));
-   assert.deepEqual(httpRequests,[],'game shouldn't load remote scripts on school iPad');
+   assert.deepEqual(httpRequests,[],"game must not load remote scripts on school iPad");
    if(v.mode==='2vs2')assert((await page.evaluate(()=>window.__brawlV3QA())).ipadReady,'iPad shell flag');
    console.log('PASS '+v.mode+' landscape/touch BOT match started, JS errors=0, external requests=0');
   }finally {await context.close();}
