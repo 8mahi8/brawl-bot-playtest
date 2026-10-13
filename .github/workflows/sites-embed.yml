@@ -6,6 +6,7 @@ on:
       - 'foundation/1v1-foundation-v1.html'
       - 'foundation/2v2-ipad-safari.html'
       - 'tests/sites-embed-regression.cjs'
+      - 'tests/sites-1v1-diagnostic.cjs'
       - '.github/workflows/sites-embed.yml'
   pull_request:
     paths:
@@ -13,6 +14,7 @@ on:
       - 'foundation/1v1-foundation-v1.html'
       - 'foundation/2v2-ipad-safari.html'
       - 'tests/sites-embed-regression.cjs'
+      - 'tests/sites-1v1-diagnostic.cjs'
       - '.github/workflows/sites-embed.yml'
   workflow_dispatch:
 permissions:
@@ -29,3 +31,5 @@ jobs:
       - run: npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
       - name: Google Sites embed code parity and touch-play tests
         run: node tests/sites-embed-regression.cjs
+      - name: 1vs1 diagnostic inside sandboxed Google Sites-like iframe
+        run: node tests/sites-1v1-diagnostic.cjs
