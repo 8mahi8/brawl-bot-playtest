@@ -48,6 +48,7 @@ async function open(browser,mode,initial){
  page.on('pageerror',e=>errors.push(String(e)));
  await page.addInitScript(installMock,initial);
  await page.goto('file://'+path.resolve(root,mode==='1v1'?'online/1v1-online-lab.html':'online/2v2-online-lab.html'));
+ await page.locator('details.online-config summary').click();
  await page.locator('#onlineDbInput').fill('https://test-project-default-rtdb.firebaseio.com/');
  return {context,page,errors};
 }
