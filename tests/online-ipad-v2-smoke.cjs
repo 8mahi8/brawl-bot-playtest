@@ -5,8 +5,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {webkit}=require('playwright-core');
 const root=path.resolve(__dirname,'..');
 const modes=[
- {mode:'1vs1',file:'online/ipad-duel-v2-lab.html',app:'#appStage',screen:'#charScreen:not(.hidden)',create:'#createBtn',scene:'game',roomRoot:'brawl_v2_duel_rooms',protocol:31},
- {mode:'2vs2',file:'online/ipad-squad-v2-lab.html',app:'#app',screen:'#lobbyScreen:not(.hidden)',create:'#createBtn',scene:'game',roomRoot:'brawl_v2_squad_rooms',protocol:3012}
+ {mode:'1vs1',file:'online/ipad-duel-v2-lab.html',app:'#appStage',screen:'#charScreen:not(.hidden)',create:'#createBtn',scene:'game',roomRoot:'rooms',protocol:31},
+ {mode:'2vs2',file:'online/ipad-squad-v2-lab.html',app:'#app',screen:'#lobbyScreen:not(.hidden)',create:'#createBtn',scene:'game',roomRoot:'rooms2v2',protocol:3012}
 ];
 (async()=>{
  const browser=await webkit.launch({headless:true});
