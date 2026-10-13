@@ -1,0 +1,50 @@
+name: BRAWL real multi-browser online E2E (LOCAL emulator only)
+on:
+  push:
+    paths:
+      - 'online/ipad-duel-v2-lab.html'
+      - 'online/ipad-squad-v2-lab.html'
+      - 'tests/online-ipad-v2-emulator-browser.cjs'
+      - 'firebase.online-e2e.json'
+      - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
+      - '.github/workflows/online-ipad-v2-real-emulator.yml'
+  pull_request:
+    paths:
+      - 'online/ipad-duel-v2-lab.html'
+      - 'online/ipad-squad-v2-lab.html'
+      - 'tests/online-ipad-v2-emulator-browser.cjs'
+      - 'firebase.online-e2e.json'
+      - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
+      - '.github/workflows/online-ipad-v2-real-emulator.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-webkit-clients:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      FIREBASE_CLI_DISABLE_TELEMETRY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install local Firebase emulator CLI and WebKit
+        run: |
+          npm install --no-save --package-lock=false firebase-tools@14.24.0 playwright-core@1.56.1
+          npx playwright-core install --with-deps webkit
+      - name: Download pinned Firebase compat browser SDK to LOCAL CI fixture
+        run: |
+          mkdir -p artifacts/firebase-sdk
+          curl -fsSL --retry 3 --max-time 25 https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js -o artifacts/firebase-sdk/firebase-app-compat.js
+          curl -fsSL --retry 3 --max-time 25 https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js -o artifacts/firebase-sdk/firebase-database-compat.js
+          test -s artifacts/firebase-sdk/firebase-app-compat.js
+          test -s artifacts/firebase-sdk/firebase-database-compat.js
+      - name: Start LOCAL RTDB emulator and exercise two and four real browser clients
+        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-online --config firebase.online-e2e.json "node tests/online-ipad-v2-emulator-browser.cjs"
