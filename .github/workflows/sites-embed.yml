@@ -1,0 +1,31 @@
+name: BRAWL Google Sites standalone embed check
+on:
+  push:
+    paths:
+      - 'sites/**'
+      - 'foundation/1v1-foundation-v1.html'
+      - 'foundation/2v2-ipad-safari.html'
+      - 'tests/sites-embed-regression.cjs'
+      - '.github/workflows/sites-embed.yml'
+  pull_request:
+    paths:
+      - 'sites/**'
+      - 'foundation/1v1-foundation-v1.html'
+      - 'foundation/2v2-ipad-safari.html'
+      - 'tests/sites-embed-regression.cjs'
+      - '.github/workflows/sites-embed.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+      - name: Google Sites embed code parity and touch-play tests
+        run: node tests/sites-embed-regression.cjs
