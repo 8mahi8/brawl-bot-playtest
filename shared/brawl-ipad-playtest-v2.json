@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "purpose": "Authoritative release manifest for NEW silent school-iPad BOT playtest v2; existing frozen foundation/builds intentionally unaffected.",
+  "pages": {
+    "1vs1": "sites/1vs1-ipad-playtest-v2.html",
+    "2vs2": "sites/2vs2-ipad-playtest-v2.html"
+  },
+  "audio": false,
+  "characters": {
+    "tank": {
+      "hp": 160,
+      "shot": "5 pellets",
+      "gadget": "dash + guard a living ally within 260 units if one exists"
+    },
+    "gunner": {
+      "hp": 100,
+      "shot": "3-shot burst"
+    },
+    "sniper": {
+      "hp": 70,
+      "shot": "1 precision projectile"
+    },
+    "bomber": {
+      "hp": 90,
+      "shot": "ballistic bomb, splash radius 56"
+    }
+  },
+  "standalone": true,
+  "features": [
+    "character-specific aim guides",
+    "no always-on control legend",
+    "quiet combat feedback",
+    "BOT match reports",
+    "KO spectator camera 2vs2",
+    "cover-aware auto-aim",
+    "sniper GAD stealth leak prevention"
+  ],
+  "exceptions": [
+    "2vs2 ally-only tank protection; 1vs1 has no ally",
+    "2vs2 KO/AREA and 1vs1 KO round flow",
+    "mode-specific network implementation"
+  ]
+}

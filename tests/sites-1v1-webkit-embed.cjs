@@ -8,7 +8,8 @@ const root=path.resolve(__dirname,'..');
 const variants=[
   {path:'sites/1vs1-ipad-bot-embed.html',label:'original',required:false},
   {path:'sites/1vs1-ipad-diagnostic-v2.html',label:'diagnostic',required:true},
-  {path:'sites/1vs1-ipad-stable-v1.html',label:'stable',required:true}
+  {path:'sites/1vs1-ipad-stable-v1.html',label:'stable',required:true},
+  {path:'sites/1vs1-ipad-playtest-v2.html',label:'polish',required:true}
 ];
 (async()=>{
   const browser=await webkit.launch({headless:true});
@@ -34,7 +35,7 @@ const variants=[
         },{source:src,policy:sandbox});
         const f=page.frameLocator('iframe');
         await f.locator('#soloBtn').waitFor({timeout:13000});
-        if(item.label==='diagnostic'||item.label==='stable'){
+        if(item.label==='diagnostic'||item.label==='stable'||item.label==='polish'){
           await f.locator('#brawlDiag').waitFor({state:'attached',timeout:10000});
           await page.waitForTimeout(400);
           const diag=await f.locator('#brawlDiag').innerText();
@@ -44,17 +45,23 @@ const variants=[
         console.log('HIT '+item.label+' ['+sandbox+']: '+JSON.stringify(hit));
         await f.locator('#soloBtn').tap({timeout:10000});
         await f.locator('#charScreen:not(.hidden)').waitFor({timeout:10000});
-        if(item.label==='diagnostic'||item.label==='stable'){
+        if(item.label==='diagnostic'||item.label==='stable'||item.label==='polish'){
           await page.waitForTimeout(300);
           const diag=await f.locator('#brawlDiag').innerText();
           assert.match(diag,/scene=select/, 'instrumentation should expose selected scene: '+diag);
-          if(item.label==='stable')assert.equal(await f.locator('#brawlDiag').evaluate(e=>getComputedStyle(e).display),'none','stable UI should hide diagnostic banner');
+          if(['stable','polish'].includes(item.label))assert.equal(await f.locator('#brawlDiag').evaluate(e=>getComputedStyle(e).display),'none','release UI should hide diagnostic banner');
         }
         await f.locator('#readyBtn').tap({timeout:10000});
         await f.locator('#hud:not(.hidden)').waitFor({timeout:10000});
         await page.waitForTimeout(1500);
         const actualScene=await f.locator('#appStage').getAttribute('data-scene');
         assert.equal(actualScene,'game');
+        if(item.label==='polish'){
+          const snapshot=await f.locator('#charScreen').evaluate(el=>({tankHP:document.querySelector('[data-char="tank"]')?.textContent||'',hiddenGuide:getComputedStyle(document.querySelector('#pcHelp')).display,stats:!!document.querySelector('#resultStats1v1')}));
+          assert.match(snapshot.tankHP,/160 HP/,'Tank must match 2vs2 HP');
+          assert.equal(snapshot.hiddenGuide,'none','school UI should not clutter with controls');
+          assert(snapshot.stats,'1vs1 result stats panel');
+        }
         assert.deepEqual(errors,[],'unhandled JavaScript errors: '+errors.join(' | '));
         console.log('PASS WebKit iPad iframe '+item.label+' ['+sandbox+']: lobby -> select -> game');
       }catch(e){

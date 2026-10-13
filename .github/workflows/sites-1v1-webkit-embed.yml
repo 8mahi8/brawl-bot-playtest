@@ -9,6 +9,11 @@ on:
       - 'sites/1vs1-ipad-stable-v1.html'
       - 'sites/2vs2-ipad-diagnostic-v1.html'
       - 'sites/2vs2-ipad-ko-scout-v1.html'
+      - 'sites/1vs1-ipad-playtest-v2.html'
+      - 'sites/2vs2-ipad-playtest-v2.html'
+      - 'tests/sites-ipad-polish-layout.cjs'
+      - 'tests/sites-ipad-playtest-contract.cjs'
+      - 'shared/brawl-ipad-playtest-v2.json'
       - 'tests/sites-2v2-ko-scout.cjs'
       - 'tests/sites-ipad-candidate-parity.cjs'
       - 'tests/sites-1v1-webkit-embed.cjs'
@@ -22,6 +27,11 @@ on:
       - 'sites/1vs1-ipad-stable-v1.html'
       - 'sites/2vs2-ipad-diagnostic-v1.html'
       - 'sites/2vs2-ipad-ko-scout-v1.html'
+      - 'sites/1vs1-ipad-playtest-v2.html'
+      - 'sites/2vs2-ipad-playtest-v2.html'
+      - 'tests/sites-ipad-polish-layout.cjs'
+      - 'tests/sites-ipad-playtest-contract.cjs'
+      - 'shared/brawl-ipad-playtest-v2.json'
       - 'tests/sites-2v2-ko-scout.cjs'
       - 'tests/sites-ipad-candidate-parity.cjs'
       - 'tests/sites-1v1-webkit-embed.cjs'
@@ -44,9 +54,20 @@ jobs:
           npx playwright-core install --with-deps webkit
       - name: Keep gameplay scripts identical to release source
         run: node tests/sites-ipad-candidate-parity.cjs
+      - name: Verify both polished modes implement same iPad release contract
+        run: node tests/sites-ipad-playtest-contract.cjs
       - name: Compare original, diagnostic and stable 1vs1 in restricted iframes
         run: node tests/sites-1v1-webkit-embed.cjs
       - name: Test original and diagnostic 2vs2 KO and AREA in WebKit iPad iframes
         run: node tests/sites-2v2-webkit-embed.cjs
       - name: KO spectator and concealed-opponent regression
         run: node tests/sites-2v2-ko-scout.cjs
+      - name: iPad polished UI layout screenshots and interactive hit targets
+        run: node tests/sites-ipad-polish-layout.cjs
+      - name: Store polished layout screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brawl-ipad-combat-polish-screens
+          path: artifacts/ipad-polish-*.png
+          if-no-files-found: ignore
