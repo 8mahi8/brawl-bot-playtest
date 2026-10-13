@@ -42,6 +42,7 @@ const variants=[
         await f.locator('#soloBtn').tap({timeout:10000});
         await f.locator('#charScreen:not(.hidden)').waitFor({timeout:10000});
         if(item.label==='diagnostic'){
+          await page.waitForTimeout(300);
           const diag=await f.locator('#brawlDiag').innerText();
           assert.match(diag,/scene=select/, 'diagnostic should expose selected scene: '+diag);
         }
