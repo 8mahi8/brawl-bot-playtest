@@ -1309,6 +1309,9 @@ async function joinRoom(asBot=false){if(connecting||joined||leaveBusy)return;con
   const canResume=!!oldSeat&&!(live[stored]&&Object.keys(live[stored]).length>0);
   const pid=canResume?stored:sessionId();let selected=null;
   const result=await candidate.child('lobby').transaction(cur=>{
+   // Firebase RTDB may invoke the updater with null before a local transaction cache is warmed.
+   // A validated snapshot seeds the first local attempt; server hash conflicts still retry with fresh state.
+   cur=cur||original;
    if(!cur||cur.status!=='waiting'&&!(canResume&&['locked','playing'].includes(cur.status)))return;
    const seats={...(cur.seats||{})},existing=SEATS.find(k=>seats[k]?.id===pid);
    if(existing){selected=existing;return {...cur,seats};}
