@@ -30,7 +30,7 @@ const modes=[
     const f=page.frameLocator('iframe');
     await f.locator('#soloBtn').waitFor({timeout:15000});
     assert(await f.locator(config.create).isVisible(),'new friend room must be visible');
-    assert(await f.locator('#onlineDbInput').isAttached(),'test-only Firebase URL field');
+    assert(await f.locator('#onlineDbInput').count()===1,'test-only Firebase URL field');
     await f.locator(config.create).tap({timeout:10000});
     await page.waitForTimeout(220);
     const status=await f.locator(config.mode==='1vs1'?'#lobbyStatus':'#homeStatus').innerText();
