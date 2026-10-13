@@ -65,7 +65,9 @@ async function guestRoom(client,spec,id,bot){
  if(spec.joinPanel)await client.page.locator(spec.joinPanel).click();
  await client.page.locator('#roomInput').fill(id);
  await client.page.locator(bot?'#joinBotBtn':'#joinBtn').click();
- await waitState(client,spec,'room');
+ await delay(1200);
+ if(spec.mode==='squad')console.log('SQUAD JOIN ATTEMPT '+id+' : '+(await client.page.locator('#homeStatus').innerText()));
+ await waitState(client,spec,'room',11000);
 }
 async function startMatch(clients,spec,botIndex){
  for(const [i,c] of clients.entries()){
@@ -111,7 +113,8 @@ async function run(browser,spec,count,botIndex=-1){
  }catch(error){
   for(const c of clients){
    const q=await snap(c,spec).catch(()=>null);
-   console.error('STATE '+spec.mode+' '+c.who+' '+JSON.stringify({scene:q?.scene,roomId:q?.roomId,game:q?.game?.phase||q?.game,lobby:q?.lobby?.status,connected:q?.connected,online:q?.online,issues:c.issues.slice(-8)}));
+   const uiStatus=await c.page.locator(spec.mode==='squad'?'#homeStatus':'#lobbyStatus').innerText().catch(()=>'?');
+   console.error('STATE '+spec.mode+' '+c.who+' '+JSON.stringify({scene:q?.scene,roomId:q?.roomId,game:q?.game?.phase||q?.game,lobby:q?.lobby?.status,connected:q?.connected,online:q?.online,uiStatus,issues:c.issues.slice(-8)}));
   }
   throw error;
  }finally{for(const c of clients)await c.ctx.close();}
