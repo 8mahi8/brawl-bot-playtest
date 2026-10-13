@@ -17,7 +17,7 @@ assert.doesNotMatch(source,/<script[^>]+\bsrc=/i);
     await page.setContent('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body></body></html>');
     await page.evaluate(({source,policy})=>{
       const frame=document.createElement('iframe');
-      frame.sandbox=policy;
+      frame.setAttribute('sandbox',policy);
       frame.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:0';
       document.body.style.margin='0';document.body.appendChild(frame);frame.srcdoc=source;
     },{source,policy});
