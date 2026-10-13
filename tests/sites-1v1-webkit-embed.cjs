@@ -35,7 +35,7 @@ const variants=[
         const f=page.frameLocator('iframe');
         await f.locator('#soloBtn').waitFor({timeout:13000});
         if(item.label==='diagnostic'||item.label==='stable'){
-          await f.locator('#brawlDiag').waitFor({timeout:10000});
+          await f.locator('#brawlDiag').waitFor({state:'attached',timeout:10000});
           await page.waitForTimeout(400);
           const diag=await f.locator('#brawlDiag').innerText();
           assert.match(diag,/JS OK/, 'diagnostic should confirm loaded JS: '+diag);
@@ -44,7 +44,7 @@ const variants=[
         console.log('HIT '+item.label+' ['+sandbox+']: '+JSON.stringify(hit));
         await f.locator('#soloBtn').tap({timeout:10000});
         await f.locator('#charScreen:not(.hidden)').waitFor({timeout:10000});
-        if(item.label==='diagnostic'){
+        if(item.label==='diagnostic'||item.label==='stable'){
           await page.waitForTimeout(300);
           const diag=await f.locator('#brawlDiag').innerText();
           assert.match(diag,/scene=select/, 'instrumentation should expose selected scene: '+diag);
