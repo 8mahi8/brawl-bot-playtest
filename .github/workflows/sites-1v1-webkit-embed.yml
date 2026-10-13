@@ -1,0 +1,38 @@
+name: BRAWL 1vs1 and 2vs2 Google Sites iPad WebKit QA
+on:
+  push:
+    paths:
+      - 'sites/1vs1-ipad-bot-embed.html'
+      - 'sites/2vs2-ipad-bot-embed.html'
+      - 'tests/sites-2v2-webkit-embed.cjs'
+      - 'sites/1vs1-ipad-diagnostic-v2.html'
+      - 'tests/sites-1v1-webkit-embed.cjs'
+      - '.github/workflows/sites-1v1-webkit-embed.yml'
+  pull_request:
+    paths:
+      - 'sites/1vs1-ipad-bot-embed.html'
+      - 'sites/2vs2-ipad-bot-embed.html'
+      - 'tests/sites-2v2-webkit-embed.cjs'
+      - 'sites/1vs1-ipad-diagnostic-v2.html'
+      - 'tests/sites-1v1-webkit-embed.cjs'
+      - '.github/workflows/sites-1v1-webkit-embed.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sandboxed-webkit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install iPad Safari engine
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+          npx playwright-core install --with-deps webkit
+      - name: Compare original and diagnostic in restricted iframes
+        run: node tests/sites-1v1-webkit-embed.cjs
+      - name: Test 2vs2 offline KO and AREA inside restrictive iPad Safari iframes
+        run: node tests/sites-2v2-webkit-embed.cjs
