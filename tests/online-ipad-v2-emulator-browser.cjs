@@ -62,8 +62,8 @@ async function hostRoom(client,spec){
  assert(/^\d{5}$/.test(q.roomId)); return q.roomId;
 }
 async function guestRoom(client,spec,id,bot){
- await client.page.locator('#roomInput').fill(id);
  if(spec.joinPanel)await client.page.locator(spec.joinPanel).click();
+ await client.page.locator('#roomInput').fill(id);
  await client.page.locator(bot?'#joinBotBtn':'#joinBtn').click();
  await waitState(client,spec,'room');
 }
