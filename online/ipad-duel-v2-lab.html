@@ -426,6 +426,8 @@ window.BrawlOnlineConfig = Object.freeze({
 });
 
 
+document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefill());
+
 /* BEGIN SHARED STEALTH V1 — same rules in both BRAWL modes */
 (function(root){
  'use strict';
@@ -1375,7 +1377,7 @@ const BrawlAbilityV1=Object.freeze({
         const value={ v:PROTOCOL, createdAt:firebase.database.ServerValue.TIMESTAMP,
           players:{host:{online:true,ready:false,char:'tank',rematch:false,back:false,session:sessionId}},
           botConfig:{char:'gunner',level:'normal'},
-          game:{phase:'select',round:0, scores:{host:0,guest:0},hp:{host:180,guest:180}} };
+          game:{phase:'select',round:0, scores:{host:0,guest:0},hp:{host:160,guest:160}} };
         const result=await candidate.transaction(old=>old===null?value:undefined,undefined,false);
         if(result.committed){ref=candidate;roomId=code;won=true;break;}
       }
