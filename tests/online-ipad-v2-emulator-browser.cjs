@@ -138,19 +138,20 @@ async function run(browser,spec,count,botIndex=-1){
    const combat=readyQs[0].combat;
    assert.equal(combat.phase,'playing','battle must still be active for damage E2E');
    const moves={
-    [attackerId]:{rev:combat.motions[attackerId].rev+1,x:650,y:540,a:0},
-    [victimId]:{rev:combat.motions[victimId].rev+1,x:800,y:540,a:Math.PI}
+    [attackerId]:{rev:combat.motions[attackerId].rev+1,x:700,y:540,a:0},
+    [victimId]:{rev:combat.motions[victimId].rev+1,x:760,y:540,a:Math.PI}
    };
    await shooter.page.evaluate(async ({roomId,motions})=>{
     await window.firebase.database().ref('rooms2v2/'+roomId+'/game/motions').update(motions);
    },{roomId:id,motions:moves});
-   await shooter.page.waitForFunction(({k})=>Math.abs((window[k]?.()?.local?.x||0)-650)<5,{k:spec.qa},{timeout:9000});
-   await clients[targetIndex].page.waitForFunction(({k})=>Math.abs((window[k]?.()?.local?.x||0)-800)<5,{k:spec.qa},{timeout:9000});
+   await shooter.page.waitForFunction(({k})=>Math.abs((window[k]?.()?.local?.x||0)-700)<5,{k:spec.qa},{timeout:9000});
+   await clients[targetIndex].page.waitForFunction(({k})=>Math.abs((window[k]?.()?.local?.x||0)-760)<5,{k:spec.qa},{timeout:9000});
    await shooter.page.waitForFunction(({k,victim})=>{
     const p=window[k]?.()?.positionValues?.[victim];
-    return !!p&&Math.abs(p.x-800)<5;
+    return !!p&&Math.abs(p.x-760)<5;
    },{k:spec.qa,victim:victimId},{timeout:9000});
    const hpBefore=(await snap(shooter,spec)).hp[victimId];
+   assert(hpBefore>0,'opposing human must be alive and damageable');
    const attackerBefore=(await snap(shooter,spec)).stats[attackerId].lastActionSeq;
    const beforeInfo=await snap(shooter,spec);
    console.log('HP DAMAGE SETUP '+JSON.stringify({mode:beforeInfo.mode,hostChar:beforeInfo.stats[attackerId]?.char,ammo:beforeInfo.stats[attackerId]?.ammo,victimId,hpBefore,hostPosition:beforeInfo.local,victimPosition:beforeInfo.positionValues[victimId],gameClock:beforeInfo.combat?.clock,hostSeat:beforeInfo.seat}));
