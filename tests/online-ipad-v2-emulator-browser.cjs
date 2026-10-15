@@ -151,9 +151,17 @@ async function run(browser,spec,count,botIndex=-1){
     return !!p&&Math.abs(p.x-800)<5;
    },{k:spec.qa,victim:victimId},{timeout:9000});
    const hpBefore=(await snap(shooter,spec)).hp[victimId];
+   const attackerBefore=(await snap(shooter,spec)).stats[attackerId].lastActionSeq;
+   const beforeInfo=await snap(shooter,spec);
+   console.log('HP DAMAGE SETUP '+JSON.stringify({mode:beforeInfo.mode,hostChar:beforeInfo.stats[attackerId]?.char,ammo:beforeInfo.stats[attackerId]?.ammo,victimId,hpBefore,hostPosition:beforeInfo.local,victimPosition:beforeInfo.positionValues[victimId],gameClock:beforeInfo.combat?.clock,hostSeat:beforeInfo.seat}));
    await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
+   await shooter.page.waitForFunction(({k,attacker,seq})=>(window[k]?.()?.stats?.[attacker]?.lastActionSeq??0)>seq,
+    {k:spec.qa,attacker:attackerId,seq:attackerBefore},{timeout:10000});
+   await delay(1000);
+   const afterInfo=await snap(shooter,spec);
+   console.log('HP DAMAGE SHOT '+JSON.stringify({hostAmmo:afterInfo.stats[attackerId]?.ammo,hostHP:afterInfo.hp[attackerId],victimHP:afterInfo.hp[victimId],hostPosition:afterInfo.local,victimPosition:afterInfo.positionValues[victimId],projectiles:afterInfo.combat?.projectiles,events:afterInfo.combat?.events,usedActions:afterInfo.combat?.usedActions,combatClock:afterInfo.combat?.clock}));
    await shooter.page.waitForFunction(({k,victim,hp})=>(window[k]?.()?.hp?.[victim]??Infinity)<hp,
-    {k:spec.qa,victim:victimId,hp:hpBefore},{timeout:12000});
+    {k:spec.qa,victim:victimId,hp:hpBefore},{timeout:8000});
    await clients[targetIndex].page.waitForFunction(({k,victim,hp})=>(window[k]?.()?.hp?.[victim]??Infinity)<hp,
     {k:spec.qa,victim:victimId,hp:hpBefore},{timeout:12000});
    const hpAfter=(await snap(clients[targetIndex],spec)).hp[victimId];
