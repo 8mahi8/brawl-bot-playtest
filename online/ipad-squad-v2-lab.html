@@ -1078,6 +1078,69 @@ const $=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v))
 const canvas=$('arena'),ctx=canvas.getContext('2d',{alpha:false});
 let solo=false,botPilot=false,liveDB=null,sdkPromise=null,botActors={},botPanelOpen=false,botRowsKey='',botRematchBusy=false,leaveBusy=false;
 let lastSnapshotAt=0,snapshotGap=0,fps=60,lastBotSettingsAt=0;
+// HUD-only local hit predictions; authoritative damage, KO and score never change.
+const HP_PREVIEW_TTL=1400;
+let hpPreviewHits=[];
+function pruneHpPreviews(){
+ const now=performance.now();
+ hpPreviewHits=hpPreviewHits.filter(p=>now-p.at<HP_PREVIEW_TTL&&p.amount>.01&&
+  p.matchId===game?.matchId&&p.round===game?.round&&game?.phase==='playing'&&
+  game?.stats?.[p.victim]?.life===p.life&&game?.hp?.[p.victim]>0&&!paused);
+}
+function predictedEnemyHp(){
+ pruneHpPreviews();
+ const hp={...game?.hp};
+ for(const p of hpPreviewHits){
+  // Never display an unconfirmed KO or modify the battle's actual state.
+  if(Number.isFinite(hp[p.victim])&&hp[p.victim]>0)
+   hp[p.victim]=Math.max(1,hp[p.victim]-p.amount);
+ }
+ return hp;
+}
+function previewOwnBulletHit(b,victim,damage){
+ if(solo||botPilot||!game||game.phase!=='playing'||paused||
+    b.owner!==myId||!victim||!game?.stats?.[victim]||!Number.isFinite(damage)||damage<=0)return;
+ if(!(game.hp?.[victim]>1)||!canSeeEnemy(targetPoint(victim),victim))return;
+ pruneHpPreviews();
+ if(hpPreviewHits.some(p=>p.id===b.id))return;
+ const pending=hpPreviewHits.filter(p=>p.victim===victim).reduce((a,p)=>a+p.amount,0);
+ const amount=Math.min(damage,Math.max(0,game.hp[victim]-pending-1));
+ if(amount<=0)return;
+ hpPreviewHits.push({id:b.id,victim,amount,at:performance.now(),matchId:game.matchId,round:game.round,life:game.stats[victim].life});
+ if(hpPreviewHits.length>36)hpPreviewHits.shift();
+ renderGameHUD();
+}
+function previewVisibleBulletCollision(b,x,y){
+ if(!b||b.owner!==myId||solo||botPilot||paused||!game||game.phase!=='playing'||!Number.isFinite(x)||!Number.isFinite(y))return false;
+ for(const k of SEATS){
+  if(teamOfSeat(k)===b.team)continue;
+  const p=lobby?.seats?.[k];if(!p||!(game?.hp?.[p.id]>0))continue;
+  const pos=targetPoint(p.id);
+  if(!canSeeEnemy(pos,p.id))continue;
+  if(BrawlProjectileV1.hitCircle(x,y,pos.x,pos.y,R+(b.radius||6))){
+   previewOwnBulletHit(b,p.id,BrawlProjectileV1.damage(b,BrawlCombatV8.tankDamage));
+   return true;
+  }
+ }
+ return false;
+}
+function reconcileHpPreviews(previous,next){
+ if(!previous||!next||next.phase!=='playing'||previous.matchId!==next.matchId||previous.round!==next.round){
+  hpPreviewHits=[];return;
+ }
+ pruneHpPreviews();
+ for(const victim of new Set(hpPreviewHits.map(p=>p.victim))){
+  const oldHP=previous.hp?.[victim],newHP=next.hp?.[victim];
+  if(!Number.isFinite(oldHP)||!Number.isFinite(newHP))continue;
+  if(newHP>oldHP||newHP<=0){hpPreviewHits=hpPreviewHits.filter(p=>p.victim!==victim);continue;}
+  let delta=Math.max(0,oldHP-newHP);
+  for(const p of hpPreviewHits){
+   if(p.victim!==victim||delta<=0)continue;
+   const consumed=Math.min(p.amount,delta);p.amount-=consumed;delta-=consumed;
+  }
+ }
+ hpPreviewHits=hpPreviewHits.filter(p=>p.amount>.01);
+}
 let appliedMotionRev=-1,combatBusy=false,claimBusy=false;
 let db=null,room=null,roomId='',myId='',myConnection='',lobby=null,presence={},game=null,positions={},joined=false,connected=false,connecting=false,working=false,clockOffset=0;
 let listeners=[],onlineTimer=null,lastSend=0,sendSeq=0,local={x:220,y:290,a:0,vx:0,vy:0},view={scale:1,ox:0,oy:0,cx:NaN,cy:NaN,overhead:false},scene='home',pointer=null,lastFrame=0,pausedSince=0,paused=false,hostBusy=false;
@@ -1200,7 +1263,7 @@ function renderResultStats(){
 }
 function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;renderResultStats();const mine=lobby.seats[mySeat()],me=game.stats[myId],hp=game.hp[myId],hudNow=combatNow(),activeChar=me?.char||mine.char;
  const info=ABILITY_GUIDE[activeChar]||ABILITY_GUIDE.tank;$('skillInfoTitle').textContent=info.title;$('skillInfoText').textContent='GAD：'+info.gad+'\nULT：'+info.ult+'\n操作：タップでガジェット、ULTはドラッグして狙えます。PCは右クリック/Q と Space/E。\n左ドラッグで移動、右タップで射撃、右ドラッグで狙う。';
-  const vm=BrawlDesignV1.model({seatKeys:SEATS,seats:lobby.seats,stats:game?.stats||{},hp:game?.hp||{},myId,mySeat:mySeat(),now:hudNow,chars:CHARS,visible:id=>canSeeEnemy(targetPoint(id),id)});
+  const vm=BrawlDesignV1.model({seatKeys:SEATS,seats:lobby.seats,stats:game?.stats||{},hp:predictedEnemyHp(),myId,mySeat:mySeat(),now:hudNow,chars:CHARS,visible:id=>canSeeEnemy(targetPoint(id),id)});
  $('myLabel').textContent=(botPilot?'BOT / ':'YOU / ')+(CHARS[activeChar]?.label||'タンク');$('mySeat').textContent=mySeat().toUpperCase()+' · '+myTeam().toUpperCase();
  $('myHP').textContent=game.mode==='ko'&&hp===0&&game.phase==='playing'?'KO · BOT観戦中':Number.isFinite(hp)?Math.ceil(hp)+' / '+CHARS[activeChar].hp:'HP -';$('myHpFill').style.width=clamp((hp||0)/CHARS[activeChar].hp*100,0,100)+'%';
  const loaded=vm.ammo.ammo;$('myAmmo').textContent='弾 '+loaded+' / 3';[...$('myReload').children].forEach((el,i)=>{const fill=i<loaded?1:i===loaded?vm.ammo.progress:0;el.style.background=`linear-gradient(to right,#f4f9ff ${Math.round(fill*100)}%,#203646 ${Math.round(fill*100)}%)`;});
@@ -1208,7 +1271,7 @@ function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;re
  $('myBuff').textContent=me?.overdriveUntil>hudNow?'オーバードライブ中':me?.boostUntil>hudNow?'加速中':me?.armed?'強化爆弾準備中':'';
  $('allySummary').textContent=vm.allies.map(p=>'ALLY '+p.seat.toUpperCase().slice(-1)+' · '+(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO')).join('  ');
  $('enemyLabel').textContent=(myTeam()==='blue'?'RED':'BLUE')+' TEAM';$('enemyTeam').textContent='';
- $('enemySummary').textContent=vm.enemies.map((p,i)=>(i+1)+'  '+(p.known?(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO'):'?')).join('\n');
+ $('enemySummary').textContent=vm.enemies.map((p,i)=>(i+1)+'  '+(p.known?(p.hp>0?(hpPreviewHits.some(q=>q.victim===p.id)?'≈':'')+Math.ceil(p.hp)+'/'+p.maxHp:'KO'):'?')).join('\n');
  $('roundInfo').textContent='ROUND '+(game?.round||1)+' · BLUE '+(game?.scores?.blue||0)+' - '+(game?.scores?.red||0)+' RED'+(gasMargin()>0?' · GAS':'');
  if(game?.mode==='area'){$('roundInfo').textContent=`BLUE ${Math.floor((game.area?.blueMs||0)/BALANCE.areaCaptureMs*100)}% : ${Math.floor((game.area?.redMs||0)/BALANCE.areaCaptureMs*100)}% RED · ${Math.floor(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)/60)}:${String(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)%60).padStart(2,'0')}`;if(hp===0)$('myHP').textContent='復活まで '+Math.ceil(Math.max(0,(game.respawns?.[myId]||hudNow)-hudNow)/1000)+'秒';}
  $('gameBanner').firstChild.textContent=game?.mode==='area'?'2vs2 · HOT ZONE':'2vs2 · KNOCKOUT';
@@ -1260,7 +1323,7 @@ function attachRoom(){unwatch();lastSnapshotAt=0;snapshotGap=0;const thisRoom=ro
  watch(room.child('lobby'),'value',snap=>{lobby=snap.val();lobbyReady=true;if(!lobby||!mySeat()){if(joined){status('席が無効になったため退出しました');setTimeout(()=>{if(room===thisRoom)leave(false)},1000)}return;}
   ingestPositions();renderLobby();reconcileRoomView();if(lobby.status==='waiting')tryStart();});
  watch(room.child('presence'),'value',snap=>{presence=snap.val()||{};presenceReady=true;ingestPositions();renderLobby();checkPaused();drainActions();tryStart();});
- watch(room.child('game'),'value',snap=>{const snapshotNow=performance.now();if(lastSnapshotAt)snapshotGap=snapshotNow-lastSnapshotAt;lastSnapshotAt=snapshotNow;game=snap.val();WALLS=game?.mode==='area'?AREA_WALLS:KO_WALLS;BUSHES=game?.mode==='area'?AREA_BUSHES:KO_BUSHES;gameReady=true;reconcileRoomView();gadgetReceipts();if(roundResetKey===game?.matchId+':'+game?.round){syncMotion();renderCombatEvents();}});
+ watch(room.child('game'),'value',snap=>{const snapshotNow=performance.now();if(lastSnapshotAt)snapshotGap=snapshotNow-lastSnapshotAt;lastSnapshotAt=snapshotNow;const before=game;game=snap.val();reconcileHpPreviews(before,game);WALLS=game?.mode==='area'?AREA_WALLS:KO_WALLS;BUSHES=game?.mode==='area'?AREA_BUSHES:KO_BUSHES;gameReady=true;reconcileRoomView();gadgetReceipts();if(roundResetKey===game?.matchId+':'+game?.round){syncMotion();renderCombatEvents();}});
  watch(room.child('positions'),'value',snap=>{rawPositions=snap.val()||{};positionsReady=true;ingestPositions();reconcileRoomView();});
  watch(room.child('actions'),'child_added',snap=>{const a=snap.val();if(a&&snap.key)acceptAction({...a,eventId:snap.key});});
  // Existing effect history must never move the returning player a second time.
@@ -1350,9 +1413,9 @@ async function tryStart(){if(hostBusy||!joined||!connected||!clockReady||!lobbyR
    return {...cur,lobby:{...l,status:'playing',matchId,rematch:null},game:makeGame(matchId,l.seats,l.mode),actions:null,effects:null,positions:null};
   },undefined,false);
  }catch(e){status('対戦開始に失敗：'+errorText(e));}finally{hostBusy=false;}}
-function initLocal(){remotePositionReceivedAt.clear();view.cx=NaN;view.cy=NaN;view.overhead=false;updateCameraLabel();const seat=mySeat(),s=SPAWNS[seat]||SPAWNS.blue1,p=rawPositions[myId],restore=validPosition(p)&&p.motionRev===(game.motions?.[myId]?.rev||0)&&p.life===(game.stats?.[myId]?.life||0);const m=game.motions?.[myId]||s;local={x:restore?p.x:m.x,y:restore?p.y:m.y,a:restore?p.a:m.a,vx:0,vy:0};appliedMotionRev=m.rev||0;sendSeq=restore?p.seq:0;actionSeq=Math.max(actionSeq,game.stats?.[myId]?.lastActionSeq||0);lastSend=0;pointer=null;aimPointer=null;ultPointer=null;dashUntil=0;pausedSince=0;clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();predictedActions.clear();seenActions.clear();seenEffects.clear();processedNetworkSeq={};revealed={};fx=[];for(const id of Object.keys(remotes))delete remotes[id];}
+function initLocal(){hpPreviewHits=[];remotePositionReceivedAt.clear();view.cx=NaN;view.cy=NaN;view.overhead=false;updateCameraLabel();const seat=mySeat(),s=SPAWNS[seat]||SPAWNS.blue1,p=rawPositions[myId],restore=validPosition(p)&&p.motionRev===(game.motions?.[myId]?.rev||0)&&p.life===(game.stats?.[myId]?.life||0);const m=game.motions?.[myId]||s;local={x:restore?p.x:m.x,y:restore?p.y:m.y,a:restore?p.a:m.a,vx:0,vy:0};appliedMotionRev=m.rev||0;sendSeq=restore?p.seq:0;actionSeq=Math.max(actionSeq,game.stats?.[myId]?.lastActionSeq||0);lastSend=0;pointer=null;aimPointer=null;ultPointer=null;dashUntil=0;pausedSince=0;clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();predictedActions.clear();seenActions.clear();seenEffects.clear();processedNetworkSeq={};revealed={};fx=[];for(const id of Object.keys(remotes))delete remotes[id];}
 function ensureRoundLocal(){if(!positionsReady||!game||!lobby||game.matchId!==lobby.matchId)return;ingestPositions();const key=game.matchId+':'+game.round;if(roundResetKey===key)return;initLocal();roundResetKey=key;}
-function resetTransientCombat(){pointer=null;aimPointer=null;ultPointer=null;pcKeys.clear();pcAim=null;pcCursor=null;bulletVisuals.clear();clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();fx=[];lastUseLocal=0;lastShootLocal=0;}
+function resetTransientCombat(){hpPreviewHits=[];pointer=null;aimPointer=null;ultPointer=null;pcKeys.clear();pcAim=null;pcCursor=null;bulletVisuals.clear();clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();fx=[];lastUseLocal=0;lastShootLocal=0;}
 function checkPaused(){if(scene!=='game'||!game||!lobby)return;
  const remoteMissing=!allPresent(),sharedPaused=game.phase==='paused';paused=sharedPaused||remoteMissing||game.phase==='aborted';
  const key=game.matchId+':'+game.round+':'+(sharedPaused?game.pausedAt:'missing');
@@ -1398,7 +1461,7 @@ async function managePauseState(){if(phaseBusy||!room||!lobby||!game||!connected
 // Gas progresses from the shared startAt and is applied once per second by host.
 
 async function leave(removeSeat=true){if(leaveBusy)return;if(!joined){showScene('home');return;}
- leaveBusy=true;for(const id of ['soloBtn','createBtn','joinBtn','joinBotBtn'])$(id).disabled=true;try{const wasSolo=solo,memory=wasSolo?db:null;const r=room,id=myId,cid=myConnection;unwatch();joined=false;room=null;roomId='';myConnection='';connected=false;lobby=null;game=null;positions={};pointer=null;aimPointer=null;ultPointer=null;paused=false;clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];
+ leaveBusy=true;for(const id of ['soloBtn','createBtn','joinBtn','joinBotBtn'])$(id).disabled=true;try{const wasSolo=solo,memory=wasSolo?db:null;const r=room,id=myId,cid=myConnection;unwatch();joined=false;room=null;roomId='';myConnection='';connected=false;lobby=null;game=null;positions={};hpPreviewHits=[];pointer=null;aimPointer=null;ultPointer=null;paused=false;clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];
  showScene('home');$('homeStatus').textContent='ルームから退出しました';
  try{if(removeSeat&&r){await r.child('lobby').transaction(cur=>{
   if(!cur)return;const key=SEATS.find(k=>cur.seats?.[k]?.id===id);if(!key)return;
@@ -1547,7 +1610,7 @@ function projectileStep(list,dt,authoritative){const hits=[];
    width:W,height:H,rangeFirst:true,
    wallHit:(x,y,r)=>WALLS.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
    targetHit:b=>{
-    if(!authoritative)return false;
+    if(!authoritative)return previewVisibleBulletCollision(b,b.x,b.y);
     for(const k of SEATS){
      if(teamOfSeat(k)===b.team)continue;
      const p=lobby?.seats?.[k];if(!p||!(game?.hp?.[p.id]>0))continue;
@@ -1782,6 +1845,9 @@ const remotes={};
    let p=bulletVisuals.get(bullet.id);
    if(!p){p={x:targetX,y:targetY};bulletVisuals.set(bullet.id,p);}
    else{p.x+=(targetX-p.x)*weight;p.y+=(targetY-p.y)*weight;}
+   // A host-accepted projectile may replace a local visual before it reaches an enemy.
+   // Track the same HUD-only provisional hit from authoritative projectile presentation too.
+   if(bullet.owner===myId)previewVisibleBulletCollision(bullet,p.x,p.y);
    ctx.strokeStyle=bullet.team==='blue'?'#9ce6ff':'#ffbdc8';
    ctx.lineWidth=bullet.char==='sniper'?4:3;
    ctx.beginPath();ctx.arc(p.x,p.y,bullet.char==='sniper'?6:4,0,Math.PI*2);ctx.stroke();
