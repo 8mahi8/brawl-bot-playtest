@@ -10,7 +10,7 @@ for(const file of sources){
  const html=fs.readFileSync(path.join(root,file),'utf8');
  const match=html.match(/const guardian=h\.owner==='gas'\?null:\(seatKeys\.map\(k=>g\.seats\[k\]\.id\)\.find\(id=>\{[\s\S]*?\}\)\|\|null\);/);
  assert(match,'Un-guarded event must be null-normalized in '+file);
- const body=match[0].replace(/^const guardian/,'var guardian')+'\n guardian;';
+ const body=match[0].replace(/^const guardian/,'var guardian')+'\n return guardian;';
  const cx=vm.createContext({});
  const fn=new vm.Script('(function(h,seatKeys,g,t){'+body+'})',{filename:file}).runInContext(cx);
  const g={
