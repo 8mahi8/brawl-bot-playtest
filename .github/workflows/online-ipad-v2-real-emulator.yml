@@ -8,6 +8,7 @@ on:
       - 'tests/online-remote-presentation.cjs'
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-hp-preview.cjs'
+      - 'tests/online-host-action-batching.cjs'
       - 'firebase.online-e2e.json'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
       - '.github/workflows/online-ipad-v2-real-emulator.yml'
@@ -19,6 +20,7 @@ on:
       - 'tests/online-remote-presentation.cjs'
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-hp-preview.cjs'
+      - 'tests/online-host-action-batching.cjs'
       - 'firebase.online-e2e.json'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
       - '.github/workflows/online-ipad-v2-real-emulator.yml'
@@ -47,6 +49,8 @@ jobs:
         run: node tests/online-host-fast-dispatch.cjs
       - name: Verify 2vs2 provisional HUD hit feedback and reconciliation
         run: node tests/online-hp-preview.cjs
+      - name: Verify bounded host-action batching and transaction safety
+        run: node tests/online-host-action-batching.cjs
       - name: Install local Firebase emulator CLI and WebKit
         run: |
           npm install --no-save --package-lock=false firebase-tools@14.24.0 playwright-core@1.56.1

@@ -118,6 +118,15 @@ async function run(browser,spec,count,botIndex=-1){
    await observer.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,{k:spec.qa,id:hostId,seq:before},{timeout:10000});
    const peerAckMs=Date.now()-shotSentAt;
    console.log('PASS squad 4 participants: touch shot authoritative ack '+hostAckMs+'ms, other-client ack '+peerAckMs+'ms (local RTDB emulator, not real network RTT)');
+   // Verify four real clients can submit near-concurrent shots; all receipts must
+   // survive the host's bounded batch transaction and appear on every client.
+   await delay(450);
+   const initial=await Promise.all(clients.map(c=>snap(c,spec)));
+   const shots=initial.map(q=>({id:q.myId,seq:q.stats[q.myId].lastActionSeq}));
+   await Promise.all(clients.map(c=>c.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000})));
+   await shooter.page.waitForFunction(({key,expected})=>{const q=window[key]?.();return !!q?.stats&&expected.every(p=>q.stats[p.id]?.lastActionSeq>p.seq);},{key:spec.qa,expected:shots},{timeout:16000});
+   await observer.page.waitForFunction(({key,expected})=>{const q=window[key]?.();return !!q?.stats&&expected.every(p=>q.stats[p.id]?.lastActionSeq>p.seq);},{key:spec.qa,expected:shots},{timeout:16000});
+   console.log('PASS squad 4 near-concurrent real-client shots: all four player action sequences accepted and replicated');
   }
   for(const c of clients)assert.deepEqual(c.issues.filter(x=>x.startsWith('JS ')),[],'browser runtime '+c.who);
  }catch(error){
