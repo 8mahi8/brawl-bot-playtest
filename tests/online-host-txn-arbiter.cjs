@@ -20,6 +20,7 @@ function rig(opts={}){
  }}}};
  const c={
   combatBusy:false,hostProcessing:!!opts.hostProcessing,
+  combatTickCalls:0,combatTickSkips:{busy:0,queue:0,scope:0,clock:0},
   hostQueue:opts.queued?[{eventId:'shot'}]:[],
   game:{...current},room,myConnection:'host1',console,
   serverNow:()=>10000,isAuthoritative:()=>opts.host!==false,combatReady:()=>opts.ready!==false,
