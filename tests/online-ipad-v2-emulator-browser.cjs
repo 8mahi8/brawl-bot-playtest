@@ -168,7 +168,7 @@ async function run(browser,spec,count,botIndex=-1){
     for(const [ix,c] of clients.entries()){
      const q=await snap(c,spec);
      console.error('DAMAGE TIMEOUT '+ix+' '+JSON.stringify({
-      hostAuthorized:q.hostAuthorized,combatReady:q.combatReadyNow,hostTimerActive:q.hostTimerActive,hostTimerPulses:q.hostTimerPulses,combatTickCalls:q.combatTickCalls,combatTickSkips:q.combatTickSkips,combatTickResults:q.combatTickResults,
+      hostAuthorized:q.hostAuthorized,combatReady:q.combatReadyNow,hostTimerActive:q.hostTimerActive,hostTimerPulses:q.hostTimerPulses,combatTickCalls:q.combatTickCalls,combatTickSkips:q.combatTickSkips,combatTickResults:q.combatTickResults,combatTickLastError:q.combatTickLastError,
       combatBusy:q.combatBusy,hostProcessing:q.hostProcessing,hostActionDispatchQueued:q.hostActionDispatchQueued,
       hostQueue:q.hostQueue,pendingActionCount:q.pendingActionCount,
       clockLag:q.hostClockLag,clock:q.combat?.clock,rev:q.combat?.combatRev,
