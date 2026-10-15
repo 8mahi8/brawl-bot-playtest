@@ -1110,6 +1110,20 @@ function previewOwnBulletHit(b,victim,damage){
  if(hpPreviewHits.length>36)hpPreviewHits.shift();
  renderGameHUD();
 }
+function previewVisibleBulletCollision(b,x,y){
+ if(!b||b.owner!==myId||solo||botPilot||paused||!game||game.phase!=='playing'||!Number.isFinite(x)||!Number.isFinite(y))return false;
+ for(const k of SEATS){
+  if(teamOfSeat(k)===b.team)continue;
+  const p=lobby?.seats?.[k];if(!p||!(game?.hp?.[p.id]>0))continue;
+  const pos=targetPoint(p.id);
+  if(!canSeeEnemy(pos,p.id))continue;
+  if(BrawlProjectileV1.hitCircle(x,y,pos.x,pos.y,R+(b.radius||6))){
+   previewOwnBulletHit(b,p.id,BrawlProjectileV1.damage(b,BrawlCombatV8.tankDamage));
+   return true;
+  }
+ }
+ return false;
+}
 function reconcileHpPreviews(previous,next){
  if(!previous||!next||next.phase!=='playing'||previous.matchId!==next.matchId||previous.round!==next.round){
   hpPreviewHits=[];return;
@@ -1596,22 +1610,7 @@ function projectileStep(list,dt,authoritative){const hits=[];
    width:W,height:H,rangeFirst:true,
    wallHit:(x,y,r)=>WALLS.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
    targetHit:b=>{
-    if(!authoritative){
-     // Local visuals may show provisional HP only for visible enemies, never commit damage.
-     if(b.owner!==myId)return false;
-     for(const k of SEATS){
-      if(teamOfSeat(k)===b.team)continue;
-      const p=lobby?.seats?.[k];
-      if(!p||!(game?.hp?.[p.id]>0))continue;
-      const pos=targetPoint(p.id);
-      if(!canSeeEnemy(pos,p.id))continue;
-      if(BrawlProjectileV1.hitCircle(b.x,b.y,pos.x,pos.y,R+b.radius)){
-       previewOwnBulletHit(b,p.id,BrawlProjectileV1.damage(b,BrawlCombatV8.tankDamage));
-       return true; // Stop only the local visual projectile at the anticipated impact.
-      }
-     }
-     return false;
-    }
+    if(!authoritative)return previewVisibleBulletCollision(b,b.x,b.y);
     for(const k of SEATS){
      if(teamOfSeat(k)===b.team)continue;
      const p=lobby?.seats?.[k];if(!p||!(game?.hp?.[p.id]>0))continue;
@@ -1846,6 +1845,9 @@ const remotes={};
    let p=bulletVisuals.get(bullet.id);
    if(!p){p={x:targetX,y:targetY};bulletVisuals.set(bullet.id,p);}
    else{p.x+=(targetX-p.x)*weight;p.y+=(targetY-p.y)*weight;}
+   // A host-accepted projectile may replace a local visual before it reaches an enemy.
+   // Track the same HUD-only provisional hit from authoritative projectile presentation too.
+   if(bullet.owner===myId)previewVisibleBulletCollision(bullet,p.x,p.y);
    ctx.strokeStyle=bullet.team==='blue'?'#9ce6ff':'#ffbdc8';
    ctx.lineWidth=bullet.char==='sniper'?4:3;
    ctx.beginPath();ctx.arc(p.x,p.y,bullet.char==='sniper'?6:4,0,Math.PI*2);ctx.stroke();
