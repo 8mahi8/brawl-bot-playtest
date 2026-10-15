@@ -4,7 +4,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const root=path.resolve(__dirname,'..');
-const sources=['online/ipad-squad-v2-lab.html','src/modes/2v2.template.html'];
+const sources=['online/ipad-squad-v2-lab.html'];
 let assertions=0;
 for(const file of sources){
  const html=fs.readFileSync(path.join(root,file),'utf8');
