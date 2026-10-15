@@ -2,7 +2,7 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'../online/ipad-squad-v2-lab.html'),'utf8');
-const names=['pruneHpPreviews','predictedEnemyHp','previewOwnBulletHit','reconcileHpPreviews'];
+const names=['pruneHpPreviews','predictedEnemyHp','previewOwnBulletHit','previewVisibleBulletCollision','reconcileHpPreviews'];
 function extract(name){
  const re=new RegExp('function '+name+'\\([^\\n]*\\)\\{[\\s\\S]*?\\n\\}');
  const m=html.match(re);assert(m,'Extract exact source function '+name);return m[0];
@@ -11,7 +11,9 @@ const blocks=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map
 for(const [i,b]of blocks.entries())new vm.Script(b,{filename:'squad inline script '+i});
 assert(html.includes("hp:predictedEnemyHp()"),'HUD uses previews');
 assert(html.includes("reconcileHpPreviews(before,game)"),'RTDB snapshot reconciles HP');
-assert(html.includes("previewOwnBulletHit(b,p.id,BrawlProjectileV1.damage("),'locally rendered projectile triggers prediction');
+assert(html.includes("previewOwnBulletHit(b,p.id,BrawlProjectileV1.damage("),'prediction uses local hit preview helper');
+assert(html.includes("if(!authoritative)return previewVisibleBulletCollision(b,b.x,b.y);"),'local bullet path triggers collision preview');
+assert(html.includes("if(bullet.owner===myId)previewVisibleBulletCollision(bullet,p.x,p.y);"),'host-accepted bullet presentation also triggers collision preview');
 assert(html.includes("if(!canSeeEnemy(pos,p.id))continue;"),'hidden players not leaked');
 assert(!html.includes('ref.child("hpPreview")')&&!html.includes("room.child('hpPreview')"),'no new network writes');
 function rig(){
@@ -20,10 +22,14 @@ function rig(){
   console,Math,Number,performance:{now:()=>now},
   hpPreviewHits:[],HP_PREVIEW_TTL:1400,paused:false,solo:false,botPilot:false,myId:'shooter',
   game:{matchId:'match',round:1,phase:'playing',hp:{shooter:100,enemy:100},stats:{enemy:{life:1}}},
-  canSeeEnemy:()=>true,targetPoint:()=>({x:10,y:10}),renderGameHUD:()=>{context.hudCalls++},hudCalls:0
+  canSeeEnemy:()=>true,targetPoint:()=>({x:10,y:10}),renderGameHUD:()=>{context.hudCalls++},hudCalls:0,
+  SEATS:['blue1','red1'],R:18,lobby:{seats:{blue1:{id:'shooter'},red1:{id:'enemy'}}},
+  teamOfSeat:k=>k.slice(0,3)==='red'?'red':'blue',
+  BrawlProjectileV1:{hitCircle:(x,y,tx,ty,r)=>Math.hypot(x-tx,y-ty)<=r,damage:b=>b.damage},
+  BrawlCombatV8:{tankDamage:()=>0},
  };
  vm.createContext(context);
- const script=names.map(extract).join('\n')+'\nthis.fx={pruneHpPreviews,predictedEnemyHp,previewOwnBulletHit,reconcileHpPreviews};';
+ const script=names.map(extract).join('\n')+'\nthis.fx={pruneHpPreviews,predictedEnemyHp,previewOwnBulletHit,previewVisibleBulletCollision,reconcileHpPreviews};';
  vm.runInContext(script,context);
  return{
   c:context,
@@ -54,4 +60,7 @@ test('offline and BOT modes do not predict',()=>{const r=rig();r.c.solo=true;r.h
 test('other shooters cannot produce local prediction',()=>{const r=rig();r.c.fx.previewOwnBulletHit({id:'other',owner:'someoneElse'},'enemy',12);assert.equal(r.pending(),0)});
 test('paused gameplay hides preview',()=>{const r=rig();r.hit('shot');r.c.paused=true;assert.equal(r.hp(),100)});
 test('server healing cancels preview',()=>{const r=rig();r.nextSnapshot(90);r.hit('shot');r.nextSnapshot(92);assert.equal(r.hp(),92);assert.equal(r.pending(),0)});
+test('local visual collision shows provisional HP',()=>{const r=rig();const b={id:'shot1',owner:'shooter',team:'blue',radius:6,damage:12};assert.equal(r.c.fx.previewVisibleBulletCollision(b,10,10),true);assert.equal(r.hp(),88)});
+test('host-accepted visual collision shares projectile deduplication',()=>{const r=rig();const b={id:'shot1',owner:'shooter',team:'blue',radius:6,damage:12};r.c.fx.previewVisibleBulletCollision(b,10,10);r.c.fx.previewVisibleBulletCollision(b,10,10);assert.equal(r.pending(),1);assert.equal(r.hp(),88)});
+test('distant or invisible enemy cannot show speculative HP',()=>{const r=rig();const b={id:'shot1',owner:'shooter',team:'blue',radius:6,damage:12};assert.equal(r.c.fx.previewVisibleBulletCollision(b,500,300),false);r.c.canSeeEnemy=()=>false;assert.equal(r.c.fx.previewVisibleBulletCollision(b,10,10),false);assert.equal(r.pending(),0)});
 console.log('PASS '+count+' HUD preview cases, '+blocks.length+' embedded JavaScript blocks parsed');
