@@ -507,10 +507,10 @@ html,body,#app{background:#081720;color:#ecf7f5}
    for(const h of hits){
     if(!(g.hp[h.victim]>0))continue;
     g.combatAt[h.victim]=t;if(g.stats[h.owner])g.combatAt[h.owner]=t;
-    const guardian=h.owner==='gas'?null:seatKeys.map(k=>g.seats[k].id).find(id=>{
+    const guardian=h.owner==='gas'?null:(seatKeys.map(k=>g.seats[k].id).find(id=>{
      const st=g.stats[id];
      return st?.char==='tank'&&st.guardUntil>t&&g.hp[id]>0&&(id===h.victim||(st.guardTargetId===h.victim&&st.guardTargetLife===g.stats[h.victim].life));
-    });
+    })||null);
     const result=BrawlMatchV1.applyHit(g,h,t,BALANCE,{guardian});
     if(!result)continue;
     emit('hit',{owner:h.owner,victim:h.victim,amount:result.amount,guarded:!!guardian,guardian,
