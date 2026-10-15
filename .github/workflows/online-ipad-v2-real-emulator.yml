@@ -6,6 +6,7 @@ on:
       - 'online/ipad-squad-v2-lab.html'
       - 'tests/online-ipad-v2-emulator-browser.cjs'
       - 'tests/online-remote-presentation.cjs'
+      - 'tests/online-host-fast-dispatch.cjs'
       - 'firebase.online-e2e.json'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
       - '.github/workflows/online-ipad-v2-real-emulator.yml'
@@ -15,6 +16,7 @@ on:
       - 'online/ipad-squad-v2-lab.html'
       - 'tests/online-ipad-v2-emulator-browser.cjs'
       - 'tests/online-remote-presentation.cjs'
+      - 'tests/online-host-fast-dispatch.cjs'
       - 'firebase.online-e2e.json'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
       - '.github/workflows/online-ipad-v2-real-emulator.yml'
@@ -39,6 +41,8 @@ jobs:
           java-version: '21'
       - name: Verify visual-only position prediction and HTML syntax
         run: node tests/online-remote-presentation.cjs
+      - name: Verify responsive 2vs2 shot dispatch gating and HTML syntax
+        run: node tests/online-host-fast-dispatch.cjs
       - name: Install local Firebase emulator CLI and WebKit
         run: |
           npm install --no-save --package-lock=false firebase-tools@14.24.0 playwright-core@1.56.1
