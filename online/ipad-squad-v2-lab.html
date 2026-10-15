@@ -1499,7 +1499,26 @@ function renderCombatEvents(){for(const [id,e] of Object.entries(game?.events||{
 }}
 async function claimHost(){if(claimBusy||!isAuthoritative()||game?.hostToken===myConnection||presence[myId]?.[game?.hostToken])return;claimBusy=true;const match=game.matchId,token=myConnection;try{await room.child('game').transaction(g=>g?.matchId===match&&!presence[myId]?.[g.hostToken]?{...g,hostToken:token}:undefined,undefined,false);}finally{claimBusy=false;}}
 function inputSnapshot(){const input=structuredClone(positions);input[myId]={...local,matchId:game?.matchId,round:game?.round,motionRev:appliedMotionRev,life:game?.stats?.[myId]?.life||0};return input;}
-async function processCombatTick(){if(combatBusy||!isAuthoritative()||!combatReady()||game.hostToken!==myConnection)return;combatBusy=true;const now=serverNow(),rev=game.combatRev,token=myConnection,input=inputSnapshot(),match=game.matchId,round=game.round;try{await room.child('game').transaction(g=>{if(!g||g.matchId!==match||g.round!==round)return;const n=engine(g).step(g,input,now,rev,token);return n===g?undefined:n;},undefined,false);}catch(e){console.warn('Combat tick',e);}finally{combatBusy=false;}}
+// Firebase RTDB serializes writes on the same game node. Never compete with a
+// host action batch, and skip a network transaction before physics can advance.
+async function processCombatTick(){
+ if(combatBusy||hostProcessing||hostQueue.length||!isAuthoritative()||!combatReady()||game.hostToken!==myConnection)return;
+ const now=serverNow();
+ if(!Number.isFinite(game.clock?.wallAt)||now-game.clock.wallAt<50)return;
+ combatBusy=true;
+ const activeRoom=room,rev=game.combatRev,token=myConnection,input=inputSnapshot(),match=game.matchId,round=game.round;
+ try{
+  await activeRoom.child('game').transaction(g=>{
+   if(!g||g.hostToken!==token||g.matchId!==match||g.round!==round)return;
+   const n=engine(g).step(g,input,now,rev,token);
+   return n===g?undefined:n;
+  },undefined,false);
+ }catch(e){console.warn('Combat tick',e);}
+ finally{
+  combatBusy=false;
+  if(room===activeRoom&&hostQueue.length)scheduleHostActionDispatch();
+ }
+}
 
 function isAuthoritative(){return joined&&connected&&clockReady&&lobbyReady&&gameReady&&presenceReady&&room&&lobby?.ownerId===myId&&!pageSuspended&&!!myConnection;}
 function allPresent(){return !!lobby&&connected&&SEATS.every(k=>isOnline(lobby.seats?.[k]?.id));}
@@ -1599,7 +1618,7 @@ function submitAction(action,errorPrefix){const roomKey=room.key,owner=myId,ref=
 // Order, per-player sequence checks, replay receipts, and damage stay in the engine.
 const HOST_ACTION_BATCH_LIMIT=6;
 async function processHostQueue(){
- if(!combatReady()||!isAuthoritative()||hostProcessing||!hostQueue.length||game.hostToken!==myConnection)return;
+ if(!combatReady()||!isAuthoritative()||hostProcessing||combatBusy||!hostQueue.length||game.hostToken!==myConnection)return;
  const activeRoom=room,match=game.matchId,round=game.round,token=myConnection;
  let activeBatch=[];hostProcessing=true;
  try{
@@ -1614,6 +1633,12 @@ async function processHostQueue(){
     if(!g||g.hostToken!==token||g.matchId!==match||g.round!==round||g.phase!=='playing')return;
     let next=g;
     for(const a of activeBatch)next=engine(next).accept(next,a,input,now);
+    // A received shot normally waits for a second Firebase round trip before
+    // any bullet/HP physics can advance. If >=50ms elapsed, step in THIS SAME
+    // authoritative transaction. The shared engine still determines all hits.
+    if(next?.phase==='playing'&&now-next.clock?.wallAt>=50){
+     next=engine(next).step(next,input,now,next.combatRev,token);
+    }
     return next===g?undefined:next;
    },undefined,false);
    activeBatch=[];
@@ -1622,7 +1647,12 @@ async function processHostQueue(){
   // Failed transaction: allow confirmed pending requests to be re-queued.
   for(const a of activeBatch)queuedActions.delete(a.eventId);
   console.warn('Host action batch',e);
- }finally{hostProcessing=false;}
+ }finally{
+  hostProcessing=false;
+  // The 100ms timer is still a fallback; avoid losing new actions enqueued
+  // while the previous transaction was in flight.
+  if(room===activeRoom&&hostQueue.length)scheduleHostActionDispatch();
+ }
 }
 
 function projectileStep(list,dt,authoritative){const hits=[];
