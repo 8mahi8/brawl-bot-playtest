@@ -111,10 +111,13 @@ async function run(browser,spec,count,botIndex=-1){
    const hostId=q.myId,before=q.stats[hostId].lastActionSeq;
    const startupWait=Math.max(250,Math.min(3500,q.combat.startAt-Date.now()+450));
    await delay(startupWait);
+   const shotSentAt=Date.now();
    await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
    await shooter.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,{k:spec.qa,id:hostId,seq:before},{timeout:10000});
+   const hostAckMs=Date.now()-shotSentAt;
    await observer.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,{k:spec.qa,id:hostId,seq:before},{timeout:10000});
-   console.log('PASS squad 4 participants: real touch shot reaches authoritative battle state and second client');
+   const peerAckMs=Date.now()-shotSentAt;
+   console.log('PASS squad 4 participants: touch shot authoritative ack '+hostAckMs+'ms, other-client ack '+peerAckMs+'ms (local RTDB emulator, not real network RTT)');
   }
   for(const c of clients)assert.deepEqual(c.issues.filter(x=>x.startsWith('JS ')),[],'browser runtime '+c.who);
  }catch(error){

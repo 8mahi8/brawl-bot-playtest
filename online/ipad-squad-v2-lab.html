@@ -1485,7 +1485,20 @@ function acceptAction(a,localPrediction=false){if(!validActionRequest(a)||failed
 }
 function actionReceipt(a,acceptedAt){return {owner:a.owner,seq:a.seq,type:a.type,at:a.at,acceptedAt};}
 function validActionReceipt(a,r){return !!r&&typeof r==='object'&&r.owner===a.owner&&r.seq===a.seq&&r.type===a.type&&r.at===a.at&&Number.isFinite(r.acceptedAt)&&a.at<=r.acceptedAt+ACTION_FUTURE&&a.at>=r.acceptedAt-ACTION_TTL;}
-function drainActions(){const now=serverNow();
+// Dispatch server-confirmed shots without the extra wait for the 100ms host poll.
+ // Coalesce short bursts into one microtask; authoritative collision remains unchanged.
+ let hostActionDispatchQueued=false;
+ function scheduleHostActionDispatch(){
+  if(hostActionDispatchQueued||hostProcessing||!hostQueue.length||!isAuthoritative()||!combatReady())return;
+  hostActionDispatchQueued=true;
+  const activeRoom=room,matchId=game.matchId,round=game.round;
+  queueMicrotask(()=>{
+   hostActionDispatchQueued=false;
+   if(room!==activeRoom||game?.matchId!==matchId||game?.round!==round||!combatReady()||!isAuthoritative()||!hostQueue.length)return;
+   processHostQueue().catch(e=>console.warn('Fast host action dispatch',e));
+  });
+ }
+ function drainActions(){const now=serverNow();
  if(!clockReady)return;
  for(const [id,p]of pendingActions)if(p.action.at<now-ACTION_TTL||p.action.at>now+ACTION_FUTURE||failedLocalActions.has(id)){pendingActions.delete(id);clientBullets=clientBullets.filter(b=>!b.id.startsWith(id+':'));}
  if(!lobbyReady||!gameReady||!presenceReady||!positionsReady||!game||game.matchId!==lobby?.matchId||roundResetKey!==game.matchId+':'+game.round||pageSuspended)return;
@@ -1503,6 +1516,7 @@ function drainActions(){const now=serverNow();
    boundedRemember(queuedActions,id);hostQueue.push(a);
   }
  }
+ scheduleHostActionDispatch();
 }
 function submitAction(action,errorPrefix){const roomKey=room.key,owner=myId,ref=room.child('actions').push(),a={...action,eventId:ref.key};
  localPendingWrites.add(a.eventId);acceptAction(a,true);
