@@ -10,11 +10,11 @@ const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].ma
 scripts.forEach((code,i)=>new vm.Script(code,{filename:'full 2vs2 script '+i}));
 const action=(id,owner='a',extra={})=>({eventId:id,owner,connectionId:'cid',at:10000,matchId:'M1',round:1,seq:Number(id.replace(/\D/g,''))||1,...extra});
 function rig(actions,options={}){
- const events={writes:0,callCount:0,snapshot:0,commits:[],logs:[]};
- let store={hostToken:'hostCID',matchId:'M1',round:1,phase:'playing',processed:[]};
+ const events={writes:0,callCount:0,snapshot:0,steps:0,commits:[],logs:[]};
+ let store={hostToken:'hostCID',matchId:'M1',round:1,phase:'playing',processed:[],clock:{wallAt:options.clockWallAt??9900,t:0},combatRev:0};
  const presence={a:{cid:true},b:{cid:true}};
  const c={
-  HOST_ACTION_BATCH_LIMIT:6,hostProcessing:false,hostQueue:[...actions],game:{...store},
+  HOST_ACTION_BATCH_LIMIT:6,hostProcessing:false,combatBusy:!!options.combatBusy,hostQueue:[...actions],game:{...store},
   room:null,myConnection:'hostCID',presence,queuedActions:new Set(actions.map(a=>a.eventId)),
   ACTION_TTL:3000,ACTION_FUTURE:250,console:{warn:(...xs)=>events.logs.push(xs.join(' '))},
   combatReady:()=>options.ready!==false,
@@ -22,7 +22,14 @@ function rig(actions,options={}){
   validActionRequest:a=>a.type!=='invalid',
   inputSnapshot:()=>{events.snapshot++;return{}},
   serverNow:()=>10000,
-  engine:()=>({accept:(g,a)=>({...g,processed:[...g.processed,a.eventId]})})
+  engine:()=>({
+   accept:(g,a)=>({...g,processed:[...g.processed,a.eventId]}),
+   step:(g,_input,at,rev,token)=>{
+    assert.equal(token,'hostCID');assert.equal(rev,g.combatRev);
+    events.steps++;
+    return {...g,combatRev:rev+1,clock:{wallAt:at,t:g.clock.t+100}};
+   }
+  })
  };
  const room={
   child(path){
@@ -83,6 +90,28 @@ async function check(name,fn){await fn();passed++;console.log('PASS batch host a
  });
  await check('batch has no network writes for invalid-only set',async()=>{
   const r=rig([action('bad1','a',{type:'invalid'})]);await r.run();assert.equal(r.events.writes,0);
+ });
+ await check('shot acceptance and due bullet physics happen in the SAME transaction',async()=>{
+  const r=rig([action('shot1'),action('shot2')]);
+  await r.run();
+  assert.equal(r.events.writes,1);
+  assert.equal(r.events.steps,1);
+  assert.equal(r.read().combatRev,1);
+  assert.equal(r.read().clock.wallAt,10000);
+  assert.equal(r.read().processed.join(','),'shot1,shot2');
+ });
+ await check('too-young physics clock avoids extra step but accepts shot',async()=>{
+  const r=rig([action('shot1')],{clockWallAt:9980});
+  await r.run();
+  assert.equal(r.events.writes,1);
+  assert.equal(r.events.steps,0);
+  assert.equal(r.read().processed.length,1);
+ });
+ await check('in-flight combat tick blocks action transaction competition',async()=>{
+  const r=rig([action('shot1')],{combatBusy:true});
+  await r.run();
+  assert.equal(r.events.writes,0);
+  assert.equal(r.c.hostQueue.length,1);
  });
  console.log('PASS '+passed+' batching cases and '+scripts.length+' embedded JS scripts compiled');
 })().catch(e=>{console.error(e.stack||e);process.exitCode=1});
