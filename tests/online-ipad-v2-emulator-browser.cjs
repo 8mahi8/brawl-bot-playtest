@@ -161,8 +161,25 @@ async function run(browser,spec,count,botIndex=-1){
    await delay(1000);
    const afterInfo=await snap(shooter,spec);
    console.log('HP DAMAGE SHOT '+JSON.stringify({hostAmmo:afterInfo.stats[attackerId]?.ammo,hostHP:afterInfo.hp[attackerId],victimHP:afterInfo.hp[victimId],hostPosition:afterInfo.local,victimPosition:afterInfo.positionValues[victimId],projectiles:afterInfo.combat?.projectiles,events:afterInfo.combat?.events,usedActions:afterInfo.combat?.usedActions,combatClock:afterInfo.combat?.clock}));
-   await shooter.page.waitForFunction(({k,victim,hp})=>(window[k]?.()?.hp?.[victim]??Infinity)<hp,
-    {k:spec.qa,victim:victimId,hp:hpBefore},{timeout:8000});
+   try{
+    await shooter.page.waitForFunction(({k,victim,hp})=>(window[k]?.()?.hp?.[victim]??Infinity)<hp,
+      {k:spec.qa,victim:victimId,hp:hpBefore},{timeout:8000});
+   }catch(err){
+    for(const [ix,c] of clients.entries()){
+     const q=await snap(c,spec);
+     console.error('DAMAGE TIMEOUT '+ix+' '+JSON.stringify({
+      hostAuthorized:q.hostAuthorized,combatReady:q.combatReadyNow,
+      combatBusy:q.combatBusy,hostProcessing:q.hostProcessing,hostActionDispatchQueued:q.hostActionDispatchQueued,
+      hostQueue:q.hostQueue,pendingActionCount:q.pendingActionCount,
+      clockLag:q.hostClockLag,clock:q.combat?.clock,rev:q.combat?.combatRev,
+      phase:q.game,token:q.gameHostToken,cid:q.connectionId,
+      victimHP:q.hp?.[victimId],shots:q.shots,
+      projectileIds:Object.keys(q.combat?.projectiles||{}),
+      position:q.positionValues?.[victimId],stats:q.stats?.[attackerId]
+     }));
+    }
+    throw err;
+   }
    await clients[targetIndex].page.waitForFunction(({k,victim,hp})=>(window[k]?.()?.hp?.[victim]??Infinity)<hp,
     {k:spec.qa,victim:victimId,hp:hpBefore},{timeout:12000});
    const hpAfter=(await snap(clients[targetIndex],spec)).hp[victimId];
