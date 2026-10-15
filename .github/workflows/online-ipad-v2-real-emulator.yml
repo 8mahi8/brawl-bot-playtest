@@ -27,6 +27,9 @@ on:
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
       - '.github/workflows/online-ipad-v2-real-emulator.yml'
   workflow_dispatch:
+concurrency:
+  group: brawl-real-emulator-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
