@@ -598,10 +598,10 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
    for(const h of hits){
     if(!(g.hp[h.victim]>0))continue;
     g.combatAt[h.victim]=t;if(g.stats[h.owner])g.combatAt[h.owner]=t;
-    const guardian=h.owner==='gas'?null:seatKeys.map(k=>g.seats[k].id).find(id=>{
+    const guardian=h.owner==='gas'?null:(seatKeys.map(k=>g.seats[k].id).find(id=>{
      const st=g.stats[id];
      return st?.char==='tank'&&st.guardUntil>t&&g.hp[id]>0&&id!==h.victim&&st.guardTargetId===h.victim&&st.guardTargetLife===g.stats[h.victim].life;
-    });
+    })||null);
     const result=BrawlMatchV1.applyHit(g,h,t,BALANCE,{guardian});
     if(!result)continue;
     // Host-authoritative match totals. Gas damage does not credit another player.
@@ -1142,6 +1142,7 @@ function reconcileHpPreviews(previous,next){
  hpPreviewHits=hpPreviewHits.filter(p=>p.amount>.01);
 }
 let appliedMotionRev=-1,combatBusy=false,claimBusy=false;
+let hostTimerPulses=0,combatTickCalls=0,combatTickSkips={busy:0,queue:0,clock:0,scope:0},combatTickResults={writes:0,committed:0,missing:0,wrongHost:0,wrongMatch:0,wrongRev:0,noStep:0,error:0},combatTickLastError='';
 let db=null,room=null,roomId='',myId='',myConnection='',lobby=null,presence={},game=null,positions={},joined=false,connected=false,connecting=false,working=false,clockOffset=0;
 let listeners=[],onlineTimer=null,lastSend=0,sendSeq=0,local={x:220,y:290,a:0,vx:0,vy:0},view={scale:1,ox:0,oy:0,cx:NaN,cy:NaN,overhead:false},scene='home',pointer=null,lastFrame=0,pausedSince=0,paused=false,hostBusy=false;
 let pcAim=null,pcKeys=new Set();
@@ -1334,7 +1335,7 @@ function attachRoom(){unwatch();lastSnapshotAt=0;snapshotGap=0;const thisRoom=ro
   effectsReady=true;
   watch(thisRoom.child('effects'),'child_added',s=>{const e=s.val();if(e&&s.key)handleEffect({...e,id:s.key});});
  }).catch(e=>status('効果履歴の読み込み失敗：'+errorText(e)));
- onlineTimer=setInterval(()=>{if(room!==thisRoom||solo&&document.hidden)return;if(lobby?.status==='waiting')tryStart();checkPaused();drainActions();if(['playing','round_end','paused'].includes(game?.phase))managePauseState();if(game?.phase==='playing'&&isAuthoritative()){claimHost();processHostQueue();processCombatTick();}if(game?.phase==='round_end'&&isAuthoritative())nextRoundIfDue();if(game?.phase==='match_end'&&isAuthoritative())considerRematch();autoBotRematch();renderGameHUD();renderNetworkStatus();},100);
+ onlineTimer=setInterval(()=>{hostTimerPulses++;if(room!==thisRoom||solo&&document.hidden)return;if(lobby?.status==='waiting')tryStart();checkPaused();drainActions();if(['playing','round_end','paused'].includes(game?.phase))managePauseState();if(game?.phase==='playing'&&isAuthoritative()){claimHost();processHostQueue();processCombatTick();}if(game?.phase==='round_end'&&isAuthoritative())nextRoundIfDue();if(game?.phase==='match_end'&&isAuthoritative())considerRematch();autoBotRematch();renderGameHUD();renderNetworkStatus();},100);
 }
 // The lobby and game snapshots can arrive in either order.
 function reconcileRoomView(){if(!lobbyReady||!gameReady||!lobby||!game||game.matchId!==lobby.matchId||!mySeat())return;
@@ -1499,7 +1500,35 @@ function renderCombatEvents(){for(const [id,e] of Object.entries(game?.events||{
 }}
 async function claimHost(){if(claimBusy||!isAuthoritative()||game?.hostToken===myConnection||presence[myId]?.[game?.hostToken])return;claimBusy=true;const match=game.matchId,token=myConnection;try{await room.child('game').transaction(g=>g?.matchId===match&&!presence[myId]?.[g.hostToken]?{...g,hostToken:token}:undefined,undefined,false);}finally{claimBusy=false;}}
 function inputSnapshot(){const input=structuredClone(positions);input[myId]={...local,matchId:game?.matchId,round:game?.round,motionRev:appliedMotionRev,life:game?.stats?.[myId]?.life||0};return input;}
-async function processCombatTick(){if(combatBusy||!isAuthoritative()||!combatReady()||game.hostToken!==myConnection)return;combatBusy=true;const now=serverNow(),rev=game.combatRev,token=myConnection,input=inputSnapshot(),match=game.matchId,round=game.round;try{await room.child('game').transaction(g=>{if(!g||g.matchId!==match||g.round!==round)return;const n=engine(g).step(g,input,now,rev,token);return n===g?undefined:n;},undefined,false);}catch(e){console.warn('Combat tick',e);}finally{combatBusy=false;}}
+// Firebase RTDB serializes writes on the same game node. Never compete with a
+// host action batch, and skip a network transaction before physics can advance.
+async function processCombatTick(){
+ combatTickCalls++;
+ if(combatBusy||hostProcessing){combatTickSkips.busy++;return;}
+ if(hostQueue.length){combatTickSkips.queue++;return;}
+ if(!isAuthoritative()||!combatReady()||game.hostToken!==myConnection){combatTickSkips.scope++;return;}
+ const now=serverNow();
+ if(!Number.isFinite(game.clock?.wallAt)||now-game.clock.wallAt<50){combatTickSkips.clock++;return;}
+ combatBusy=true;
+ const activeRoom=room,rev=game.combatRev,token=myConnection,input=inputSnapshot(),match=game.matchId,round=game.round;
+ try{
+  combatTickResults.writes++;
+  const tr=await activeRoom.child('game').transaction(g=>{
+   if(!g){combatTickResults.missing++;return;}
+   if(g.hostToken!==token){combatTickResults.wrongHost++;return;}
+   if(g.matchId!==match||g.round!==round){combatTickResults.wrongMatch++;return;}
+   if(g.combatRev!==rev){combatTickResults.wrongRev++;return;}
+   const n=engine(g).step(g,input,now,rev,token);
+   if(n===g){combatTickResults.noStep++;return;}
+   return n;
+  },undefined,false);
+  if(tr.committed)combatTickResults.committed++;
+ }catch(e){combatTickResults.error++;combatTickLastError=String(e?.stack||e);console.warn('Combat tick',e);}
+ finally{
+  combatBusy=false;
+  if(room===activeRoom&&hostQueue.length)scheduleHostActionDispatch();
+ }
+}
 
 function isAuthoritative(){return joined&&connected&&clockReady&&lobbyReady&&gameReady&&presenceReady&&room&&lobby?.ownerId===myId&&!pageSuspended&&!!myConnection;}
 function allPresent(){return !!lobby&&connected&&SEATS.every(k=>isOnline(lobby.seats?.[k]?.id));}
@@ -1599,7 +1628,7 @@ function submitAction(action,errorPrefix){const roomKey=room.key,owner=myId,ref=
 // Order, per-player sequence checks, replay receipts, and damage stay in the engine.
 const HOST_ACTION_BATCH_LIMIT=6;
 async function processHostQueue(){
- if(!combatReady()||!isAuthoritative()||hostProcessing||!hostQueue.length||game.hostToken!==myConnection)return;
+ if(!combatReady()||!isAuthoritative()||hostProcessing||combatBusy||!hostQueue.length||game.hostToken!==myConnection)return;
  const activeRoom=room,match=game.matchId,round=game.round,token=myConnection;
  let activeBatch=[];hostProcessing=true;
  try{
@@ -1614,6 +1643,12 @@ async function processHostQueue(){
     if(!g||g.hostToken!==token||g.matchId!==match||g.round!==round||g.phase!=='playing')return;
     let next=g;
     for(const a of activeBatch)next=engine(next).accept(next,a,input,now);
+    // A received shot normally waits for a second Firebase round trip before
+    // any bullet/HP physics can advance. If >=50ms elapsed, step in THIS SAME
+    // authoritative transaction. The shared engine still determines all hits.
+    if(next?.phase==='playing'&&now-next.clock?.wallAt>=50){
+     next=engine(next).step(next,input,now,next.combatRev,token);
+    }
     return next===g?undefined:next;
    },undefined,false);
    activeBatch=[];
@@ -1622,7 +1657,12 @@ async function processHostQueue(){
   // Failed transaction: allow confirmed pending requests to be re-queued.
   for(const a of activeBatch)queuedActions.delete(a.eventId);
   console.warn('Host action batch',e);
- }finally{hostProcessing=false;}
+ }finally{
+  hostProcessing=false;
+  // The 100ms timer is still a fallback; avoid losing new actions enqueued
+  // while the previous transaction was in flight.
+  if(room===activeRoom&&hostQueue.length)scheduleHostActionDispatch();
+ }
 }
 
 function projectileStep(list,dt,authoritative){const hits=[];
@@ -2098,7 +2138,7 @@ const rememberedRoom=safeSessGet('brawl-v3-lastroom');
 if(/^\d{5}$/.test(rememberedRoom||'')){$('roomInput').value=rememberedRoom;$('homeStatus').textContent='前回のルームIDを入力済み。復帰する場合は「ルームに参加」を押してね。';}
 applyFit();showScene('home');requestAnimationFrame(frame);
 // Read-only diagnostics used by the local mock test harness; no live-server controls.
-window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
+window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
 })();
 </script>
 </body></html>

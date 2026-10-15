@@ -127,6 +127,64 @@ async function run(browser,spec,count,botIndex=-1){
    await shooter.page.waitForFunction(({key,expected})=>{const q=window[key]?.();return !!q?.stats&&expected.every(p=>q.stats[p.id]?.lastActionSeq>p.seq);},{key:spec.qa,expected:shots},{timeout:16000});
    await observer.page.waitForFunction(({key,expected})=>{const q=window[key]?.();return !!q?.stats&&expected.every(p=>q.stats[p.id]?.lastActionSeq>p.seq);},{key:spec.qa,expected:shots},{timeout:16000});
    console.log('PASS squad 4 near-concurrent real-client shots: all four player action sequences accepted and replicated');
+
+   // Real browser gameplay + local Firebase emulator: warp one attacker and
+   // defender into range, then fire through the UI and assert actual host HP.
+   // This touches ONLY the local test RTDB, never the user's production room.
+   const readyQs=await Promise.all(clients.map(c=>snap(c,spec)));
+   const targetIndex=readyQs.findIndex((v,i)=>i>0&&v.seat?.startsWith('red'));
+   assert(targetIndex>0,'opposing red-team human client available for damage test');
+   const victimId=readyQs[targetIndex].myId,attackerId=readyQs[0].myId;
+   const combat=readyQs[0].combat;
+   assert.equal(combat.phase,'playing','battle must still be active for damage E2E');
+   const moves={
+    [attackerId]:{rev:combat.motions[attackerId].rev+1,x:700,y:540,a:0},
+    [victimId]:{rev:combat.motions[victimId].rev+1,x:760,y:540,a:Math.PI}
+   };
+   await shooter.page.evaluate(async ({roomId,motions})=>{
+    await window.firebase.database().ref('rooms2v2/'+roomId+'/game/motions').update(motions);
+   },{roomId:id,motions:moves});
+   await shooter.page.waitForFunction(({k})=>Math.abs((window[k]?.()?.local?.x||0)-700)<5,{k:spec.qa},{timeout:9000});
+   await clients[targetIndex].page.waitForFunction(({k})=>Math.abs((window[k]?.()?.local?.x||0)-760)<5,{k:spec.qa},{timeout:9000});
+   await shooter.page.waitForFunction(({k,victim})=>{
+    const p=window[k]?.()?.positionValues?.[victim];
+    return !!p&&Math.abs(p.x-760)<5;
+   },{k:spec.qa,victim:victimId},{timeout:9000});
+   const hpBefore=(await snap(shooter,spec)).hp[victimId];
+   assert(hpBefore>0,'opposing human must be alive and damageable');
+   const attackerBefore=(await snap(shooter,spec)).stats[attackerId].lastActionSeq;
+   const beforeInfo=await snap(shooter,spec);
+   console.log('HP DAMAGE SETUP '+JSON.stringify({mode:beforeInfo.mode,hostChar:beforeInfo.stats[attackerId]?.char,ammo:beforeInfo.stats[attackerId]?.ammo,victimId,hpBefore,hostPosition:beforeInfo.local,victimPosition:beforeInfo.positionValues[victimId],gameClock:beforeInfo.combat?.clock,hostSeat:beforeInfo.seat}));
+   await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
+   await shooter.page.waitForFunction(({k,attacker,seq})=>(window[k]?.()?.stats?.[attacker]?.lastActionSeq??0)>seq,
+    {k:spec.qa,attacker:attackerId,seq:attackerBefore},{timeout:10000});
+   await delay(1000);
+   const afterInfo=await snap(shooter,spec);
+   console.log('HP DAMAGE SHOT '+JSON.stringify({hostAmmo:afterInfo.stats[attackerId]?.ammo,hostHP:afterInfo.hp[attackerId],victimHP:afterInfo.hp[victimId],hostPosition:afterInfo.local,victimPosition:afterInfo.positionValues[victimId],projectiles:afterInfo.combat?.projectiles,events:afterInfo.combat?.events,usedActions:afterInfo.combat?.usedActions,combatClock:afterInfo.combat?.clock}));
+   try{
+    await shooter.page.waitForFunction(({k,victim,hp})=>(window[k]?.()?.hp?.[victim]??Infinity)<hp,
+      {k:spec.qa,victim:victimId,hp:hpBefore},{timeout:8000});
+   }catch(err){
+    for(const [ix,c] of clients.entries()){
+     const q=await snap(c,spec);
+     console.error('DAMAGE TIMEOUT '+ix+' '+JSON.stringify({
+      hostAuthorized:q.hostAuthorized,combatReady:q.combatReadyNow,hostTimerActive:q.hostTimerActive,hostTimerPulses:q.hostTimerPulses,combatTickCalls:q.combatTickCalls,combatTickSkips:q.combatTickSkips,combatTickResults:q.combatTickResults,combatTickLastError:q.combatTickLastError,
+      combatBusy:q.combatBusy,hostProcessing:q.hostProcessing,hostActionDispatchQueued:q.hostActionDispatchQueued,
+      hostQueue:q.hostQueue,pendingActionCount:q.pendingActionCount,
+      clockLag:q.hostClockLag,clock:q.combat?.clock,rev:q.combat?.combatRev,
+      phase:q.game,token:q.gameHostToken,cid:q.connectionId,
+      victimHP:q.hp?.[victimId],shots:q.shots,
+      projectileIds:Object.keys(q.combat?.projectiles||{}),
+      position:q.positionValues?.[victimId],stats:q.stats?.[attackerId]
+     }));
+    }
+    throw err;
+   }
+   await clients[targetIndex].page.waitForFunction(({k,victim,hp})=>(window[k]?.()?.hp?.[victim]??Infinity)<hp,
+    {k:spec.qa,victim:victimId,hp:hpBefore},{timeout:12000});
+   const hpAfter=(await snap(clients[targetIndex],spec)).hp[victimId];
+   console.log('PASS squad in-range human-shot E2E: authoritative enemy HP '+hpBefore+' -> '+hpAfter+' replicated in both separate browsers');
+
   }
   for(const c of clients)assert.deepEqual(c.issues.filter(x=>x.startsWith('JS ')),[],'browser runtime '+c.who);
  }catch(error){
