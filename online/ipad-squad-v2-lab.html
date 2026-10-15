@@ -1086,6 +1086,9 @@ let aimPointer=null,actionSeq=0,lastShootLocal=0,seenActions=new Set(),seenEffec
 let ultPointer=null,dashUntil=0,dashA=0,lastUseLocal=0,roundResetKey='';
 let phaseBusy=false,gasBusy=false,ultResolveBusy=false,localPauseKey='',lastGasWarning=0;
 let rawPositions={},positionsReady=false,positionScope='',effectsReady=false,roomGeneration=0;
+// Local receipt time only; never use extrapolated coordinates for damage or the game engine.
+const remotePositionReceivedAt=new Map();
+const REMOTE_VISUAL_EXTRAPOLATE_MS=90;
 let pageSuspended=false,presenceTask=null;
 let historicalEffects=new Set();
 let suspendTask=Promise.resolve(),pageResumeBusy=false,pageResumeWanted=false;
@@ -1234,17 +1237,18 @@ async function registerPresence(){if(!room||!myId||!connected||pageSuspended)ret
 }
 function validPosition(p){return !!p&&p.matchId===game?.matchId&&p.round===game?.round&&Number.isSafeInteger(p.seq)&&p.seq>=0&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.a)&&p.x>=R&&p.x<=W-R&&p.y>=R&&p.y<=H-R&&Number.isSafeInteger(p.motionRev)&&Number.isSafeInteger(p.life);}
 function ingestPositions(){if(!game)return;
- const scope=game.matchId+':'+game.round;if(positionScope!==scope){positions={};positionScope=scope;}
+ const scope=game.matchId+':'+game.round;if(positionScope!==scope){positions={};positionScope=scope;remotePositionReceivedAt.clear();}
  for(const [id,p]of Object.entries(rawPositions)){
   if(!playerSeat(id)||!validPosition(p)||p.motionRev!==(game.motions?.[id]?.rev||0)||p.life!==(game.stats?.[id]?.life||0))continue;
   const prior=positions[id];
   if(prior&&prior.connectionId===p.connectionId&&prior.life===p.life&&prior.motionRev===p.motionRev&&p.seq<=prior.seq)continue;
   if(p.connectionId&&!presence[id]?.[p.connectionId])continue;
   positions[id]={...p};
+  remotePositionReceivedAt.set(id,performance.now());
  }
 }
 function attachRoom(){unwatch();lastSnapshotAt=0;snapshotGap=0;const thisRoom=room,generation=++roomGeneration;
- positionsReady=false;effectsReady=false;rawPositions={};historicalEffects.clear();presenceTask=null;
+ positionsReady=false;effectsReady=false;rawPositions={};remotePositionReceivedAt.clear();historicalEffects.clear();presenceTask=null;
  lobbyReady=false;gameReady=false;presenceReady=false;clockReady=false;pendingActions.clear();queuedActions.clear();
  // Pending set() results outlive listener/BFCache generations. Never turn an
  // unconfirmed local SDK echo into a server-confirmed request on reattach.
@@ -1346,7 +1350,7 @@ async function tryStart(){if(hostBusy||!joined||!connected||!clockReady||!lobbyR
    return {...cur,lobby:{...l,status:'playing',matchId,rematch:null},game:makeGame(matchId,l.seats,l.mode),actions:null,effects:null,positions:null};
   },undefined,false);
  }catch(e){status('対戦開始に失敗：'+errorText(e));}finally{hostBusy=false;}}
-function initLocal(){view.cx=NaN;view.cy=NaN;view.overhead=false;updateCameraLabel();const seat=mySeat(),s=SPAWNS[seat]||SPAWNS.blue1,p=rawPositions[myId],restore=validPosition(p)&&p.motionRev===(game.motions?.[myId]?.rev||0)&&p.life===(game.stats?.[myId]?.life||0);const m=game.motions?.[myId]||s;local={x:restore?p.x:m.x,y:restore?p.y:m.y,a:restore?p.a:m.a,vx:0,vy:0};appliedMotionRev=m.rev||0;sendSeq=restore?p.seq:0;actionSeq=Math.max(actionSeq,game.stats?.[myId]?.lastActionSeq||0);lastSend=0;pointer=null;aimPointer=null;ultPointer=null;dashUntil=0;pausedSince=0;clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();predictedActions.clear();seenActions.clear();seenEffects.clear();processedNetworkSeq={};revealed={};fx=[];for(const id of Object.keys(remotes))delete remotes[id];}
+function initLocal(){remotePositionReceivedAt.clear();view.cx=NaN;view.cy=NaN;view.overhead=false;updateCameraLabel();const seat=mySeat(),s=SPAWNS[seat]||SPAWNS.blue1,p=rawPositions[myId],restore=validPosition(p)&&p.motionRev===(game.motions?.[myId]?.rev||0)&&p.life===(game.stats?.[myId]?.life||0);const m=game.motions?.[myId]||s;local={x:restore?p.x:m.x,y:restore?p.y:m.y,a:restore?p.a:m.a,vx:0,vy:0};appliedMotionRev=m.rev||0;sendSeq=restore?p.seq:0;actionSeq=Math.max(actionSeq,game.stats?.[myId]?.lastActionSeq||0);lastSend=0;pointer=null;aimPointer=null;ultPointer=null;dashUntil=0;pausedSince=0;clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();predictedActions.clear();seenActions.clear();seenEffects.clear();processedNetworkSeq={};revealed={};fx=[];for(const id of Object.keys(remotes))delete remotes[id];}
 function ensureRoundLocal(){if(!positionsReady||!game||!lobby||game.matchId!==lobby.matchId)return;ingestPositions();const key=game.matchId+':'+game.round;if(roundResetKey===key)return;initLocal();roundResetKey=key;}
 function resetTransientCombat(){pointer=null;aimPointer=null;ultPointer=null;pcKeys.clear();pcAim=null;pcCursor=null;bulletVisuals.clear();clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();fx=[];lastUseLocal=0;lastShootLocal=0;}
 function checkPaused(){if(scene!=='game'||!game||!lobby)return;
@@ -1732,6 +1736,23 @@ function drawPlayer(p,seat,mine,isVisible=true){if(!isVisible)return;const id=lo
 }
 const remotes={};
 
+ // The main 80ms position cadence is unchanged. Predict at most 90ms of remote travel
+ // from the latest accepted packet, and only for visuals. This never affects hit detection.
+ function remotePresentationTarget(net,receivedAt,now,obstacles){
+  if(!net||!Number.isFinite(net.x)||!Number.isFinite(net.y))return net;
+  if(!Number.isFinite(receivedAt)||!Number.isFinite(now)||!Number.isFinite(net.vx)||!Number.isFinite(net.vy))return net;
+  const age=Math.min(REMOTE_VISUAL_EXTRAPOLATE_MS,Math.max(0,now-receivedAt))/1000;
+  if(age<=0)return net;
+  // Bound impossible velocity spikes, and reject prediction into walls.
+  const vx=clamp(net.vx,-260,260),vy=clamp(net.vy,-260,260);
+  const x=clamp(net.x+vx*age,R,W-R),y=clamp(net.y+vy*age,R,H-R);
+  const hitsWall=(px,py)=>obstacles.some(w=>px+R>w.x&&px-R<w.x+w.w&&py+R>w.y&&py-R<w.y+w.h);
+  const px=hitsWall(x,net.y)?net.x:x;
+  const py=hitsWall(px,y)?net.y:y;
+  return {...net,x:px,y:py};
+ }
+
+
  // Combat snapshots advance in discrete steps, but visual bullets must animate each frame.
  // These visual positions never affect authoritative collision and damage.
  const bulletVisuals=new Map();
@@ -1828,7 +1849,14 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);drawArena();
  if(scene==='game'&&lobby){for(const seat of SEATS){const s=lobby.seats?.[seat];if(!s)continue;
   let p;if(s.id===myId)p={...local,char:game?.stats?.[s.id]?.char||s.char};else{const net=positions[s.id],spawn=SPAWNS[seat];if(!remotes[s.id])remotes[s.id]={x:spawn.x,y:spawn.y,a:spawn.a};const dest=net?.motionRev===(game.motions?.[s.id]?.rev||0)&&net?.life===(game.stats?.[s.id]?.life||0)&&net?.matchId===game?.matchId&&net?.round===game?.round&&Number.isFinite(net.x)&&Number.isFinite(net.y)&&net.x>=R&&net.x<=W-R&&net.y>=R&&net.y<=H-R?net:(game.motions?.[s.id]||spawn);
-   const visual=remotes[s.id];const smoothing=1-Math.exp(-15*dt);visual.x+=(dest.x-visual.x)*smoothing;visual.y+=(dest.y-visual.y)*smoothing;visual.a=dest.a??spawn.a;p={...visual,char:game?.stats?.[s.id]?.char||s.char};}
+   const fresh=dest===net&&net&&remotePositionReceivedAt.has(s.id);
+   const target=fresh?remotePresentationTarget(net,remotePositionReceivedAt.get(s.id),performance.now(),WALLS):dest;
+   const visual=remotes[s.id];const distance=Math.hypot(target.x-visual.x,target.y-visual.y);
+   // Fast catch-up after regular position packets; teleport/respawn remains immediate.
+   const smoothing=1-Math.exp(-22*dt);
+   if(distance>135){visual.x=target.x;visual.y=target.y;}
+   else{visual.x+=(target.x-visual.x)*smoothing;visual.y+=(target.y-visual.y)*smoothing;}
+   visual.a=target.a??spawn.a;p={...visual,char:game?.stats?.[s.id]?.char||s.char};}
   const jump=Object.values(game?.scheduled||{}).find(u=>u.kind==='jump'&&u.owner===s.id);if(jump){const f=clamp((visualCombatNow()-jump.start)/(jump.until-jump.start),0,1);p.x=jump.fromX+(jump.x-jump.fromX)*f;p.y=jump.fromY+(jump.y-jump.fromY)*f-Math.sin(f*Math.PI)*65;}
   const isMate=teamOfSeat(seat)===myTeam();const visible=isMate||canSeeEnemy(targetPoint(s.id),s.id);
   if((game?.hp?.[s.id]??0)>0)drawPlayer(p,seat,s.id===myId,visible);
