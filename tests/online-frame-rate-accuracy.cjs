@@ -9,7 +9,8 @@ const live=html.slice(begin,end);
 function simulate(interval,frames,scene='game'){
  const steps=[],ctx={
   lastFrame:0,fps:60,gadgetToastExpiry:0,fx:[],scene,
-  performance:{now:()=>4},
+  performance:{now:()=>4},document:{hidden:false},
+  workTiming:{frameSamples:0,frameGapOver100:0,frameGapMaxMs:0,updateTotalMs:0,botTotalMs:0,nonDrawTotalMs:0,nonDrawMaxMs:0},
   drawTiming:{frames:0,totalDrawMs:0,lastDrawMs:0,maxDrawMs:0,skippedCoveredFrames:0},
   clamp:(n,a,b)=>Math.max(a,Math.min(b,n)),adjustCanvasQuality:()=>{},update:dt=>steps.push(dt),
   updateBots:()=>{},combatReady:()=>false,draw:()=>{},requestAnimationFrame:()=>{}
@@ -17,12 +18,14 @@ function simulate(interval,frames,scene='game'){
  vm.createContext(ctx);
  vm.runInContext(live+'\nthis.tick=frame;',ctx);
  for(let i=0;i<=frames;i++)ctx.tick(1000+i*interval);
- return {fps:ctx.fps,steps,drawTiming:ctx.drawTiming};
+ return {fps:ctx.fps,steps,drawTiming:ctx.drawTiming,workTiming:ctx.workTiming};
 }
 const slow=simulate(120,45);
+assert(slow.workTiming.frameGapOver100>=40,'profile genuine 120ms foreground rAF stalls');
 assert(slow.fps>8&&slow.fps<11,'120ms real frames should show about 8 FPS, not capped 17 FPS: '+slow.fps);
 assert(slow.steps.slice(1).every(dt=>dt<=.06000001),'movement physics delta remains safely capped');
 const smooth=simulate(1000/60,45);
+assert.equal(smooth.workTiming.frameGapOver100,0,'normal 60Hz frames are not stalls');
 assert(smooth.fps>55&&smooth.fps<65,'60Hz should show about 60 FPS: '+smooth.fps);
 const covered=simulate(1000/60,45,'lobby');
 assert.equal(covered.drawTiming.frames,0,'Canvas rendering must be suspended behind lobby overlay');
