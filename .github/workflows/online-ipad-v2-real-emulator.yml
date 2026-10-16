@@ -17,6 +17,7 @@ on:
       - 'tests/online-hp-preview.cjs'
       - 'tests/online-host-action-batching.cjs'
       - 'tests/online-host-txn-arbiter.cjs'
+      - 'tests/online-quiet-ko-write-batching.cjs'
       - 'tests/online-guardian-null-hit.cjs'
       - 'firebase.online-e2e.json'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
@@ -38,6 +39,7 @@ on:
       - 'tests/online-hp-preview.cjs'
       - 'tests/online-host-action-batching.cjs'
       - 'tests/online-host-txn-arbiter.cjs'
+      - 'tests/online-quiet-ko-write-batching.cjs'
       - 'tests/online-guardian-null-hit.cjs'
       - 'firebase.online-e2e.json'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
@@ -86,6 +88,8 @@ jobs:
         run: node tests/online-hp-preview.cjs
       - name: Verify bounded host-action batching and transaction safety
         run: node tests/online-host-action-batching.cjs
+      - name: Verify safe quiet KO transaction coalescing and full clock advance
+        run: node tests/online-quiet-ko-write-batching.cjs
       - name: Verify shot-priority host game transaction arbiter
         run: node tests/online-host-txn-arbiter.cjs
       - name: Verify Firebase-safe null guardian in 2vs2 hit events
