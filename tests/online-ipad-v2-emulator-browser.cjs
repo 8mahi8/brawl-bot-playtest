@@ -127,6 +127,7 @@ async function run(browser,spec,count,botIndex=-1){
    await delay(startupWait);
    const shotSentAt=Date.now();
    await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
+   const touchCompletedAt=Date.now();
    await shooter.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,{k:spec.qa,id:hostId,seq:before},{timeout:10000});
    const hostAckMs=Date.now()-shotSentAt;
    await observer.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,{k:spec.qa,id:hostId,seq:before},{timeout:10000});
@@ -137,8 +138,9 @@ async function run(browser,spec,count,botIndex=-1){
    console.log('PASS squad 4 participants: touch shot authoritative ack '+hostAckMs+
     'ms, other-client ack '+peerAckMs+
     'ms (local RTDB emulator, not real network RTT); host clock lag '+
-    Math.round(ackState.hostClockLag||0)+'ms, server receipt delay '+
-    (ackReceipt?Math.round(ackReceipt.acceptedAt-shotSentAt)+'ms':'expired'));
+    Math.round(ackState.hostClockLag||0)+'ms, input gesture awaited '+
+    (touchCompletedAt-shotSentAt)+'ms; action timestamp to host acceptance '+
+    (ackReceipt?Math.round(ackReceipt.acceptedAt-ackReceipt.at)+'ms':'receipt expired'));
    // Verify four real clients can submit near-concurrent shots; all receipts must
    // survive the host's bounded batch transaction and appear on every client.
    await delay(450);
@@ -159,11 +161,30 @@ async function run(browser,spec,count,botIndex=-1){
    const received=perfAfter.positionSnapshots-perfBefore.positionSnapshots;
    const hudUpdates=perfAfter.hudRenders-perfBefore.hudRenders;
    const sceneUpdates=perfAfter.gameSceneCalls-perfBefore.gameSceneCalls;
-   assert(received>=6,'four active peers should produce a measurable position stream: '+received);
+   assert(received>=4,'four active peers still send idle heartbeats: '+received);
+   assert(received<=26,'stationary 4-player position stream should be throttled: '+received);
    assert.equal(sceneUpdates,0,'position updates must not rebuild the game scene');
    assert(hudUpdates<=40,'position flood should not trigger HUD on every packet: '+hudUpdates);
-   console.log('PASS squad UI position burst: '+received+' position snapshots; '+
+   console.log('PASS squad stationary stream: '+received+' position snapshots; '+
     hudUpdates+' HUD redraws; '+sceneUpdates+' redundant game-scene rebuilds in 1400ms (local WebKit)');
+
+   // The idle optimization must NOT introduce lag in movement or in stop
+   // packets. Prove browser keyboard motion travels through live RTDB.
+   const movingClient=clients[1],moverId=(await snap(movingClient,spec)).myId;
+   const moverStart=(await snap(shooter,spec)).positionValues[moverId]?.x;
+   assert(Number.isFinite(moverStart),'peer position exists before move');
+   await movingClient.page.keyboard.down('d');
+   await delay(620);
+   await movingClient.page.keyboard.up('d');
+   await shooter.page.waitForFunction(({k,id,start})=>
+    (window[k]?.()?.positionValues?.[id]?.x||0)>start+5,
+    {k:spec.qa,id:moverId,start:moverStart},{timeout:9000});
+   const moverAfter=(await snap(shooter,spec)).positionValues[moverId].x;
+   await shooter.page.waitForFunction(({k,id})=>
+    Math.abs(window[k]?.()?.positionValues?.[id]?.vx??1)<5,
+    {k:spec.qa,id:moverId},{timeout:9000});
+   console.log('PASS squad moving peer: real keyboard x '+moverStart+' -> '+moverAfter+
+    ', stop velocity replicated with active position cadence');
    const adaptive=await snap(shooter,spec);
    console.log('PERF squad adaptive DPR2 host after live combat: '+JSON.stringify({
     css:adaptive.canvasMetrics.cssWidth+'x'+adaptive.canvasMetrics.cssHeight,
