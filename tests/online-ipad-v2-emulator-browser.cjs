@@ -120,6 +120,8 @@ async function run(browser,spec,count,botIndex=-1){
    console.log('PERF squad host retina DPR2: '+Math.round(raw)+' raw vs '+pixels+
      ' capped backing pixels ('+Math.round(pixels/Math.max(1,raw)*100)+'%) '+
      JSON.stringify(px));
+   assert(q.drawTiming?.skippedCoveredFrames>0,
+    'home/lobby covered rAF frames must not waste Canvas paint');
    assert.equal(Object.keys(q.combat.stats).length,4);
    assert(q.stats&&q.combat.matchId,'four authoritative players');
    const hostId=q.myId,before=q.stats[hostId].lastActionSeq;
@@ -133,6 +135,11 @@ async function run(browser,spec,count,botIndex=-1){
    await observer.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,{k:spec.qa,id:hostId,seq:before},{timeout:10000});
    const peerAckMs=Date.now()-shotSentAt;
    const ackState=await snap(shooter,spec);
+   const touch=ackState.inputTiming?.lastTouchShot;
+   assert(touch?.submitted&&ackState.inputTiming.touchShots>=1,
+    'real WebKit pointerup must issue an actual touch shot');
+   assert(touch.handlerMs>=0&&touch.gestureMs>=0,
+    'browser captures handler cost and touch hold duration separately');
    const ackReceipt=Object.values(ackState.combat?.usedActions||{}).find(v=>
     v.owner===hostId&&v.seq>before&&v.type==='shot'&&v.status==='accepted');
    console.log('PASS squad 4 participants: touch shot authoritative ack '+hostAckMs+
@@ -141,6 +148,11 @@ async function run(browser,spec,count,botIndex=-1){
     Math.round(ackState.hostClockLag||0)+'ms, input gesture awaited '+
     (touchCompletedAt-shotSentAt)+'ms; action timestamp to host acceptance '+
     (ackReceipt?Math.round(ackReceipt.acceptedAt-ackReceipt.at)+'ms':'receipt expired'));
+   console.log('INPUT squad real Safari/WebKit pointer event: '+
+    JSON.stringify({...touch,hostAcceptedFromActionMs:ackReceipt?
+     Math.round(ackReceipt.acceptedAt-ackReceipt.at):null,
+     webdriverTapMs:touchCompletedAt-shotSentAt,
+     drawTiming:ackState.drawTiming}));
    // Verify four real clients can submit near-concurrent shots; all receipts must
    // survive the host's bounded batch transaction and appear on every client.
    await delay(450);
@@ -154,13 +166,13 @@ async function run(browser,spec,count,botIndex=-1){
    // Four live users send position packets even when stationary. Regression:
    // frequent network positions must not re-run the complete scene layout or
    // force HUD work; the fixed 100ms refresh and game snapshots still do it.
-   const beforePerf=await snap(shooter,spec),perfBefore=beforePerf.presentationMetrics;
+   const beforePerf=await snap(shooter,spec),perfBefore=beforePerf.presentationMetrics,drawBefore=beforePerf.drawTiming;
    const arenaBefore=beforePerf.arenaBackdropMetrics;
    assert(perfBefore,'presentation diagnostics exposed in development HTML');
    assert(arenaBefore&&!arenaBefore.disabled&&arenaBefore.builds>=1,
     'static arena canvas paints once in real WebKit');
    await delay(1400);
-   const afterPerf=await snap(shooter,spec),perfAfter=afterPerf.presentationMetrics;
+   const afterPerf=await snap(shooter,spec),perfAfter=afterPerf.presentationMetrics,drawAfter=afterPerf.drawTiming;
    const arenaAfter=afterPerf.arenaBackdropMetrics;
    assert.equal(arenaAfter.builds,arenaBefore.builds,
     'no background re-rasterization across steady gameplay frames');
@@ -177,6 +189,12 @@ async function run(browser,spec,count,botIndex=-1){
    assert(hudUpdates<=40,'position flood should not trigger HUD on every packet: '+hudUpdates);
    console.log('PASS squad stationary stream: '+received+' position snapshots; '+
     hudUpdates+' HUD redraws; '+sceneUpdates+' redundant game-scene rebuilds in 1400ms (local WebKit)');
+   const nDraws=drawAfter.frames-drawBefore.frames;
+   console.log('PERF squad host actual JS Canvas draw cost (WebKit CI, not iPad): '+
+    JSON.stringify({frames:nDraws,avgDrawMs:nDraws>0?
+     Math.round((drawAfter.totalDrawMs-drawBefore.totalDrawMs)/nDraws*10)/10:null,
+     maxSinceStartMs:Math.round(drawAfter.maxDrawMs*10)/10,
+     skippedCovered:drawAfter.skippedCoveredFrames}));
 
    // The idle optimization must NOT introduce lag in movement or in stop
    // packets. Prove browser keyboard motion travels through live RTDB.
