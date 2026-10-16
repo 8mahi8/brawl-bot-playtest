@@ -260,6 +260,45 @@ async function run(browser,spec,count,botIndex=-1){
      !Object.values(q.combat?.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===id);
    },{k:spec.qa,id:attackerId},{timeout:12000});
 
+   // In addition to desktop Q/E, verify the on-screen touch buttons on a
+   // second real WebKit client. This is the iPad/phone input path.
+   await guest.page.waitForFunction(k=>window[k]?.()?.combatReadyNow,spec.qa,{timeout:10000});
+   const touchBefore=await snap(guest,spec);
+   assert.equal(touchBefore.stats[victimId].char,'tank','touch ability test expects a tank');
+   assert(touchBefore.stats[victimId].gadgets>0,'touch client has available GAD');
+   await guest.page.locator('#gadAction').tap({timeout:5000});
+   await shooter.page.waitForFunction(({k,id,before,rev})=>{
+    const q=window[k]?.();return q?.stats?.[id]?.gadgets===before-1&&
+     q?.combat?.motions?.[id]?.rev>rev;
+   },{k:spec.qa,id:victimId,before:touchBefore.stats[victimId].gadgets,
+      rev:touchBefore.combat.motions[victimId].rev},{timeout:13000});
+   console.log('PASS squad real touch GAD: peer confirms resource and movement on 2nd device');
+
+   // ULT is charged ONLY via a test emulator transaction; trigger it from
+   // actual WebKit pointerdown/pointerup on the touch control.
+   await guest.page.evaluate(async ({roomId,id})=>{
+    const ref=window.firebase.database().ref('rooms2v2/'+roomId+'/game');
+    const result=await ref.transaction(g=>{
+     if(!g||g.phase!=='playing'||!g.stats?.[id])return;
+     g.stats[id].ult=100;return g;
+    },undefined,false);
+    if(!result.committed)throw Error('touch ULT local emulator fixture failed');
+   },{roomId:id,id:victimId});
+   await guest.page.waitForFunction(({k,id})=>window[k]?.()?.stats?.[id]?.ult===100,
+    {k:spec.qa,id:victimId},{timeout:12000});
+   await delay(350);
+   const touchUltSeq=(await snap(guest,spec)).stats[victimId].lastActionSeq;
+   await guest.page.locator('#ultAction').tap({timeout:5000});
+   await shooter.page.waitForFunction(({k,id,seq})=>{
+    const q=window[k]?.();return q?.stats?.[id]?.lastActionSeq>seq&&
+     q.stats[id].ult===0;
+   },{k:spec.qa,id:victimId,seq:touchUltSeq},{timeout:15000});
+   await guest.page.waitForFunction(({k,id})=>{
+    const q=window[k]?.();return q?.combatReadyNow&&
+     !Object.values(q.combat?.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===id);
+   },{k:spec.qa,id:victimId},{timeout:12000});
+   console.log('PASS squad real touch ULT: peer sees accepted ultimate, tank landing complete');
+
    // Force a nearly finished knockout on the LOCAL EMULATOR, then deliver the
    // decisive shot via the actual touch control. Check scores and KO across
    // all four browsers, without relying on the short-lived round_end screen.
