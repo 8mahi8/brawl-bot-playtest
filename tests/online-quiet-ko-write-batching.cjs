@@ -11,17 +11,21 @@ assert(fromMetrics>0&&toMetrics>fromMetrics,'live transaction metrics extracted'
 const source=html.slice(fromMetrics,toMetrics)+'\n'+html.slice(from,to)+'\n'+html.slice(fn,end)+
  '\nthis.runTick=processCombatTick;this.metrics=()=>({quiet:{...quietTickMetrics},txn:{...tickTxnTiming}});';
 const IDs=['blue-a','blue-b','red-a','red-b'],seats=Object.fromEntries(IDs.map((id,i)=>[['blue1','blue2','red1','red2'][i],{id}]));
-function rig({age=200,mode='ko',t=1000,projectiles={},scheduled={},debuffs={},events={},hp={},remoteChange,ready=true}={}){
+function rig({age=200,mode='ko',t=1000,projectiles={},scheduled={},debuffs={},events={},hp={},ammo={},remoteChange,ready=true}={}){
  let now=10000,clock=0,steps=[],transactions=0,updaters=0,commits=0;
  let store={phase:'playing',mode,matchId:'m',round:1,hostToken:'cid',combatRev:7,startAt:0,
-  seats,hp:Object.fromEntries(IDs.map(id=>[id,hp[id]??100])),projectiles,scheduled,debuffs,events,
+  seats,hp:Object.fromEntries(IDs.map(id=>[id,hp[id]??100])),
+  stats:Object.fromEntries(IDs.map(id=>[id,{char:'tank',ammo:ammo[id]??3,refillAt:0,
+   guardUntil:0,boostUntil:0,overdriveUntil:0}])),
+  projectiles,scheduled,debuffs,events,
   clock:{wallAt:now-age,t}};
  const room={child(name){assert.equal(name,'game');return {transaction:async updater=>{
   transactions++;if(remoteChange)remoteChange(store);
   updaters++;const n=updater(store);if(n){store=n;commits++;}
   return {committed:!!n};
  }};}};
- const c={performance:{now:()=>++clock},combatBusy:false,hostProcessing:false,hostQueue:[],
+ const c={performance:{now:()=>++clock},CHARS:{tank:{hp:100}},
+  combatBusy:false,hostProcessing:false,hostQueue:[],
   combatTickCalls:0,combatTickSkips:{busy:0,queue:0,clock:0,scope:0},
   combatTickResults:{writes:0,committed:0,missing:0,wrongHost:0,wrongMatch:0,wrongRev:0,noStep:0,error:0},
   game:{...store,projectiles:{...projectiles},scheduled:{...scheduled},debuffs:{...debuffs},events:{...events}},
@@ -63,6 +67,8 @@ async function test(label,fn){await fn();tests++;console.log('PASS quiet KO tick
   ['recent visual event',{events:{hit:{type:'hit'}}}],
   ['Hot Zone mode',{mode:'area'}],
   ['KO of any player',{hp:{'red-a':0}}],
+  ['partially damaged player',{hp:{'red-a':80}}],
+  ['ammo still reloading',{ammo:{'blue-b':2}}],
   ['near KO gas boundary',{t:27900}],
  ]){
   await test(name+' retains normal sub-180ms tick',async()=>{
