@@ -167,14 +167,14 @@ async function run(browser,spec,count,botIndex=-1){
    // frequent network positions must not re-run the complete scene layout or
    // force HUD work; the fixed 100ms refresh and game snapshots still do it.
    const beforePerf=await snap(shooter,spec),perfBefore=beforePerf.presentationMetrics,drawBefore=beforePerf.drawTiming,workBefore=beforePerf.workTiming;
-   const phaseBefore=beforePerf.timerPhaseTiming,pauseBefore=beforePerf.pauseBannerMetrics,txnBefore=beforePerf.tickTxnTiming;
+   const phaseBefore=beforePerf.timerPhaseTiming,pauseBefore=beforePerf.pauseBannerMetrics,txnBefore=beforePerf.tickTxnTiming,quietBefore=beforePerf.quietTickMetrics;
    const arenaBefore=beforePerf.arenaBackdropMetrics;
    assert(perfBefore,'presentation diagnostics exposed in development HTML');
    assert(arenaBefore&&!arenaBefore.disabled&&arenaBefore.builds>=1,
     'static arena canvas paints once in real WebKit');
    await delay(1400);
    const afterPerf=await snap(shooter,spec),perfAfter=afterPerf.presentationMetrics,drawAfter=afterPerf.drawTiming,workAfter=afterPerf.workTiming;
-   const phaseAfter=afterPerf.timerPhaseTiming,pauseAfter=afterPerf.pauseBannerMetrics,txnAfter=afterPerf.tickTxnTiming;
+   const phaseAfter=afterPerf.timerPhaseTiming,pauseAfter=afterPerf.pauseBannerMetrics,txnAfter=afterPerf.tickTxnTiming,quietAfter=afterPerf.quietTickMetrics;
    const arenaAfter=afterPerf.arenaBackdropMetrics;
    assert.equal(arenaAfter.builds,arenaBefore.builds,
     'no background re-rasterization across steady gameplay frames');
@@ -232,6 +232,14 @@ async function run(browser,spec,count,botIndex=-1){
     JSON.stringify({phases,pauseBannerWrites:pauseAfter.writes-pauseBefore.writes,
      pauseBannerSkips:pauseAfter.skips-pauseBefore.skips,
      totalTimerSyncMs:Math.round(delta('timerTotalMs')*10)/10}));
+   assert(quietAfter&&quietBefore&&Number.isSafeInteger(quietAfter.deferrals),
+    'real WebKit exposes local quiet-KO write avoidance diagnostics');
+   console.log('TRACE squad quiet KO double-step writes (local WebKit): '+
+    JSON.stringify({mode:afterPerf.mode,phase:afterPerf.game,
+     deferredPolls:quietAfter.deferrals-quietBefore.deferrals,
+     twoStepsOneWrite:quietAfter.doubleSteps-quietBefore.doubleSteps,
+     activeOneStep:quietAfter.ordinarySteps-quietBefore.ordinarySteps,
+     staleFirebaseFallback:quietAfter.unsafeAtCommit-quietBefore.unsafeAtCommit}));
    const diff=key=>txnAfter[key]-txnBefore[key];
    const avg=(key,denom)=>denom?Math.round(diff(key)/denom*10)/10:null;
    console.log('TRACE squad host Firebase transaction CPU vs network wait (local WebKit): '+
