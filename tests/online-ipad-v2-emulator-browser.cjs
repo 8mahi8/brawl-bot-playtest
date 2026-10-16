@@ -35,7 +35,7 @@ function patched(spec){
    'window.__brawlLocalCanvasStage=stage=>{if(!["full","noArena","noActors","fillOnly"].includes(stage))throw Error("Bad canvas stage");__brawlCanvasStage=stage;return stage;};',
    'const __brawlOriginalIdleCanvasGate=shouldDrawCanvasFrame;',
    'let __brawlLocalIdleCanvas=true;',
-   'shouldDrawCanvasFrame=(now)=>__brawlLocalIdleCanvas?__brawlOriginalIdleCanvasGate(now):(__brawlOriginalIdleCanvasGate(now),true);',
+   'shouldDrawCanvasFrame=(now)=>__brawlLocalIdleCanvas?__brawlOriginalIdleCanvasGate(now):(quietCanvasLastActiveAt=now,quietCanvasLastDrawAt=now,quietCanvasMetrics.activeDraws++,true);',
    'window.__brawlLocalIdleCanvasGate=enabled=>{__brawlLocalIdleCanvas=enabled===true;return __brawlLocalIdleCanvas;};',
    renderHook
   ].join('\n'));
