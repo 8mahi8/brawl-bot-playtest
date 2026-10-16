@@ -18,4 +18,15 @@ assert(pixelCount(1024,620,scale(1024,620,2,false,620,true))<=budget,'iPad onlin
 assert(pixelCount(1200,800,scale(1200,800,2,false,800,true))<=budget,'large tablet respects pixel budget');
 assert.equal(scale(1600,1000,2,false,1000,true),1,'never drop below CSS resolution');
 assert.equal(scale(960,540,1.25,false,540,true),1.25,'middle-density layout not needlessly softened');
-console.log('PASS 2vs2 Canvas DPR: retina iPad pixel cap, small phone sharpness, solo quality, DOM untouched');
+// Simulate sustained overloaded WebKit (120ms frames), then recovered 60Hz.
+// The live runtime must avoid one-frame quality flapping and retain CSS size.
+const adjust=vm.runInContext('adjustCanvasQuality',context);
+for(let i=1;i<=40;i++)adjust(.12,1000+i*120,true);
+assert.equal(vm.runInContext('canvasQualityCap',context),1,'sustained slow frames step down to DPR 1');
+assert.equal(scale(1024,620,2,false,620,true),1,'overloaded host lowers Canvas workload');
+assert(vm.runInContext('canvasQualityReductions',context)>=3,'quality steps counted');
+for(let i=1;i<=450;i++)adjust(1/60,6500+i*(1000/60),true);
+assert(vm.runInContext('canvasQualityCap',context)>1,'sustained 60Hz playback recovers resolution');
+adjust(0,18000,false);
+assert.equal(vm.runInContext('canvasQualityCap',context),2,'leaving multiplayer restores native-quality baseline');
+console.log('PASS 2vs2 adaptive Canvas: retina pixel cap, sustained slow-frame downgrade, gradual recovery, solo/phone sharpness');
