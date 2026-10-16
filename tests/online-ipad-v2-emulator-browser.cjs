@@ -15,6 +15,18 @@ function patched(spec){
  assert.equal(src.split(origin).length-1,1,'Firebase SDK creation hook '+spec.mode);
  src=src.replace(origin,origin+'\n'+(spec.mode==='duel'?'    ':' ')+"db.useEmulator('127.0.0.1',9000);");
  src=src.replace('connect-src ', 'connect-src http://127.0.0.1:9000 ws://127.0.0.1:9000 ');
+ if(spec.mode==='squad'){
+  // CI HTTP fixture ONLY: keep committed/published 2vs2 HTML unchanged.
+  const hook='// Firebase RTDB serializes writes on the same game node.';
+  assert.equal(src.split(hook).length-1,1,'unique quiet KO source hook');
+  src=src.replace(hook,[
+   'const __benchOriginalQuietKoTickSafe=quietKoTickSafe;',
+   'let __benchQuietEnabled=true;',
+   'quietKoTickSafe=(...args)=>__benchQuietEnabled&&__benchOriginalQuietKoTickSafe(...args);',
+   'window.__brawlLocalQuietAB=enabled=>{__benchQuietEnabled=enabled===true;return __benchQuietEnabled;};',
+   hook
+  ].join('\n'));
+ }
  assert(src.includes("db.useEmulator('127.0.0.1',9000)"));
  return src;
 }
@@ -127,22 +139,73 @@ async function run(browser,spec,count,botIndex=-1){
    const hostId=q.myId,before=q.stats[hostId].lastActionSeq;
    const startupWait=Math.max(250,Math.min(3500,q.combat.startAt-Date.now()+450));
    await delay(startupWait);
-   // Verify local WebKit+RTDB keeps authoritative clock speed while the host
-   // avoids every other Firebase write during entirely quiet four-human KO.
-   const quietStart=await snap(shooter,spec);
-   assert.equal(quietStart.mode,'ko','quiet-write benchmark requires KO mode');
-   await delay(1700);
-   const quietEnd=await snap(shooter,spec);
-   const idleDefers=quietEnd.quietTickMetrics.deferrals-quietStart.quietTickMetrics.deferrals;
-   const idleBatches=quietEnd.quietTickMetrics.doubleSteps-quietStart.quietTickMetrics.doubleSteps;
-   const idleClockMs=quietEnd.combat.clock.t-quietStart.combat.clock.t;
-   assert(idleDefers>=2&&idleBatches>=2,
-    'real four-client KO idle must save Firebase writes: '+JSON.stringify({idleDefers,idleBatches}));
-   assert(idleClockMs>=1000,
-    'two-step KO write batching must not stall authoritative game time: '+idleClockMs);
-   console.log('PASS squad quiet KO 4-browser: '+idleDefers+' deferred host polls / '+
-    idleBatches+' two-step Firebase writes; game clock '+idleClockMs+
-    'ms advance in 1700ms idle (LOCAL WebKit, not physical iPad)');
+   // Same four live players and same Firebase room: LOCAL fixture alternates
+   // unbatched control and quiet-KO optimization. ABBA reduces thermal/order
+   // bias; frame pacing is descriptive because GitHub runners are noisy.
+   async function sampleQuietVariant(enabled,sequence){
+    const toggled=await shooter.page.evaluate(v=>window.__brawlLocalQuietAB(v),enabled);
+    assert.equal(toggled,enabled,'local test-only optimization switch');
+    await delay(180);
+    await shooter.page.evaluate(()=>{
+     const probe={gaps:[],last:0,stopped:false};
+     window.__brawlQuietFrameProbe=probe;
+     function frame(t){
+      if(probe.stopped)return;
+      if(probe.last)probe.gaps.push(t-probe.last);
+      probe.last=t;
+      requestAnimationFrame(frame);
+     }
+     requestAnimationFrame(frame);
+    });
+    const q1=await snap(shooter,spec),wallStart=Date.now();
+    await delay(1700);
+    const q2=await snap(shooter,spec),wallMs=Date.now()-wallStart;
+    const gaps=await shooter.page.evaluate(()=>{
+     const probe=window.__brawlQuietFrameProbe;
+     probe.stopped=true;delete window.__brawlQuietFrameProbe;
+     return probe.gaps;
+    });
+    gaps.sort((a,b)=>a-b);
+    const delta=(category,key)=>q2[category][key]-q1[category][key];
+    const sent=delta('tickTxnTiming','starts'),pulses=delta('workTiming','timerPulses');
+    assert.equal(q2.game,'playing','A/B window must stay inside the same match');
+    return {
+     variant:enabled?'quiet-ko':'legacy-100ms',sequence,wallMs,
+     hostPolls:pulses,tickWrites:sent,committed:delta('tickTxnTiming','committed'),
+     deferredPolls:delta('quietTickMetrics','deferrals'),
+     doubleStepWrites:delta('quietTickMetrics','doubleSteps'),
+     gameClockMs:q2.combat.clock.t-q1.combat.clock.t,
+     hostTimerCpuMs:Math.round(q2.timerPhaseTiming.hostCombat.totalMs-q1.timerPhaseTiming.hostCombat.totalMs),
+     frameCount:gaps.length,
+     frameMedianMs:gaps[Math.floor(gaps.length*.5)]?Math.round(gaps[Math.floor(gaps.length*.5)]):null,
+     frameP95Ms:gaps[Math.floor(gaps.length*.95)]?Math.round(gaps[Math.floor(gaps.length*.95)]):null
+    };
+   }
+   const bench=[];
+   for(const [index,enabled] of [false,true,true,false].entries()){
+    const sample=await sampleQuietVariant(enabled,index+1);
+    assert(sample.hostPolls>=7,'browser host timer must run in A/B window: '+JSON.stringify(sample));
+    assert(sample.gameClockMs>=900,'idle KO game clock must progress: '+JSON.stringify(sample));
+    bench.push(sample);
+   }
+   // Restore original game logic for all the shooting and reconnect tests.
+   await shooter.page.evaluate(()=>window.__brawlLocalQuietAB(true));
+   const baseline=bench.filter(b=>b.variant==='legacy-100ms');
+   const quiet=bench.filter(b=>b.variant==='quiet-ko');
+   const sum=(rows,key)=>rows.reduce((v,r)=>v+r[key],0);
+   const baselineRate=sum(baseline,'tickWrites')/sum(baseline,'hostPolls');
+   const quietRate=sum(quiet,'tickWrites')/sum(quiet,'hostPolls');
+   assert.equal(sum(baseline,'deferredPolls'),0,'disabled quiet optimization cannot defer any host polls');
+   assert(sum(quiet,'doubleStepWrites')>=3,'enabled quiet optimization must batch safe game ticks');
+   assert(quietRate<baselineRate*.8,
+    'quiet mode should meaningfully reduce game transactions per host poll: '+JSON.stringify({baselineRate,quietRate,bench}));
+   console.log('PASS squad quiet KO A/B write reduction (LOCAL four-WebKit RTDB): '+
+    JSON.stringify({baselineWritesPerPoll:+baselineRate.toFixed(3),
+     quietWritesPerPoll:+quietRate.toFixed(3),
+     relativeWriteReductionPct:Math.round((1-quietRate/baselineRate)*100),
+     windows:bench}));
+   // rAF pacing is logged, never asserted as an improvement on noisy CI:
+   // actual school Safari input latency/FPS requires hardware testing.
    const shotSentAt=Date.now();
    await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
    const touchCompletedAt=Date.now();
