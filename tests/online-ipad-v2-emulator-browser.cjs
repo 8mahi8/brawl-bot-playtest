@@ -253,9 +253,9 @@ async function run(browser,spec,count,botIndex=-1){
    for(const [i,enabled]of [false,true,true,false].entries())
     idleCanvasAB.push(await sampleIdleCanvasGate(enabled,i+1));
    await Promise.all(clients.map(c=>c.page.evaluate(()=>window.__brawlLocalIdleCanvasGate(true))));
-   const group=enabled=>idleCanvasAB.filter(x=>x.mode===(enabled?'idle-draw-gate':'always-redraw')).flatMap(x=>x.clients);
+   const idleGroup=enabled=>idleCanvasAB.filter(x=>x.mode===(enabled?'idle-draw-gate':'always-redraw')).flatMap(x=>x.clients);
    const aggregate=enabled=>{
-    const rows=group(enabled),avg=k=>+(rows.reduce((v,x)=>v+x[k],0)/rows.length).toFixed(1);
+    const rows=idleGroup(enabled),avg=k=>+(rows.reduce((v,x)=>v+x[k],0)/rows.length).toFixed(1);
     return {meanRafFrames:avg('raf'),meanDrawCalls:avg('framesDrawn'),
      meanIdleFrameSkips:avg('idleFramesSkipped'),meanTimerPulses:avg('timerPulses'),
      hostRafFrames:rows.filter((_,i)=>i%4===0).map(x=>x.raf)};
