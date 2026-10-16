@@ -8,6 +8,7 @@ on:
       - 'tests/online-remote-presentation.cjs'
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-frame-rate-accuracy.cjs'
+      - 'tests/online-2v2-canvas-pixel-budget.cjs'
       - 'tests/online-hp-preview.cjs'
       - 'tests/online-host-action-batching.cjs'
       - 'tests/online-host-txn-arbiter.cjs'
@@ -23,6 +24,7 @@ on:
       - 'tests/online-remote-presentation.cjs'
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-frame-rate-accuracy.cjs'
+      - 'tests/online-2v2-canvas-pixel-budget.cjs'
       - 'tests/online-hp-preview.cjs'
       - 'tests/online-host-action-batching.cjs'
       - 'tests/online-host-txn-arbiter.cjs'
@@ -52,6 +54,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Verify 2vs2 tablet Canvas memory budget and phone quality
+        run: node tests/online-2v2-canvas-pixel-budget.cjs
       - name: Verify actual FPS telemetry with clamped simulation delta
         run: node tests/online-frame-rate-accuracy.cjs
       - name: Verify visual-only position prediction and HTML syntax
