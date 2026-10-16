@@ -2302,7 +2302,7 @@ function frame(now){const elapsed=Math.max(0,(now-(lastFrame||now))/1000),dt=cla
  if(scene==='game'&&!document.hidden){workTiming.frameSamples++;if(elapsed>0.1)workTiming.frameGapOver100++;workTiming.frameGapMaxMs=Math.max(workTiming.frameGapMaxMs,elapsed*1000);}
  const workStart=performance.now();update(dt);const afterUpdate=performance.now();updateBots(dt);const afterBots=performance.now();if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}
  const nonDraw=performance.now()-workStart;if(scene==='game'){workTiming.updateTotalMs+=afterUpdate-workStart;workTiming.botTotalMs+=afterBots-afterUpdate;workTiming.nonDrawTotalMs+=nonDraw;workTiming.nonDrawMaxMs=Math.max(workTiming.nonDrawMaxMs,nonDraw);}
- if(shouldDrawCanvasFrame(now)){const start=performance.now();draw(dt);const cost=performance.now()-start;drawTiming.frames++;drawTiming.lastDrawMs=Math.round(cost*10)/10;drawTiming.totalDrawMs+=cost;drawTiming.maxDrawMs=Math.max(drawTiming.maxDrawMs,cost);}else drawTiming.skippedCoveredFrames++;requestAnimationFrame(frame);}
+ if(shouldDrawCanvasFrame(now)){const start=performance.now();draw(dt);const cost=performance.now()-start;drawTiming.frames++;drawTiming.lastDrawMs=Math.round(cost*10)/10;drawTiming.totalDrawMs+=cost;drawTiming.maxDrawMs=Math.max(drawTiming.maxDrawMs,cost);}else if(scene!=='game')drawTiming.skippedCoveredFrames++;requestAnimationFrame(frame);}
 
 function setLayoutDrag(k,e){if(scene!=='layout')return;e.preventDefault();const el=$(k==='gad'?'mockGad':'mockUlt');let active=e.pointerId;el.setPointerCapture?.(active);
  const move=ev=>{if(ev.pointerId!==active)return;const stage=$('app').getBoundingClientRect(),sz=layout[k].size;
