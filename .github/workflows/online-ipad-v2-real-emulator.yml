@@ -8,6 +8,7 @@ on:
       - 'tests/online-remote-presentation.cjs'
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-frame-rate-accuracy.cjs'
+      - 'tests/online-touch-input-latency.cjs'
       - 'tests/online-2v2-canvas-pixel-budget.cjs'
       - 'tests/online-idle-position-traffic.cjs'
       - 'tests/online-2v2-static-arena-cache.cjs'
@@ -26,6 +27,7 @@ on:
       - 'tests/online-remote-presentation.cjs'
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-frame-rate-accuracy.cjs'
+      - 'tests/online-touch-input-latency.cjs'
       - 'tests/online-2v2-canvas-pixel-budget.cjs'
       - 'tests/online-idle-position-traffic.cjs'
       - 'tests/online-2v2-static-arena-cache.cjs'
@@ -64,6 +66,8 @@ jobs:
         run: node tests/online-idle-position-traffic.cjs
       - name: Verify 2vs2 tablet Canvas memory budget and phone quality
         run: node tests/online-2v2-canvas-pixel-budget.cjs
+      - name: Verify Safari touch event queue timestamp and input attribution
+        run: node tests/online-touch-input-latency.cjs
       - name: Verify actual FPS telemetry with clamped simulation delta
         run: node tests/online-frame-rate-accuracy.cjs
       - name: Verify visual-only position prediction and HTML syntax
