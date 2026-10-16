@@ -27,6 +27,10 @@ function patched(spec){
    'let __brawlLocalDrawDisabled=false;',
    'draw=function(...args){if(!__brawlLocalDrawDisabled)return __brawlLocalOriginalDraw(...args);};',
    'window.__brawlLocalDrawSwitch=enabled=>{__brawlLocalDrawDisabled=enabled!==true;return !__brawlLocalDrawDisabled;};',
+   'const __brawlOriginalRenderScale=canvasRenderScale;',
+   'let __brawlRasterFactor=1;',
+   'canvasRenderScale=(...args)=>Math.max(.65,__brawlOriginalRenderScale(...args)*__brawlRasterFactor);',
+   'window.__brawlLocalRasterFactor=factor=>{if(factor!==1&&factor!==0.75)throw Error("Bad test raster factor");__brawlRasterFactor=factor;return factor;};',
    renderHook
   ].join('\n'));
   const hook='// Firebase RTDB serializes writes on the same game node.';
@@ -216,6 +220,53 @@ async function run(browser,spec,count,botIndex=-1){
      quietWritesPerPoll:+quietRate.toFixed(3),
      relativeWriteReductionPct:Math.round((1-quietRate/baselineRate)*100),
      windows:bench}));
+   // Same four browser tabs, same battle: compare native backing-store
+   // resolution with 75% linear Canvas raster scale. This is ONLY a localhost
+   // fixture experiment; game controls remain full CSS resolution and no
+   // candidate HTML is edited until measurable benefits are demonstrated.
+   async function sampleRasterScale(factor,sequence){
+    const toggled=await Promise.all(clients.map(c=>
+     c.page.evaluate(v=>window.__brawlLocalRasterFactor(v),factor)));
+    assert(toggled.every(x=>x===factor),'all clients set the expected raster multiplier');
+    await delay(230);
+    const starts=await Promise.all(clients.map(c=>snap(c,spec)));
+    const startWall=Date.now();
+    await delay(1350);
+    const ends=await Promise.all(clients.map(c=>snap(c,spec)));
+    const byClient=clients.map((_,i)=>{
+     const a=starts[i],z=ends[i],mx=z.canvasMetrics;
+     return {raf:z.workTiming.frameSamples-a.workTiming.frameSamples,
+      gapOver100:z.workTiming.frameGapOver100-a.workTiming.frameGapOver100,
+      drawMs:Math.round(z.drawTiming.totalDrawMs-a.drawTiming.totalDrawMs),
+      hostTimerPulses:z.workTiming.timerPulses-a.workTiming.timerPulses,
+      width:mx.backingWidth,height:mx.backingHeight,pixels:mx.backingWidth*mx.backingHeight,
+      cssPixels:mx.cssWidth*mx.cssHeight,
+      drawScale:Math.round((mx.backingWidth/Math.max(1,mx.cssWidth))*100)/100,
+      gameClockMs:z.combat.clock.t-a.combat.clock.t};
+    });
+    assert(byClient.every(x=>x.hostTimerPulses>=8&&x.gameClockMs>=500),
+     'Canvas size A/B must not stall battle timer');
+    return {factor,sequence,wallMs:Date.now()-startWall,byClient};
+   }
+   const rasterAB=[];
+   for(const [i,factor]of [1,.75,.75,1].entries())
+    rasterAB.push(await sampleRasterScale(factor,i+1));
+   await Promise.all(clients.map(c=>c.page.evaluate(()=>window.__brawlLocalRasterFactor(1))));
+   const rasterStats=factor=>{
+    const rows=rasterAB.filter(x=>x.factor===factor).flatMap(x=>x.byClient);
+    const mean=key=>+(rows.reduce((a,c)=>a+c[key],0)/rows.length).toFixed(1);
+    return {meanRafFrames:mean('raf'),meanGapOver100:mean('gapOver100'),
+     meanDrawMs:mean('drawMs'),meanPixels:mean('pixels'),
+     meanTimerPulses:mean('hostTimerPulses'),
+     hostRafFrames:rows.filter((_,i)=>i%4===0).map(x=>x.raf)};
+   };
+   const nativeRaster=rasterStats(1),compactRaster=rasterStats(.75);
+   assert(compactRaster.meanPixels<nativeRaster.meanPixels*.7,
+    '0.75x Canvas scale must reduce actual backing-store pixels');
+   console.log('TRACE squad four-WebKit Canvas resolution A/B (local emulator only): '+
+    JSON.stringify({nativeRaster,compactRaster,rasterAB}));
+   // Frame pacing cannot be equated to iPad FPS. If the lower raster does not
+   // improve REAL WebKit rAF frequency here, do not promote it to the game.
    // rAF pacing is logged, never asserted as an improvement on noisy CI:
    // actual school Safari input latency/FPS requires hardware testing.
    // Four-client in-game A/B: hold the same Firebase room, inputs and host
