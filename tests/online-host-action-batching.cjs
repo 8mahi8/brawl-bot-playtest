@@ -96,15 +96,16 @@ async function check(name,fn){await fn();passed++;console.log('PASS batch host a
   assert.equal(r.events.writes,2);
   assert.equal(r.read().processed.join(','),'shot1');
  });
- await check('uncommitted burst defers remaining work instead of spinning',async()=>{
-  const r=rig(Array.from({length:7},(_,i)=>action('shot'+(i+1))),{reject:1});
+ await check('uncommitted seven-shot burst restores original ordering on retry',async()=>{
+  const shots=Array.from({length:7},(_,i)=>action('shot'+(i+1))),r=rig(shots,{reject:1});
   await r.run();
-  assert.equal(r.events.writes,1,'do not spin on an aborted RTDB transaction');
-  assert.equal(r.c.hostQueue.length,1,'unconsumed batch stays queued');
-  assert.equal(r.c.queuedActions.has('shot1'),false,'consumed request is retryable');
-  assert.equal(r.events.dispatches,0,'wait for periodic retry rather than recursive microtasks');
+  assert.equal(r.events.writes,1,'do not spin on aborted RTDB transaction');
+  assert.equal(r.c.hostQueue.length,0,'later shots must not overtake rejected batch');
+  assert.equal(r.c.queuedActions.size,0,'all confirmed pending requests become retryable');
+  assert.equal(r.events.dispatches,0,'defer retry rather than schedule a recursive microtask');
+  for(const shot of shots)r.append(shot); // Next timer reconstructs pending actions in sequence order.
   await r.run();
-  assert.equal(r.read().processed.join(','),'shot7');
+  assert.equal(r.read().processed.join(','),'shot1,shot2,shot3,shot4,shot5,shot6,shot7');
  });
  await check('no actions processed during paused match',async()=>{
   const r=rig([action('shot1')],{ready:false});await r.run();assert.equal(r.events.writes,0);
