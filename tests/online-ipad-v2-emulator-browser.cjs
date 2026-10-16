@@ -27,7 +27,7 @@ const server=http.createServer((req,res)=>{
 });
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function context(browser,mode,who){
- const ctx=await browser.newContext({viewport:{width:1024,height:620},hasTouch:true,isMobile:true,deviceScaleFactor:1,locale:'ja-JP'});
+ const ctx=await browser.newContext({viewport:{width:1024,height:620},hasTouch:true,isMobile:true,deviceScaleFactor:mode==='squad'&&who==='client0'?2:1,locale:'ja-JP'});
  const page=await ctx.newPage();
  const issues=[];
  page.on('pageerror',e=>issues.push('JS '+String(e.message)));
@@ -106,6 +106,20 @@ async function run(browser,spec,count,botIndex=-1){
   }
   if(spec.mode==='squad'){
    const shooter=clients[0],observer=clients[1],q=await snap(shooter,spec);
+   // The host runs at device DPR 2 (retina iPad simulation). Each other
+   // browser retains DPR 1 to keep the CI workload representative, not 4x.
+   await shooter.page.waitForFunction(k=>{
+    const m=window[k]?.()?.canvasMetrics;
+    return m&&m.backingWidth>0&&m.backingHeight>0&&m.renderScale<=2;
+   },spec.qa,{timeout:8000});
+   const px=(await snap(shooter,spec)).canvasMetrics,raw=px.cssWidth*px.cssHeight*4;
+   const pixels=px.backingWidth*px.backingHeight;
+   assert(pixels<=Math.max(px.cssWidth*px.cssHeight,px.maxGameplayPixels)+5000,
+    'retina iPad canvas respects gameplay pixel ceiling: '+JSON.stringify(px));
+   if(raw>px.maxGameplayPixels*1.03)assert(pixels<raw*.95,'retina raster budget must actually reduce backing pixels');
+   console.log('PERF squad host retina DPR2: '+Math.round(raw)+' raw vs '+pixels+
+     ' capped backing pixels ('+Math.round(pixels/Math.max(1,raw)*100)+'%) '+
+     JSON.stringify(px));
    assert.equal(Object.keys(q.combat.stats).length,4);
    assert(q.stats&&q.combat.matchId,'four authoritative players');
    const hostId=q.myId,before=q.stats[hostId].lastActionSeq;
@@ -117,7 +131,14 @@ async function run(browser,spec,count,botIndex=-1){
    const hostAckMs=Date.now()-shotSentAt;
    await observer.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,{k:spec.qa,id:hostId,seq:before},{timeout:10000});
    const peerAckMs=Date.now()-shotSentAt;
-   console.log('PASS squad 4 participants: touch shot authoritative ack '+hostAckMs+'ms, other-client ack '+peerAckMs+'ms (local RTDB emulator, not real network RTT)');
+   const ackState=await snap(shooter,spec);
+   const ackReceipt=Object.values(ackState.combat?.usedActions||{}).find(v=>
+    v.owner===hostId&&v.seq>before&&v.type==='shot'&&v.status==='accepted');
+   console.log('PASS squad 4 participants: touch shot authoritative ack '+hostAckMs+
+    'ms, other-client ack '+peerAckMs+
+    'ms (local RTDB emulator, not real network RTT); host clock lag '+
+    Math.round(ackState.hostClockLag||0)+'ms, server receipt delay '+
+    (ackReceipt?Math.round(ackReceipt.acceptedAt-shotSentAt)+'ms':'expired'));
    // Verify four real clients can submit near-concurrent shots; all receipts must
    // survive the host's bounded batch transaction and appear on every client.
    await delay(450);

@@ -1,0 +1,21 @@
+// Guard the adaptive multiplayer Canvas resolution on retina-class iPads.
+'use strict';
+const fs=require('node:fs'),assert=require('node:assert/strict'),path=require('node:path'),vm=require('node:vm');
+const html=fs.readFileSync(path.join(__dirname,'../online/ipad-squad-v2-lab.html'),'utf8');
+const start=html.indexOf('const ONLINE_CANVAS_PIXEL_BUDGET='),end=html.indexOf('function draw(dt=',start);
+assert(start>0&&end>start&&end-start<1800,'extract live canvas scale function');
+const context={Math};vm.createContext(context);
+vm.runInContext(html.slice(start,end)+';this.scale=canvasRenderScale;',context);
+const scale=context.scale, budget=1400000;
+const pixelCount=(w,h,d)=>Math.floor(w*d)*Math.floor(h*d);
+assert.equal(scale(360,600,2,false,360,true),2,'small smartphone retains retina resolution');
+assert.equal(scale(1024,620,2,true,620,true),1.25,'solo landscape keeps existing sharpness');
+assert.equal(scale(360,600,3,true,360,true),1,'solo portrait remains low memory');
+assert.equal(scale(1024,620,2,false,620,false),2,'home/lobby keep native rendering');
+assert.equal(scale(1024,620,1,false,620,true),1,'ordinary pixel-density 1 remains unchanged');
+assert.equal(scale(1024,620,2,false,620,true)<2,true,'retina iPad gameplay must reduce heavy backing store');
+assert(pixelCount(1024,620,scale(1024,620,2,false,620,true))<=budget,'iPad online canvas respects pixel budget');
+assert(pixelCount(1200,800,scale(1200,800,2,false,800,true))<=budget,'large tablet respects pixel budget');
+assert.equal(scale(1600,1000,2,false,1000,true),1,'never drop below CSS resolution');
+assert.equal(scale(960,540,1.25,false,540,true),1.25,'middle-density layout not needlessly softened');
+console.log('PASS 2vs2 Canvas DPR: retina iPad pixel cap, small phone sharpness, solo quality, DOM untouched');
