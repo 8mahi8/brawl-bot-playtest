@@ -1580,14 +1580,22 @@ function inputSnapshot(){const input=structuredClone(positions);input[myId]={...
 // capture still use the existing fast path; server-confirmed actions never wait.
 const QUIET_KO_WRITE_AGE_MS=180;
 const QUIET_KO_GAS_GUARD_MS=28000;
-let quietTickMetrics={deferrals:0,doubleSteps:0,ordinarySteps:0,unsafeAtCommit:0};
+let quietTickMetrics={deferrals:0,doubleSteps:0,ordinarySteps:0,unsafeAtCommit:0,actionCatchups:0};
 function quietKoTickSafe(g,age){
  if(!g||g.phase!=='playing'||g.mode!=='ko'||!g.clock||
   !Number.isFinite(age)||age<0||g.clock.t+Math.max(200,age)>=QUIET_KO_GAS_GUARD_MS)return false;
  if(Object.keys(g.projectiles||{}).length||Object.keys(g.scheduled||{}).length||
     Object.keys(g.debuffs||{}).length||Object.keys(g.events||{}).length)return false;
  const seats=Object.values(g.seats||{});
- return seats.length===4&&seats.every(s=>(g.hp?.[s.id]||0)>0);
+ // Clock-sensitive resources must already be full/inactive, or a fresh
+ // action might observe stale refill/regen timers while the write is deferred.
+ return seats.length===4&&seats.every(s=>{
+  const st=g.stats?.[s.id],maxHp=CHARS[st?.char]?.hp;
+  return !!st&&st.ammo===3&&!(st.refillAt>0)&&maxHp>0&&g.hp?.[s.id]===maxHp&&
+   !(st.guardUntil>g.clock.t)&&!(st.boostUntil>g.clock.t)&&
+   !(st.overdriveUntil>g.clock.t)&&!(g.protection?.[s.id]>g.clock.t)&&
+   !(g.reveals?.[s.id]>g.clock.t);
+ });
 }
 // Firebase RTDB serializes writes on the same game node. Never compete with a
 // host action batch, and skip a network transaction before physics can advance.
@@ -1770,6 +1778,13 @@ async function processHostQueue(){
    const result=await activeRoom.child('game').transaction(g=>{
     if(!g||g.hostToken!==token||g.matchId!==match||g.round!==round||g.phase!=='playing')return;
     let next=g;
+    // A new shot can interrupt the deferred idle KO update. Catch up the
+    // first event-free slice BEFORE accepting it, preserving reload/clock.
+    const sinceTick=now-g.clock?.wallAt;
+    if(quietKoTickSafe(g,sinceTick)&&sinceTick>=150){
+     const caughtUp=engine(g).step(g,input,now-100,g.combatRev,token);
+     if(caughtUp!==g){next=caughtUp;quietTickMetrics.actionCatchups++;}
+    }
     for(const a of activeBatch)next=engine(next).accept(next,a,input,now);
     // A received shot normally waits for a second Firebase round trip before
     // any bullet/HP physics can advance. If >=50ms elapsed, step in THIS SAME
