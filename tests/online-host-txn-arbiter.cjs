@@ -4,7 +4,9 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const html=fs.readFileSync(path.join(__dirname,'../online/ipad-squad-v2-lab.html'),'utf8');
 const begin=html.indexOf('async function processCombatTick()');
 const end=html.indexOf('function isAuthoritative()',begin);
-assert(begin>0&&end>begin&&end-begin<2000,'real host tick function is present');
+assert(begin>0&&end>begin&&end-begin<2900,'real host tick function is present');
+const metricsStart=html.indexOf('let tickTxnTiming='),metricsEnd=html.indexOf('let pauseBannerMetrics=',metricsStart);
+assert(metricsStart>0&&metricsEnd>metricsStart&&metricsEnd-metricsStart<1100,'real transaction metrics helper is present');
 const embedded=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(Boolean);
 embedded.forEach((x,i)=>new vm.Script(x,{filename:'embedded 2vs2 js #'+i}));
 function rig(opts={}){
@@ -18,7 +20,9 @@ function rig(opts={}){
   if(next)current=next;
   return {committed:!!next};
  }}}};
+ let clock=0;
  const c={
+  performance:{now:()=>++clock},
   combatBusy:false,hostProcessing:!!opts.hostProcessing,
   combatTickCalls:0,combatTickSkips:{busy:0,queue:0,scope:0,clock:0},
   combatTickResults:{writes:0,committed:0,missing:0,wrongHost:0,wrongMatch:0,wrongRev:0,noStep:0,error:0},
@@ -32,7 +36,8 @@ function rig(opts={}){
   }})
  };
  vm.createContext(c);
- vm.runInContext(html.slice(begin,end)+'\nthis.processCombatTick=processCombatTick',c);
+ vm.runInContext(html.slice(metricsStart,metricsEnd)+'\n'+html.slice(begin,end)+
+  '\nthis.processCombatTick=processCombatTick;this.readTxnStats=()=>({...tickTxnTiming});',c);
  return {c,metrics,run:()=>c.processCombatTick(),read:()=>current,release:()=>complete?.()};
 }
 let passed=0;
@@ -40,9 +45,14 @@ async function check(name,fn){await fn();passed++;console.log('PASS host arbiter
 (async()=>{
  await check('elapsed 80ms advances engine in one transaction',async()=>{
   const r=rig();await r.run();assert.equal(r.metrics.transactions,1);assert.equal(r.metrics.steps,1);assert.equal(r.read().combatRev,4);
+  const stats=r.c.readTxnStats();assert.equal(stats.starts,1);assert.equal(stats.committed,1);
+  assert.equal(stats.updaterCalls,1);assert.equal(stats.engineCalls,1);
+  assert(stats.callMs>=stats.updaterMs&&stats.updaterMs>=stats.engineMs,
+   'transaction call contains updater and shared combat calculation');
  });
  await check('less than 50ms elapsed does not write to Firebase',async()=>{
   const r=rig({wallAt:9980});await r.run();assert.equal(r.metrics.transactions,0);assert.equal(r.metrics.steps,0);
+  assert.equal(r.c.readTxnStats().starts,0,'no-cost skip does not distort Firebase metrics');
  });
  await check('active action batch takes priority over combat tick',async()=>{
   const r=rig({hostProcessing:true});await r.run();assert.equal(r.metrics.transactions,0);
