@@ -164,6 +164,16 @@ async function run(browser,spec,count,botIndex=-1){
    assert(hudUpdates<=40,'position flood should not trigger HUD on every packet: '+hudUpdates);
    console.log('PASS squad UI position burst: '+received+' position snapshots; '+
     hudUpdates+' HUD redraws; '+sceneUpdates+' redundant game-scene rebuilds in 1400ms (local WebKit)');
+   const adaptive=await snap(shooter,spec);
+   console.log('PERF squad adaptive DPR2 host after live combat: '+JSON.stringify({
+    css:adaptive.canvasMetrics.cssWidth+'x'+adaptive.canvasMetrics.cssHeight,
+    backing:adaptive.canvasMetrics.backingWidth+'x'+adaptive.canvasMetrics.backingHeight,
+    cap:adaptive.canvasMetrics.dynamicCap,
+    reductions:adaptive.canvasMetrics.qualityReductions,
+    resizes:adaptive.canvasMetrics.canvasResizes
+   }));
+   assert(adaptive.canvasMetrics.dynamicCap>=1&&adaptive.canvasMetrics.dynamicCap<=2,
+    'render quality stays within CSS-to-retina limits');
 
    // Record, but do not over-interpret, per-browser animation-frame pacing.
    // CI hardware is not a school iPad, so this is diagnostic rather than
