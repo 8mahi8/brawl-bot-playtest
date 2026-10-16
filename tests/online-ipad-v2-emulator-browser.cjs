@@ -167,14 +167,14 @@ async function run(browser,spec,count,botIndex=-1){
    // frequent network positions must not re-run the complete scene layout or
    // force HUD work; the fixed 100ms refresh and game snapshots still do it.
    const beforePerf=await snap(shooter,spec),perfBefore=beforePerf.presentationMetrics,drawBefore=beforePerf.drawTiming,workBefore=beforePerf.workTiming;
-   const phaseBefore=beforePerf.timerPhaseTiming,pauseBefore=beforePerf.pauseBannerMetrics;
+   const phaseBefore=beforePerf.timerPhaseTiming,pauseBefore=beforePerf.pauseBannerMetrics,txnBefore=beforePerf.tickTxnTiming;
    const arenaBefore=beforePerf.arenaBackdropMetrics;
    assert(perfBefore,'presentation diagnostics exposed in development HTML');
    assert(arenaBefore&&!arenaBefore.disabled&&arenaBefore.builds>=1,
     'static arena canvas paints once in real WebKit');
    await delay(1400);
    const afterPerf=await snap(shooter,spec),perfAfter=afterPerf.presentationMetrics,drawAfter=afterPerf.drawTiming,workAfter=afterPerf.workTiming;
-   const phaseAfter=afterPerf.timerPhaseTiming,pauseAfter=afterPerf.pauseBannerMetrics;
+   const phaseAfter=afterPerf.timerPhaseTiming,pauseAfter=afterPerf.pauseBannerMetrics,txnAfter=afterPerf.tickTxnTiming;
    const arenaAfter=afterPerf.arenaBackdropMetrics;
    assert.equal(arenaAfter.builds,arenaBefore.builds,
     'no background re-rasterization across steady gameplay frames');
@@ -232,6 +232,17 @@ async function run(browser,spec,count,botIndex=-1){
     JSON.stringify({phases,pauseBannerWrites:pauseAfter.writes-pauseBefore.writes,
      pauseBannerSkips:pauseAfter.skips-pauseBefore.skips,
      totalTimerSyncMs:Math.round(delta('timerTotalMs')*10)/10}));
+   const diff=key=>txnAfter[key]-txnBefore[key];
+   const avg=(key,denom)=>denom?Math.round(diff(key)/denom*10)/10:null;
+   console.log('TRACE squad host Firebase transaction CPU vs network wait (local WebKit): '+
+    JSON.stringify({transactions:diff('starts'),committed:diff('committed'),
+     rejected:diff('rejected'),updaterCalls:diff('updaterCalls'),
+     sdkTransactionCallAvgMs:avg('callMs',diff('starts')),
+     sdkTransactionCallMaxMs:Math.round(txnAfter.callMaxMs*10)/10,
+     authoritativeUpdaterAvgMs:avg('updaterMs',diff('updaterCalls')),
+     sharedEngineAvgMs:avg('engineMs',diff('engineCalls')),
+     immutablePositionSnapshotAvgMs:avg('snapshotMs',diff('starts')),
+     firebasePromiseElapsedAvgMs:avg('elapsedMs',diff('starts'))}));
 
    // The idle optimization must NOT introduce lag in movement or in stop
    // packets. Prove browser keyboard motion travels through live RTDB.
