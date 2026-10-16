@@ -28,7 +28,7 @@ function patched(spec){
    'draw=function(...args){if(!__brawlLocalDrawDisabled)return __brawlLocalOriginalDraw(...args);};',
    'window.__brawlLocalDrawSwitch=enabled=>{__brawlLocalDrawDisabled=enabled!==true;return !__brawlLocalDrawDisabled;};',
    renderHook
-  ].join('\\n'));
+  ].join('\n'));
   const hook='// Firebase RTDB serializes writes on the same game node.';
   assert.equal(src.split(hook).length-1,1,'unique quiet KO source hook');
   src=src.replace(hook,[
