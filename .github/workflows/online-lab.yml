@@ -1,0 +1,32 @@
+name: BRAWL online lab browser gate
+on:
+  push:
+    paths:
+      - 'online/**'
+      - 'tests/online-lab-browser.cjs'
+      - 'tests/online-lab-rooms.cjs'
+      - '.github/workflows/online-lab.yml'
+  pull_request:
+    paths:
+      - 'online/**'
+      - 'tests/online-lab-browser.cjs'
+      - 'tests/online-lab-rooms.cjs'
+      - '.github/workflows/online-lab.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright client without browser download
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+      - name: Prove both online candidates parse, show controls and preserve BOT mode
+        run: node tests/online-lab-browser.cjs
+      - name: Create and join simulated 1v1 and 2v2 rooms (no production DB)
+        run: node tests/online-lab-rooms.cjs
