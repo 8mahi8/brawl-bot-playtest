@@ -166,13 +166,13 @@ async function run(browser,spec,count,botIndex=-1){
    // Four live users send position packets even when stationary. Regression:
    // frequent network positions must not re-run the complete scene layout or
    // force HUD work; the fixed 100ms refresh and game snapshots still do it.
-   const beforePerf=await snap(shooter,spec),perfBefore=beforePerf.presentationMetrics,drawBefore=beforePerf.drawTiming;
+   const beforePerf=await snap(shooter,spec),perfBefore=beforePerf.presentationMetrics,drawBefore=beforePerf.drawTiming,workBefore=beforePerf.workTiming;
    const arenaBefore=beforePerf.arenaBackdropMetrics;
    assert(perfBefore,'presentation diagnostics exposed in development HTML');
    assert(arenaBefore&&!arenaBefore.disabled&&arenaBefore.builds>=1,
     'static arena canvas paints once in real WebKit');
    await delay(1400);
-   const afterPerf=await snap(shooter,spec),perfAfter=afterPerf.presentationMetrics,drawAfter=afterPerf.drawTiming;
+   const afterPerf=await snap(shooter,spec),perfAfter=afterPerf.presentationMetrics,drawAfter=afterPerf.drawTiming,workAfter=afterPerf.workTiming;
    const arenaAfter=afterPerf.arenaBackdropMetrics;
    assert.equal(arenaAfter.builds,arenaBefore.builds,
     'no background re-rasterization across steady gameplay frames');
@@ -187,6 +187,8 @@ async function run(browser,spec,count,botIndex=-1){
    assert(received<=26,'stationary 4-player position stream should be throttled: '+received);
    assert.equal(sceneUpdates,0,'position updates must not rebuild the game scene');
    assert(hudUpdates<=40,'position flood should not trigger HUD on every packet: '+hudUpdates);
+   assert(perfAfter.skippedPeriodicHud>perfBefore.skippedPeriodicHud,
+    '100ms periodic HUD callback skips duplicate game snapshot DOM paints');
    console.log('PASS squad stationary stream: '+received+' position snapshots; '+
     hudUpdates+' HUD redraws; '+sceneUpdates+' redundant game-scene rebuilds in 1400ms (local WebKit)');
    const nDraws=drawAfter.frames-drawBefore.frames;
@@ -195,6 +197,23 @@ async function run(browser,spec,count,botIndex=-1){
      Math.round((drawAfter.totalDrawMs-drawBefore.totalDrawMs)/nDraws*10)/10:null,
      maxSinceStartMs:Math.round(drawAfter.maxDrawMs*10)/10,
      skippedCovered:drawAfter.skippedCoveredFrames}));
+   const delta=(key)=>workAfter[key]-workBefore[key];
+   console.log('TRACE squad JS vs rAF scheduling (local WebKit only): '+
+    JSON.stringify({foregroundFrames:delta('frameSamples'),
+     gapsOver100ms:delta('frameGapOver100'),
+     maxGapMs:Math.round(workAfter.frameGapMaxMs),
+     jsNonDrawAvgMs:delta('frameSamples')?
+      Math.round(delta('nonDrawTotalMs')/delta('frameSamples')*10)/10:null,
+     jsBotAvgMs:delta('frameSamples')?
+      Math.round(delta('botTotalMs')/delta('frameSamples')*10)/10:null,
+     snapshotUpdates:delta('gameSnapshots'),
+     snapshotCallbackAvgMs:delta('gameSnapshots')?
+      Math.round(delta('gameSnapshotTotalMs')/delta('gameSnapshots')*10)/10:null,
+     hostTimerPulses:delta('timerPulses'),
+     hostTimerAvgMs:delta('timerPulses')?
+      Math.round(delta('timerTotalMs')/delta('timerPulses')*10)/10:null,
+     skippedRedundantHud:perfAfter.skippedPeriodicHud-perfBefore.skippedPeriodicHud,
+     fallbackHud:perfAfter.periodicHudRenders-perfBefore.periodicHudRenders}));
 
    // The idle optimization must NOT introduce lag in movement or in stop
    // packets. Prove browser keyboard motion travels through live RTDB.
