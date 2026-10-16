@@ -25,14 +25,14 @@ function patched(spec){
   src=src.replace(renderHook,[
    'const __brawlLocalOriginalDraw=draw;',
    'let __brawlLocalDrawDisabled=false;',
-   'draw=function(...args){if(!__brawlLocalDrawDisabled)return __brawlLocalOriginalDraw(...args);};',
+   'draw=function(...args){if(__brawlLocalDrawDisabled)return;if(__brawlCanvasStage==="fillOnly"){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle="#081421";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.restore();return;}return __brawlLocalOriginalDraw(...args);};',
    'window.__brawlLocalDrawSwitch=enabled=>{__brawlLocalDrawDisabled=enabled!==true;return !__brawlLocalDrawDisabled;};',
    'const __brawlOriginalDrawArena=drawArena;',
    'const __brawlOriginalDrawPlayer=drawPlayer;',
    'let __brawlCanvasStage="full";',
    'drawArena=function(...args){if(__brawlCanvasStage!=="noArena")return __brawlOriginalDrawArena(...args);};',
    'drawPlayer=function(...args){if(__brawlCanvasStage!=="noActors")return __brawlOriginalDrawPlayer(...args);};',
-   'window.__brawlLocalCanvasStage=stage=>{if(!["full","noArena","noActors"].includes(stage))throw Error("Bad canvas stage");__brawlCanvasStage=stage;return stage;};',
+   'window.__brawlLocalCanvasStage=stage=>{if(!["full","noArena","noActors","fillOnly"].includes(stage))throw Error("Bad canvas stage");__brawlCanvasStage=stage;return stage;};',
    renderHook
   ].join('\n'));
   const hook='// Firebase RTDB serializes writes on the same game node.';
@@ -223,8 +223,9 @@ async function run(browser,spec,count,botIndex=-1){
      relativeWriteReductionPct:Math.round((1-quietRate/baselineRate)*100),
      windows:bench}));
    // Keep all four real-browser multiplayer clients, Firebase, and 100ms
-   // game timers active. Mute ONLY one named Canvas stage in the localhost
-   // HTML fixture: cached scenery vs player artwork/resource bars/labels.
+   // game timers active. In the localhost HTML fixture, replace all artwork
+   // with a single opaque full-surface fill, preserving Canvas compositing.
+   // Scenery-only/character-only tests were run on the earlier PR revision.
    // The same client/browser supplies ABBA baseline comparisons.
    async function sampleCanvasStage(stage,sequence){
     const switched=await Promise.all(clients.map(c=>c.page.evaluate(
@@ -251,7 +252,7 @@ async function run(browser,spec,count,botIndex=-1){
     return {stage,sequence,wallMs:Date.now()-started,byClient};
    }
    const canvasStageAB=[];
-   for(const [i,stage]of ['full','noArena','noActors','full'].entries())
+   for(const [i,stage]of ['full','fillOnly','fillOnly','full'].entries())
     canvasStageAB.push(await sampleCanvasStage(stage,i+1));
    await Promise.all(clients.map(c=>c.page.evaluate(()=>window.__brawlLocalCanvasStage('full'))));
    const stageStats=stage=>{
@@ -261,9 +262,8 @@ async function run(browser,spec,count,botIndex=-1){
      meanDrawCpuMs:avg('drawCpuMs'),meanTimerPulses:avg('hostTimerPulses'),
      hostRafFrames:rows.filter((_,i)=>i%4===0).map(r=>r.raf)};
    };
-   console.log('TRACE squad Canvas scenery vs actors WebKit A/B (LOCAL ONLY): '+
-    JSON.stringify({full:stageStats('full'),noArena:stageStats('noArena'),
-     noActors:stageStats('noActors'),windows:canvasStageAB}));
+   console.log('TRACE squad Canvas full scene vs solid fill WebKit A/B (LOCAL ONLY): '+
+    JSON.stringify({full:stageStats('full'),fillOnly:stageStats('fillOnly'),windows:canvasStageAB}));
    // Do not use a single GitHub runner to assert school iPad FPS. Promote
    // only a game-safe change supported by these render-stage measurements.
    // rAF pacing is logged, never asserted as an improvement on noisy CI:
