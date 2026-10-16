@@ -17,6 +17,18 @@ function patched(spec){
  src=src.replace('connect-src ', 'connect-src http://127.0.0.1:9000 ws://127.0.0.1:9000 ');
  if(spec.mode==='squad'){
   // CI HTTP fixture ONLY: keep committed/published 2vs2 HTML unchanged.
+  // Disable ONLY Canvas draw calls in a LOCAL HTTP test fixture for an A/B
+  // compositor experiment. No change to the committed game and no network
+  // / hit-authority branch is modified.
+  const renderHook='// Home/lobby screens fully cover the arena;';
+  assert.equal(src.split(renderHook).length-1,1,'unique draw loop hook');
+  src=src.replace(renderHook,[
+   'const __brawlLocalOriginalDraw=draw;',
+   'let __brawlLocalDrawDisabled=false;',
+   'draw=function(...args){if(!__brawlLocalDrawDisabled)return __brawlLocalOriginalDraw(...args);};',
+   'window.__brawlLocalDrawSwitch=enabled=>{__brawlLocalDrawDisabled=enabled!==true;return !__brawlLocalDrawDisabled;};',
+   renderHook
+  ].join('\n'));
   const hook='// Firebase RTDB serializes writes on the same game node.';
   assert.equal(src.split(hook).length-1,1,'unique quiet KO source hook');
   src=src.replace(hook,[
@@ -206,6 +218,61 @@ async function run(browser,spec,count,botIndex=-1){
      windows:bench}));
    // rAF pacing is logged, never asserted as an improvement on noisy CI:
    // actual school Safari input latency/FPS requires hardware testing.
+   // Four-client in-game A/B: hold the same Firebase room, inputs and host
+   // battle logic constant, but temporarily omit ONLY Canvas drawing on every
+   // page. This distinguishes expensive game-frame paints from WebKit frame
+   // scheduling and cross-page CI contention.
+   async function sampleCanvasRendering(enabled,sequence){
+    const toggled=await Promise.all(clients.map(c=>
+     c.page.evaluate(value=>window.__brawlLocalDrawSwitch(value),enabled)));
+    assert(toggled.every(x=>x===enabled),'all four LOCAL WebKit clients changed draw state');
+    await delay(160);
+    const starts=await Promise.all(clients.map(c=>snap(c,spec)));
+    const wallStart=Date.now();
+    await delay(1250);
+    const ends=await Promise.all(clients.map(c=>snap(c,spec)));
+    const wallMs=Date.now()-wallStart;
+    const browserStates=await Promise.all(clients.map(c=>c.page.evaluate(()=>({
+     visible:document.visibilityState,hidden:document.hidden,focused:document.hasFocus()
+    }))));
+    assert(ends.every(q=>q.game==='playing'),'render A/B must keep the same live battle');
+    const numbers=clients.map((_,i)=>{
+     const a=starts[i],z=ends[i];
+     return {
+      raf:z.workTiming.frameSamples-a.workTiming.frameSamples,
+      longFrameGaps:z.workTiming.frameGapOver100-a.workTiming.frameGapOver100,
+      drawCalls:z.drawTiming.frames-a.drawTiming.frames,
+      drawCpuMs:Math.round((z.drawTiming.totalDrawMs-a.drawTiming.totalDrawMs)*10)/10,
+      timerPulses:z.workTiming.timerPulses-a.workTiming.timerPulses,
+      gameClockMs:z.combat.clock.t-a.combat.clock.t,
+      ...browserStates[i]
+     };
+    });
+    assert(numbers.every(q=>q.timerPulses>=6),'100ms game host/client timers still active');
+    assert(numbers.every(q=>q.gameClockMs>=400),'canvas-only A/B may not stall authoritative clock');
+    return {renderer:enabled?'normal':'canvas-muted',sequence,wallMs,clients:numbers};
+   }
+   const renderingAB=[];
+   for(const [i,enabled] of [true,false,false,true].entries())
+    renderingAB.push(await sampleCanvasRendering(enabled,i+1));
+   await Promise.all(clients.map(c=>c.page.evaluate(()=>window.__brawlLocalDrawSwitch(true))));
+   const median=(values)=>{const v=values.slice().sort((a,b)=>a-b);return v[Math.floor(v.length/2)];};
+   const group=(enabled)=>renderingAB.filter(q=>q.renderer===(enabled?'normal':'canvas-muted'));
+   const calc=enabled=>{
+    const list=group(enabled),raw=list.flatMap(q=>q.clients);
+    return {meanRafFrames:+(raw.reduce((v,x)=>v+x.raf,0)/raw.length).toFixed(1),
+     medianRafFrames:median(raw.map(x=>x.raf)),
+     meanDrawCpuMs:+(raw.reduce((v,x)=>v+x.drawCpuMs,0)/raw.length).toFixed(1),
+     meanTimerPulses:+(raw.reduce((v,x)=>v+x.timerPulses,0)/raw.length).toFixed(1),
+     visibleStates:raw.map(x=>x.visible),
+     focusStates:raw.map(x=>x.focused)};
+   };
+   const renderNormal=calc(true),renderMuted=calc(false);
+   console.log('TRACE squad 4-WebKit Canvas vs rAF A/B (LOCAL ONLY; no published toggle): '+
+    JSON.stringify({normal:renderNormal,canvasMuted:renderMuted,windows:renderingAB}));
+   // A frozen/background headless WebKit renderer may suppress requestAnimationFrame
+   // even with zero JS Canvas draw work. This is an observation, NOT an iPad FPS
+   // performance assertion. All real battle validations continue with drawing ON.
    const shotSentAt=Date.now();
    await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
    const touchCompletedAt=Date.now();
