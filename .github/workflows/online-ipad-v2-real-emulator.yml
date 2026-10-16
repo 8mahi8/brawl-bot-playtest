@@ -98,6 +98,8 @@ jobs:
         run: node tests/online-host-txn-arbiter.cjs
       - name: Verify Firebase-safe null guardian in 2vs2 hit events
         run: node tests/online-guardian-null-hit.cjs
+      - name: Verify E2E browser test JavaScript syntax before WebKit download
+        run: node --check tests/online-ipad-v2-emulator-browser.cjs
       - name: Install local Firebase emulator CLI and WebKit
         run: |
           npm install --no-save --package-lock=false firebase-tools@14.24.0 playwright-core@1.56.1
