@@ -9,6 +9,7 @@ on:
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-frame-rate-accuracy.cjs'
       - 'tests/online-2v2-canvas-pixel-budget.cjs'
+      - 'tests/online-idle-position-traffic.cjs'
       - 'tests/online-hp-preview.cjs'
       - 'tests/online-host-action-batching.cjs'
       - 'tests/online-host-txn-arbiter.cjs'
@@ -25,6 +26,7 @@ on:
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-frame-rate-accuracy.cjs'
       - 'tests/online-2v2-canvas-pixel-budget.cjs'
+      - 'tests/online-idle-position-traffic.cjs'
       - 'tests/online-hp-preview.cjs'
       - 'tests/online-host-action-batching.cjs'
       - 'tests/online-host-txn-arbiter.cjs'
@@ -54,6 +56,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Verify mobile movement and stationary RTDB position publication
+        run: node tests/online-idle-position-traffic.cjs
       - name: Verify 2vs2 tablet Canvas memory budget and phone quality
         run: node tests/online-2v2-canvas-pixel-budget.cjs
       - name: Verify actual FPS telemetry with clamped simulation delta
