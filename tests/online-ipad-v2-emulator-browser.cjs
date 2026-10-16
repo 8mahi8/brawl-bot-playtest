@@ -128,6 +128,40 @@ async function run(browser,spec,count,botIndex=-1){
    await observer.page.waitForFunction(({key,expected})=>{const q=window[key]?.();return !!q?.stats&&expected.every(p=>q.stats[p.id]?.lastActionSeq>p.seq);},{key:spec.qa,expected:shots},{timeout:16000});
    console.log('PASS squad 4 near-concurrent real-client shots: all four player action sequences accepted and replicated');
 
+   // Four live users send position packets even when stationary. Regression:
+   // frequent network positions must not re-run the complete scene layout or
+   // force HUD work; the fixed 100ms refresh and game snapshots still do it.
+   const perfBefore=(await snap(shooter,spec)).presentationMetrics;
+   assert(perfBefore,'presentation diagnostics exposed in development HTML');
+   await delay(1400);
+   const perfAfter=(await snap(shooter,spec)).presentationMetrics;
+   const received=perfAfter.positionSnapshots-perfBefore.positionSnapshots;
+   const hudUpdates=perfAfter.hudRenders-perfBefore.hudRenders;
+   const sceneUpdates=perfAfter.gameSceneCalls-perfBefore.gameSceneCalls;
+   assert(received>=6,'four active peers should produce a measurable position stream: '+received);
+   assert.equal(sceneUpdates,0,'position updates must not rebuild the game scene');
+   assert(hudUpdates<=40,'position flood should not trigger HUD on every packet: '+hudUpdates);
+   console.log('PASS squad UI position burst: '+received+' position snapshots; '+
+    hudUpdates+' HUD redraws; '+sceneUpdates+' redundant game-scene rebuilds in 1400ms (local WebKit)');
+
+   // Record, but do not over-interpret, per-browser animation-frame pacing.
+   // CI hardware is not a school iPad, so this is diagnostic rather than
+   // a universal FPS gate.
+   const cadence=await Promise.all(clients.map(c=>c.page.evaluate(()=>new Promise(resolve=>{
+    const intervals=[];let first=0,last=0;
+    function sample(now){if(!first)first=now;if(last)intervals.push(now-last);last=now;
+     if(now-first<900)requestAnimationFrame(sample);
+     else{intervals.sort((a,b)=>a-b);resolve({
+      frames:intervals.length,
+      medianMs:intervals[Math.floor(intervals.length*.5)]||0,
+      p95Ms:intervals[Math.floor(intervals.length*.95)]||0
+     });}
+    }
+    requestAnimationFrame(sample);
+   }))));
+   console.log('PERF squad 4 browsers WebKit frame pacing (NOT iPad hardware): '+JSON.stringify(cadence));
+
+
    // Real browser gameplay + local Firebase emulator: warp one attacker and
    // defender into range, then fire through the UI and assert actual host HP.
    // This touches ONLY the local test RTDB, never the user's production room.
