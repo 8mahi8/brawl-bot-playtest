@@ -4,17 +4,24 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const html=fs.readFileSync(path.join(__dirname,'../online/ipad-squad-v2-lab.html'),'utf8');
 const begin=html.indexOf('const HOST_ACTION_BATCH_LIMIT=6;');
 const end=html.indexOf('function projectileStep(',begin);
-assert(begin>0&&end>begin&&end-begin<2500,'bounded live code section exists');
+assert(begin>0&&end>begin&&end-begin<3500,'bounded live code section exists');
+const quietStart=html.indexOf('const QUIET_KO_WRITE_AGE_MS=');
+const quietEnd=html.indexOf('// Firebase RTDB serializes writes',quietStart);
+assert(quietStart>0&&quietEnd>quietStart&&quietEnd-quietStart<1500,'live quiet-KO gate and metrics');
 assert(html.includes('p.networkSeen&&!localPendingWrites.has(id)'),'only server-confirmed Firebase actions enter the host queue');
 const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).filter(x=>x.trim());
 scripts.forEach((code,i)=>new vm.Script(code,{filename:'full 2vs2 script '+i}));
 const action=(id,owner='a',extra={})=>({eventId:id,owner,connectionId:'cid',at:10000,matchId:'M1',round:1,seq:Number(id.replace(/\D/g,''))||1,...extra});
 function rig(actions,options={}){
  const events={writes:0,callCount:0,snapshot:0,steps:0,commits:[],logs:[],dispatches:0};
- let store={hostToken:'hostCID',matchId:'M1',round:1,phase:'playing',processed:[],clock:{wallAt:options.clockWallAt??9900,t:0},combatRev:0};
+ let store={hostToken:'hostCID',matchId:'M1',round:1,phase:'playing',processed:[],
+  clock:{wallAt:options.clockWallAt??9900,t:0},combatRev:0,
+  ...(options.quiet?{mode:'ko',seats:{blue1:{id:'a'},blue2:{id:'b'},red1:{id:'c'},red2:{id:'d'}},
+    hp:{a:100,b:100,c:100,d:100},
+    stats:Object.fromEntries(['a','b','c','d'].map(id=>[id,{char:'tank',ammo:3,refillAt:0}]))}:{})};
  const presence={a:{cid:true},b:{cid:true}};
  const c={
-  HOST_ACTION_BATCH_LIMIT:6,hostProcessing:false,combatBusy:!!options.combatBusy,hostQueue:[...actions],game:{...store},
+  CHARS:{tank:{hp:100}},HOST_ACTION_BATCH_LIMIT:6,hostProcessing:false,combatBusy:!!options.combatBusy,hostQueue:[...actions],game:{...store},
   room:null,myConnection:'hostCID',presence,queuedActions:new Set(actions.map(a=>a.eventId)),
   ACTION_TTL:3000,ACTION_FUTURE:250,console:{warn:(...xs)=>events.logs.push(xs.join(' '))},
   combatReady:()=>options.ready!==false,
@@ -48,7 +55,8 @@ function rig(actions,options={}){
   }
  };
  c.room=room;vm.createContext(c);
- vm.runInContext(html.slice(begin,end)+'\nthis.processHostQueue=processHostQueue',c);
+ vm.runInContext(html.slice(quietStart,quietEnd)+'\n'+html.slice(begin,end)+
+  '\nthis.processHostQueue=processHostQueue;this.quietStats=()=>({...quietTickMetrics});',c);
  return {c,room,events,run:()=>c.processHostQueue(),read:()=>store,append:x=>{c.hostQueue.push(x);c.queuedActions.add(x.eventId)}};
 }
 let passed=0;
@@ -58,6 +66,14 @@ async function check(name,fn){await fn();passed++;console.log('PASS batch host a
   const r=rig(Array.from({length:6},(_,i)=>action('shot'+(i+1))));
   await r.run();assert.equal(r.events.writes,1);assert.equal(r.read().processed.join(','),'shot1,shot2,shot3,shot4,shot5,shot6');
   assert.equal(r.events.snapshot,1);
+ });
+ await check('new shot during a deferred KO tick catches up time BEFORE accepting action',async()=>{
+  const r=rig([action('shot1')],{quiet:true,clockWallAt:9800});await r.run();
+  assert.equal(r.events.writes,1,'interrupting shot must still use a single Firebase write');
+  assert.equal(r.events.steps,2,'quiet pre-catchup and regular post-action physics step');
+  assert.equal(r.read().clock.t,200,'authoritative KO clock cannot lose 100ms');
+  assert.equal(r.read().processed.join(','),'shot1','incoming action is still accepted');
+  assert.equal(r.c.quietStats().actionCatchups,1);
  });
  await check('seven shots require only two transactions',async()=>{
   const r=rig(Array.from({length:7},(_,i)=>action('shot'+(i+1))));
