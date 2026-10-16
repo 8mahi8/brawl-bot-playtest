@@ -253,6 +253,13 @@ async function run(browser,spec,count,botIndex=-1){
    },{k:spec.qa,id:attackerId,seq:ultSeq},{timeout:15000});
    console.log('PASS squad real online tank ULT: charged meter spent and accepted by peer');
 
+   // An accepted Tank ULT is airborne for 0.6–1.2s. It is deliberately
+   // impossible to shoot while airborne, so wait for actual landing.
+   await shooter.page.waitForFunction(({k,id})=>{
+    const q=window[k]?.();return q?.combatReadyNow&&
+     !Object.values(q.combat?.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===id);
+   },{k:spec.qa,id:attackerId},{timeout:12000});
+
    // Force a nearly finished knockout on the LOCAL EMULATOR, then deliver the
    // decisive shot via the actual touch control. Check scores and KO across
    // all four browsers, without relying on the short-lived round_end screen.
@@ -280,11 +287,30 @@ async function run(browser,spec,count,botIndex=-1){
      Math.abs(q.positionValues?.[target]?.x-760)<5&&q.hp?.[target]===1;
    },{k:spec.qa,target:victimId},{timeout:14000});
    const scoreBefore=koState.scores?.blue||0;
+   const koSeq=(await snap(shooter,spec)).stats[attackerId].lastActionSeq;
    await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
-   await Promise.all(clients.map(c=>c.page.waitForFunction(({k,score})=>{
-    const q=window[k]?.();return q?.scores?.blue===score+1&&
-     q?.combat?.battleStats&&Object.values(q.combat.battleStats).some(v=>v.kos>0);
-   },{k:spec.qa,score:scoreBefore},{timeout:17000})));
+   try{
+    await shooter.page.waitForFunction(({k,id,seq})=>
+     (window[k]?.()?.stats?.[id]?.lastActionSeq??0)>seq,
+     {k:spec.qa,id:attackerId,seq:koSeq},{timeout:13000});
+    await Promise.all(clients.map(c=>c.page.waitForFunction(({k,score})=>{
+     const q=window[k]?.();return q?.scores?.blue===score+1&&
+      q?.combat?.battleStats&&Object.values(q.combat.battleStats).some(v=>v.kos>0);
+    },{k:spec.qa,score:scoreBefore},{timeout:15000})));
+   }catch(err){
+    for(const [ix,c]of clients.entries()){
+     const q=await snap(c,spec);
+     console.error('KO DIAGNOSTIC '+ix+' '+JSON.stringify({
+      phase:q.game,round:q.round,score:q.scores,online:q.online,
+      actor:q.myId,host:q.gameHostToken,authorized:q.hostAuthorized,
+      combatReady:q.combatReadyNow,queue:q.hostQueue,scheduled:q.combat?.scheduled,
+      actionSeq:q.stats?.[attackerId]?.lastActionSeq,receipts:q.combat?.usedActions,
+      hp:q.hp,positions:q.positionValues,local:q.local,motions:q.combat?.motions,
+      lastError:q.combatTickLastError
+     }));
+    }
+    throw err;
+   }
    const koAfter=await snap(observer,spec);
    assert(['round_end','playing','match_end'].includes(koAfter.game),'resolved or advanced KO phase');
    assert.equal(koAfter.combat.battleStats[attackerId].kos>=1,true,'host credited with decisive KO');
