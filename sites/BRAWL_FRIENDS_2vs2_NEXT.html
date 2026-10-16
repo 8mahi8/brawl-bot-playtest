@@ -2017,13 +2017,32 @@ function drawShotGuide(char,angle,reach,ult=false){
 // controls and text retain native-resolution CSS rendering. Small phones and
 // the solo mode retain their previous effective scale.
 const ONLINE_CANVAS_PIXEL_BUDGET=1400000;
+// Slow iPads may not sustain the initial retina resolution. Step down the
+// backing-store quality after sustained slow frames, then slowly recover when
+// the browser has ample headroom. No change to hit logic or DOM controls.
+let canvasQualityCap=2,canvasSlowMs=0,canvasFastMs=0,canvasQualityChangedAt=0,canvasQualityReductions=0,canvasResizeCount=0;
+function adjustCanvasQuality(elapsed,now,active=scene==='game'&&!solo&&!document.hidden&&!pageSuspended){
+ if(!active){canvasSlowMs=canvasFastMs=0;canvasQualityCap=2;return;}
+ const ms=Math.min(250,Math.max(0,elapsed*1000));
+ if(ms>=65){canvasSlowMs+=ms;canvasFastMs=0;}
+ else if(ms<=23){canvasFastMs+=ms;canvasSlowMs=Math.max(0,canvasSlowMs-2*ms);}
+ else{canvasSlowMs=Math.max(0,canvasSlowMs-ms);canvasFastMs=0;}
+ if(canvasSlowMs>=750&&now-canvasQualityChangedAt>=800){
+  const next=Math.max(1,Math.round((canvasQualityCap-.25)*100)/100);
+  if(next<canvasQualityCap){canvasQualityCap=next;canvasQualityReductions++;}
+  canvasQualityChangedAt=now;canvasSlowMs=0;
+ }else if(canvasFastMs>=5000&&now-canvasQualityChangedAt>=5000&&canvasQualityCap<2){
+  canvasQualityCap=Math.min(2,Math.round((canvasQualityCap+.25)*100)/100);
+  canvasQualityChangedAt=now;canvasFastMs=0;
+ }
+}
 function canvasRenderScale(sw,sh,nativeDpr=devicePixelRatio||1,isSolo=solo,smallestViewport=Math.min(innerWidth,innerHeight),inMatch=scene==='game'){
  const native=Math.min(nativeDpr||1,isSolo&&smallestViewport<=480?1:isSolo?1.25:2);
  if(isSolo||!inMatch)return native;
- return Math.max(1,Math.min(native,Math.sqrt(ONLINE_CANVAS_PIXEL_BUDGET/Math.max(1,sw*sh))));
+ return Math.max(1,Math.min(native,canvasQualityCap,Math.sqrt(ONLINE_CANVAS_PIXEL_BUDGET/Math.max(1,sw*sh))));
 }
 function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<=0||sh<=0)return;const dpr=canvasRenderScale(sw,sh),pw=Math.floor(sw*dpr),ph=Math.floor(sh*dpr);
- if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;}
+ if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;canvasResizeCount++;}
  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#081421';ctx.fillRect(0,0,sw,sh);
  cameraTransform(sw,sh,dt);if(pcCursor)pcAim=viewCoords(pcCursor);
  ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);drawArena();
@@ -2072,7 +2091,7 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  if(scene==='game'&&!paused){const a=ultPointer?.dragged&&!ultPointer.cancelled?ultPointer:aimPointer?.dragged?aimPointer:null;if(a){const dx=a.x-a.ox,dy=a.y-a.oy,angle=Math.atan2(dy,dx),char=game?.stats?.[myId]?.char;ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);ctx.strokeStyle='#e2c7ff';ctx.setLineDash([8,6]);ctx.lineWidth=3;drawShotGuide(char,angle,clamp(Math.hypot(dx,dy)/80*330,55,330),a===ultPointer);ctx.restore();}}
  if(scene==='game'&&pointer&&!paused){const x=pointer.ox,y=pointer.oy;const dx=pointer.x-x,dy=pointer.y-y;ctx.strokeStyle='rgba(160,231,251,.6)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,43,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(107,220,245,.5)';ctx.beginPath();ctx.arc(x+clamp(dx,-44,44),y+clamp(dy,-44,44),18,0,7);ctx.fill();}
 }
-function frame(now){const elapsed=Math.max(0,(now-(lastFrame||now))/1000),dt=clamp(elapsed,0,.06);lastFrame=now;if(gadgetToastExpiry&&now>gadgetToastExpiry){gadgetToastExpiry=0;$('skillToast').classList.add('hidden');}if(elapsed>0)fps=fps*.9+.1/elapsed;update(dt);updateBots(dt);if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}draw(dt);requestAnimationFrame(frame);}
+function frame(now){const elapsed=Math.max(0,(now-(lastFrame||now))/1000),dt=clamp(elapsed,0,.06);lastFrame=now;if(gadgetToastExpiry&&now>gadgetToastExpiry){gadgetToastExpiry=0;$('skillToast').classList.add('hidden');}if(elapsed>0)fps=fps*.9+.1/elapsed;adjustCanvasQuality(elapsed,now);update(dt);updateBots(dt);if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}draw(dt);requestAnimationFrame(frame);}
 
 function setLayoutDrag(k,e){if(scene!=='layout')return;e.preventDefault();const el=$(k==='gad'?'mockGad':'mockUlt');let active=e.pointerId;el.setPointerCapture?.(active);
  const move=ev=>{if(ev.pointerId!==active)return;const stage=$('app').getBoundingClientRect(),sz=layout[k].size;
@@ -2174,7 +2193,7 @@ const rememberedRoom=safeSessGet('brawl-v3-lastroom');
 if(/^\d{5}$/.test(rememberedRoom||'')){$('roomInput').value=rememberedRoom;$('homeStatus').textContent='前回のルームIDを入力済み。復帰する場合は「ルームに参加」を押してね。';}
 applyFit();showScene('home');requestAnimationFrame(frame);
 // Read-only diagnostics used by the local mock test harness; no live-server controls.
-window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
+window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
 })();
 </script>
 </body></html>

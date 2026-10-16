@@ -9,7 +9,7 @@ const live=html.slice(begin,end);
 function simulate(interval,frames){
  const steps=[],ctx={
   lastFrame:0,fps:60,gadgetToastExpiry:0,fx:[],
-  clamp:(n,a,b)=>Math.max(a,Math.min(b,n)),update:dt=>steps.push(dt),
+  clamp:(n,a,b)=>Math.max(a,Math.min(b,n)),adjustCanvasQuality:()=>{},update:dt=>steps.push(dt),
   updateBots:()=>{},combatReady:()=>false,draw:()=>{},requestAnimationFrame:()=>{}
  };
  vm.createContext(ctx);
