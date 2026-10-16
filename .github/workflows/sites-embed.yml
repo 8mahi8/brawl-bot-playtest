@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - 'sites/**'
+      - 'online/ipad-squad-v2-lab.html'
+      - 'tests/sites-online-2v2-next-parity.cjs'
       - 'foundation/1v1-foundation-v1.html'
       - 'foundation/2v2-ipad-safari.html'
       - 'tests/sites-embed-regression.cjs'
@@ -11,6 +13,8 @@ on:
   pull_request:
     paths:
       - 'sites/**'
+      - 'online/ipad-squad-v2-lab.html'
+      - 'tests/sites-online-2v2-next-parity.cjs'
       - 'foundation/1v1-foundation-v1.html'
       - 'foundation/2v2-ipad-safari.html'
       - 'tests/sites-embed-regression.cjs'
@@ -29,6 +33,8 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+      - name: Verify optimized 2vs2 NEXT HTML exactly matches tested online source
+        run: node tests/sites-online-2v2-next-parity.cjs
       - name: Google Sites embed code parity and touch-play tests
         run: node tests/sites-embed-regression.cjs
       - name: 1vs1 diagnostic inside sandboxed Google Sites-like iframe

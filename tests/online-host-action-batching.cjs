@@ -10,7 +10,7 @@ const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].ma
 scripts.forEach((code,i)=>new vm.Script(code,{filename:'full 2vs2 script '+i}));
 const action=(id,owner='a',extra={})=>({eventId:id,owner,connectionId:'cid',at:10000,matchId:'M1',round:1,seq:Number(id.replace(/\D/g,''))||1,...extra});
 function rig(actions,options={}){
- const events={writes:0,callCount:0,snapshot:0,steps:0,commits:[],logs:[]};
+ const events={writes:0,callCount:0,snapshot:0,steps:0,commits:[],logs:[],dispatches:0};
  let store={hostToken:'hostCID',matchId:'M1',round:1,phase:'playing',processed:[],clock:{wallAt:options.clockWallAt??9900,t:0},combatRev:0};
  const presence={a:{cid:true},b:{cid:true}};
  const c={
@@ -20,6 +20,7 @@ function rig(actions,options={}){
   combatReady:()=>options.ready!==false,
   isAuthoritative:()=>options.host!==false,
   validActionRequest:a=>a.type!=='invalid',
+  scheduleHostActionDispatch:()=>{events.dispatches++},
   inputSnapshot:()=>{events.snapshot++;return{}},
   serverNow:()=>10000,
   engine:()=>({
@@ -39,6 +40,7 @@ function rig(actions,options={}){
      events.writes++;
      if(options.fail===events.writes)throw Error('offline');
      const proposed=fn(store);
+     if(options.reject===events.writes)return {committed:false};
      if(proposed){store=proposed;events.commits.push(proposed.processed.map(x=>x));}
      return {committed:!!proposed};
     }
@@ -81,6 +83,29 @@ async function check(name,fn){await fn();passed++;console.log('PASS batch host a
   const r=rig([action('shot1'),action('shot2')],{fail:1});await r.run();
   assert.equal(r.read().processed.length,0);assert.equal(r.c.queuedActions.size,0);
   assert.equal(r.c.hostProcessing,false);
+ });
+ await check('uncommitted transaction releases shots for a later retry',async()=>{
+  const request=action('shot1'),r=rig([request],{reject:1});
+  await r.run();
+  assert.equal(r.events.writes,1);
+  assert.equal(r.read().processed.length,0);
+  assert.equal(r.c.hostProcessing,false);
+  assert.equal(r.c.queuedActions.has(request.eventId),false);
+  r.append(request); // The next host poll re-queues the same confirmed action.
+  await r.run();
+  assert.equal(r.events.writes,2);
+  assert.equal(r.read().processed.join(','),'shot1');
+ });
+ await check('uncommitted seven-shot burst restores original ordering on retry',async()=>{
+  const shots=Array.from({length:7},(_,i)=>action('shot'+(i+1))),r=rig(shots,{reject:1});
+  await r.run();
+  assert.equal(r.events.writes,1,'do not spin on aborted RTDB transaction');
+  assert.equal(r.c.hostQueue.length,0,'later shots must not overtake rejected batch');
+  assert.equal(r.c.queuedActions.size,0,'all confirmed pending requests become retryable');
+  assert.equal(r.events.dispatches,0,'defer retry rather than schedule a recursive microtask');
+  for(const shot of shots)r.append(shot); // Next timer reconstructs pending actions in sequence order.
+  await r.run();
+  assert.equal(r.read().processed.join(','),'shot1,shot2,shot3,shot4,shot5,shot6,shot7');
  });
  await check('no actions processed during paused match',async()=>{
   const r=rig([action('shot1')],{ready:false});await r.run();assert.equal(r.events.writes,0);

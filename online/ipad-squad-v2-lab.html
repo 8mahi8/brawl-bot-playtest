@@ -1630,7 +1630,14 @@ const HOST_ACTION_BATCH_LIMIT=6;
 async function processHostQueue(){
  if(!combatReady()||!isAuthoritative()||hostProcessing||combatBusy||!hostQueue.length||game.hostToken!==myConnection)return;
  const activeRoom=room,match=game.matchId,round=game.round,token=myConnection;
- let activeBatch=[];hostProcessing=true;
+ let activeBatch=[],deferredRetry=false;hostProcessing=true;
+ // The pending map is the source of truth for a retry. In particular, if the
+ // first six of seven shots abort, the seventh must NOT overtake them.
+ function rebuildOnNextPoll(){
+  if(room!==activeRoom||game?.matchId!==match||game?.round!==round||myConnection!==token)return;
+  hostQueue=[];
+  queuedActions.clear();
+ }
  try{
   while(hostQueue.length&&combatReady()&&room===activeRoom&&game?.matchId===match&&game?.round===round&&myConnection===token){
    const now=serverNow();
@@ -1639,7 +1646,7 @@ async function processHostQueue(){
     !!presence[a.owner]?.[a.connectionId]&&a.at>=now-ACTION_TTL&&a.at<=now+ACTION_FUTURE);
    if(!activeBatch.length)continue;
    const input=inputSnapshot();
-   await activeRoom.child('game').transaction(g=>{
+   const result=await activeRoom.child('game').transaction(g=>{
     if(!g||g.hostToken!==token||g.matchId!==match||g.round!==round||g.phase!=='playing')return;
     let next=g;
     for(const a of activeBatch)next=engine(next).accept(next,a,input,now);
@@ -1651,17 +1658,25 @@ async function processHostQueue(){
     }
     return next===g?undefined:next;
    },undefined,false);
+   if(!result.committed){
+    // Firebase may abort without throwing. Rebuild the whole ordered queue
+    // on the next poll instead of letting later shots overtake the first batch.
+    rebuildOnNextPoll();
+    activeBatch=[];
+    deferredRetry=true;
+    break;
+   }
    activeBatch=[];
   }
  }catch(e){
-  // Failed transaction: allow confirmed pending requests to be re-queued.
-  for(const a of activeBatch)queuedActions.delete(a.eventId);
+  // Rebuild the full ordered queue after an exception as well.
+  rebuildOnNextPoll();
   console.warn('Host action batch',e);
  }finally{
   hostProcessing=false;
   // The 100ms timer is still a fallback; avoid losing new actions enqueued
   // while the previous transaction was in flight.
-  if(room===activeRoom&&hostQueue.length)scheduleHostActionDispatch();
+  if(!deferredRetry&&room===activeRoom&&hostQueue.length)scheduleHostActionDispatch();
  }
 }
 
