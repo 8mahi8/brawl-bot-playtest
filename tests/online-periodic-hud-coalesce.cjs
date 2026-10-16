@@ -8,12 +8,12 @@ const src=html.slice(a,z);
 const scope={scene:'game',performance:{now:()=>scope.clock},clock:0,
  presentationMetrics:{periodicHudRenders:0,skippedPeriodicHud:0},hudCount:0,statusCount:0};
 vm.createContext(scope);
-vm.runInContext(src+\`
+vm.runInContext(src+`
 function renderGameHUD(){lastHudRenderAt=clock;hudCount++;}
 function renderNetworkStatus(){statusCount++;}
-this.poll=periodicUiRefresh;
+this.poll=(at)=>{clock=at;periodicUiRefresh(at);};
 this.stateUpdate=(at)=>{clock=at;renderGameHUD();};
-\`,scope);
+`,scope);
 scope.poll(0);
 assert.equal(scope.hudCount,1,'first game HUD always appears');
 assert.equal(scope.statusCount,1,'first network status appears');
