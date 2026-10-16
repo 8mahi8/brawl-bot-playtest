@@ -239,7 +239,8 @@ async function run(browser,spec,count,botIndex=-1){
      deferredPolls:quietAfter.deferrals-quietBefore.deferrals,
      twoStepsOneWrite:quietAfter.doubleSteps-quietBefore.doubleSteps,
      activeOneStep:quietAfter.ordinarySteps-quietBefore.ordinarySteps,
-     staleFirebaseFallback:quietAfter.unsafeAtCommit-quietBefore.unsafeAtCommit}));
+     staleFirebaseFallback:quietAfter.unsafeAtCommit-quietBefore.unsafeAtCommit,
+     shotInterruptionCatchups:quietAfter.actionCatchups-quietBefore.actionCatchups}));
    const diff=key=>txnAfter[key]-txnBefore[key];
    const avg=(key,denom)=>denom?Math.round(diff(key)/denom*10)/10:null;
    console.log('TRACE squad host Firebase transaction CPU vs network wait (local WebKit): '+
