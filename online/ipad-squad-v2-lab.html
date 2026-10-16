@@ -1086,6 +1086,18 @@ let lastHudRenderAt=-Infinity,lastNetworkStatusAt=-Infinity;
 let workTiming={timerPulses:0,timerTotalMs:0,timerMaxMs:0,gameSnapshots:0,gameSnapshotTotalMs:0,gameSnapshotMaxMs:0,
  positionSnapshots:0,positionSnapshotTotalMs:0,frameSamples:0,frameGapOver100:0,frameGapMaxMs:0,
  updateTotalMs:0,botTotalMs:0,nonDrawTotalMs:0,nonDrawMaxMs:0};
+// These measurements cover synchronous JS work only, NOT RTDB round-trip
+// time or WebKit rendering/compositing outside this callback.
+const TIMER_PHASES=['lifecycle','pauseCheck','actions','pauseControl','hostCombat','roundOps','botRematch','ui'];
+const timerPhaseTiming=Object.fromEntries(TIMER_PHASES.map(name=>[name,{calls:0,totalMs:0,maxMs:0}]));
+let pauseBannerMetrics={writes:0,skips:0};
+function measureTimerPhase(name,fn){
+ const started=performance.now();
+ try{return fn();}finally{
+  const ms=performance.now()-started,part=timerPhaseTiming[name];
+  part.calls++;part.totalMs+=ms;part.maxMs=Math.max(part.maxMs,ms);
+ }
+}
 function periodicUiRefresh(now){
  if(scene!=='game')return;
  if(now-lastHudRenderAt>=PERIODIC_HUD_MAX_AGE_MS){renderGameHUD();presentationMetrics.periodicHudRenders++;}
@@ -1361,8 +1373,16 @@ function attachRoom(){unwatch();lastSnapshotAt=0;snapshotGap=0;lastSend=0;lastSe
   effectsReady=true;
   watch(thisRoom.child('effects'),'child_added',s=>{const e=s.val();if(e&&s.key)handleEffect({...e,id:s.key});});
  }).catch(e=>status('効果履歴の読み込み失敗：'+errorText(e)));
- onlineTimer=setInterval(()=>{const started=performance.now();hostTimerPulses++;if(room!==thisRoom||solo&&document.hidden)return;if(lobby?.status==='waiting')tryStart();checkPaused();drainActions();if(['playing','round_end','paused'].includes(game?.phase))managePauseState();if(game?.phase==='playing'&&isAuthoritative()){claimHost();processHostQueue();processCombatTick();}if(game?.phase==='round_end'&&isAuthoritative())nextRoundIfDue();if(game?.phase==='match_end'&&isAuthoritative())considerRematch();autoBotRematch();periodicUiRefresh(performance.now());
- const cost=performance.now()-started;workTiming.timerPulses++;workTiming.timerTotalMs+=cost;workTiming.timerMaxMs=Math.max(workTiming.timerMaxMs,cost);},100);
+ onlineTimer=setInterval(()=>{const started=performance.now();hostTimerPulses++;if(room!==thisRoom||solo&&document.hidden)return;
+  measureTimerPhase('lifecycle',()=>{if(lobby?.status==='waiting')tryStart();});
+  measureTimerPhase('pauseCheck',()=>checkPaused());
+  measureTimerPhase('actions',()=>drainActions());
+  measureTimerPhase('pauseControl',()=>{if(['playing','round_end','paused'].includes(game?.phase))managePauseState();});
+  measureTimerPhase('hostCombat',()=>{if(game?.phase==='playing'&&isAuthoritative()){claimHost();processHostQueue();processCombatTick();}});
+  measureTimerPhase('roundOps',()=>{if(game?.phase==='round_end'&&isAuthoritative())nextRoundIfDue();if(game?.phase==='match_end'&&isAuthoritative())considerRematch();});
+  measureTimerPhase('botRematch',()=>autoBotRematch());
+  measureTimerPhase('ui',()=>periodicUiRefresh(performance.now()));
+  const cost=performance.now()-started;workTiming.timerPulses++;workTiming.timerTotalMs+=cost;workTiming.timerMaxMs=Math.max(workTiming.timerMaxMs,cost);},100);
 }
 // The lobby and game snapshots can arrive in either order.
 function reconcileRoomView(source='state'){if(!lobbyReady||!gameReady||!lobby||!game||game.matchId!==lobby.matchId||!mySeat())return;
@@ -1458,11 +1478,20 @@ function checkPaused(){if(scene!=='game'||!game||!lobby)return;
  if(paused&&localPauseKey!==key){resetTransientCombat();localPauseKey=key;}
  if(!paused)localPauseKey='';
  const banner=$('pauseBanner');
- if(game.phase==='aborted'){banner.classList.remove('hidden');banner.textContent='試合中止 · 退出して新しいルームを作成してね';}
- else if(sharedPaused||remoteMissing){const elapsed=Math.max(0,serverNow()-(game.pausedAt||serverNow()));
-  banner.classList.remove('hidden');banner.textContent=`接続待機中 · 残り${Math.ceil(Math.max(0,PAUSE_LIMIT-elapsed)/1000)}秒 · 戦闘停止`;
- }else if(game.phase==='round_end'){banner.classList.remove('hidden');}
- else banner.classList.add('hidden');
+ // 100ms polling must still detect disconnects immediately, but only
+ // mutate DOM when pause visibility or the displayed second changes.
+ function applyBanner(visible,text){
+  const hidden=banner.classList.contains('hidden');
+  let dirty=false;
+  if(visible===hidden){banner.classList.toggle('hidden',!visible);dirty=true;}
+  if(text!==undefined&&banner.textContent!==text){banner.textContent=text;dirty=true;}
+  if(dirty)pauseBannerMetrics.writes++;else pauseBannerMetrics.skips++;
+ }
+ if(game.phase==='aborted')applyBanner(true,'試合中止 · 退出して新しいルームを作成してね');
+ else if(sharedPaused||remoteMissing){const now=serverNow(),elapsed=Math.max(0,now-(game.pausedAt||now));
+  applyBanner(true,`接続待機中 · 残り${Math.ceil(Math.max(0,PAUSE_LIMIT-elapsed)/1000)}秒 · 戦闘停止`);
+ }else if(game.phase==='round_end')applyBanner(true);
+ else applyBanner(false);
 }
 // PAUSED is a shared database phase. Any connected peer may request a safety pause
 // if a player disappears; only the match owner resumes gameplay.
@@ -2271,7 +2300,7 @@ const rememberedRoom=safeSessGet('brawl-v3-lastroom');
 if(/^\d{5}$/.test(rememberedRoom||'')){$('roomInput').value=rememberedRoom;$('homeStatus').textContent='前回のルームIDを入力済み。復帰する場合は「ルームに参加」を押してね。';}
 applyFit();showScene('home');requestAnimationFrame(frame);
 // Read-only diagnostics used by the local mock test harness; no live-server controls.
-window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},workTiming:{...workTiming},inputTiming:{...inputTiming,lastTouchShot:inputTiming.lastTouchShot?{...inputTiming.lastTouchShot}:null},drawTiming:{...drawTiming,averageDrawMs:drawTiming.frames?Math.round(drawTiming.totalDrawMs/drawTiming.frames*10)/10:0},arenaBackdropMetrics:{builds:arenaBackdropRebuilds,frames:arenaBackdropFrames,disabled:arenaBackdropDisabled,width:arenaBackdrop?.width||0,height:arenaBackdrop?.height||0},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
+window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},workTiming:{...workTiming},timerPhaseTiming:Object.fromEntries(TIMER_PHASES.map(key=>[key,{...timerPhaseTiming[key]}])),pauseBannerMetrics:{...pauseBannerMetrics},inputTiming:{...inputTiming,lastTouchShot:inputTiming.lastTouchShot?{...inputTiming.lastTouchShot}:null},drawTiming:{...drawTiming,averageDrawMs:drawTiming.frames?Math.round(drawTiming.totalDrawMs/drawTiming.frames*10)/10:0},arenaBackdropMetrics:{builds:arenaBackdropRebuilds,frames:arenaBackdropFrames,disabled:arenaBackdropDisabled,width:arenaBackdrop?.width||0,height:arenaBackdrop?.height||0},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
 })();
 </script>
 </body></html>

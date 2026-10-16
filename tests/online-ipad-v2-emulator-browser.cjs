@@ -167,12 +167,14 @@ async function run(browser,spec,count,botIndex=-1){
    // frequent network positions must not re-run the complete scene layout or
    // force HUD work; the fixed 100ms refresh and game snapshots still do it.
    const beforePerf=await snap(shooter,spec),perfBefore=beforePerf.presentationMetrics,drawBefore=beforePerf.drawTiming,workBefore=beforePerf.workTiming;
+   const phaseBefore=beforePerf.timerPhaseTiming,pauseBefore=beforePerf.pauseBannerMetrics;
    const arenaBefore=beforePerf.arenaBackdropMetrics;
    assert(perfBefore,'presentation diagnostics exposed in development HTML');
    assert(arenaBefore&&!arenaBefore.disabled&&arenaBefore.builds>=1,
     'static arena canvas paints once in real WebKit');
    await delay(1400);
    const afterPerf=await snap(shooter,spec),perfAfter=afterPerf.presentationMetrics,drawAfter=afterPerf.drawTiming,workAfter=afterPerf.workTiming;
+   const phaseAfter=afterPerf.timerPhaseTiming,pauseAfter=afterPerf.pauseBannerMetrics;
    const arenaAfter=afterPerf.arenaBackdropMetrics;
    assert.equal(arenaAfter.builds,arenaBefore.builds,
     'no background re-rasterization across steady gameplay frames');
@@ -189,6 +191,12 @@ async function run(browser,spec,count,botIndex=-1){
    assert(hudUpdates<=40,'position flood should not trigger HUD on every packet: '+hudUpdates);
    assert(perfAfter.skippedPeriodicHud>perfBefore.skippedPeriodicHud,
     '100ms periodic HUD callback skips duplicate game snapshot DOM paints');
+   assert(phaseAfter.hostCombat.calls>phaseBefore.hostCombat.calls,
+    'authoritative host processing must run in unchanged 100ms cycle');
+   assert(phaseAfter.actions.calls>phaseBefore.actions.calls,
+    'confirmed action queue still checked in every timer cycle');
+   assert(pauseAfter.skips>pauseBefore.skips,
+    'unchanged pause banner should not mutate DOM on every timer pulse');
    console.log('PASS squad stationary stream: '+received+' position snapshots; '+
     hudUpdates+' HUD redraws; '+sceneUpdates+' redundant game-scene rebuilds in 1400ms (local WebKit)');
    const nDraws=drawAfter.frames-drawBefore.frames;
@@ -214,6 +222,16 @@ async function run(browser,spec,count,botIndex=-1){
       Math.round(delta('timerTotalMs')/delta('timerPulses')*10)/10:null,
      skippedRedundantHud:perfAfter.skippedPeriodicHud-perfBefore.skippedPeriodicHud,
      fallbackHud:perfAfter.periodicHudRenders-perfBefore.periodicHudRenders}));
+   const phases=Object.fromEntries(Object.entries(phaseAfter).map(([name,p])=>{
+    const before=phaseBefore[name],calls=p.calls-before.calls;
+    return [name,{calls,avgSyncMs:calls?
+     Math.round((p.totalMs-before.totalMs)/calls*10)/10:0,
+     maxSinceStartMs:Math.round(p.maxMs*10)/10}];
+   }));
+   console.log('TRACE squad 100ms timer synchronous phase CPU (local WebKit): '+
+    JSON.stringify({phases,pauseBannerWrites:pauseAfter.writes-pauseBefore.writes,
+     pauseBannerSkips:pauseAfter.skips-pauseBefore.skips,
+     totalTimerSyncMs:Math.round(delta('timerTotalMs')*10)/10}));
 
    // The idle optimization must NOT introduce lag in movement or in stop
    // packets. Prove browser keyboard motion travels through live RTDB.
