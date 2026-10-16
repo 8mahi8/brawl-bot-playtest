@@ -185,6 +185,41 @@ async function run(browser,spec,count,botIndex=-1){
    const hpAfter=(await snap(clients[targetIndex],spec)).hp[victimId];
    console.log('PASS squad in-range human-shot E2E: authoritative enemy HP '+hpBefore+' -> '+hpAfter+' replicated in both separate browsers');
 
+   // Real WebKit client loses RTDB: peer must pause, reconnect, and accept its next shot.
+   const guest=clients[targetIndex],oldGuestCid=(await snap(guest,spec)).connectionId;
+   await guest.page.evaluate(()=>window.firebase.database().goOffline());
+   await shooter.page.waitForFunction(k=>{
+    const q=window[k]?.();return q?.game==='paused'&&q.online===3;
+   },spec.qa,{timeout:18000});
+   await guest.page.evaluate(()=>window.firebase.database().goOnline());
+   await guest.page.waitForFunction(({k,cid})=>{
+    const q=window[k]?.();return q?.game==='playing'&&q.online===4&&q.combatReadyNow&&
+     !!q.connectionId&&q.connectionId!==cid;
+   },{k:spec.qa,cid:oldGuestCid},{timeout:24000});
+   const guestSeq=(await snap(guest,spec)).stats[victimId].lastActionSeq;
+   await guest.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
+   await shooter.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,
+    {k:spec.qa,id:victimId,seq:guestSeq},{timeout:14000});
+   console.log('PASS squad guest RTDB reconnect: paused, all four resumed, next shot accepted');
+
+   // Owner reconnect also has to reclaim the stale host token or combat freezes.
+   const oldHostCid=(await snap(shooter,spec)).connectionId;
+   await shooter.page.evaluate(()=>window.firebase.database().goOffline());
+   await observer.page.waitForFunction(k=>{
+    const q=window[k]?.();return q?.game==='paused'&&q.online===3;
+   },spec.qa,{timeout:18000});
+   await shooter.page.evaluate(()=>window.firebase.database().goOnline());
+   await shooter.page.waitForFunction(({k,cid})=>{
+    const q=window[k]?.();return q?.game==='playing'&&q.online===4&&q.combatReadyNow&&
+     !!q.connectionId&&q.connectionId!==cid&&q.gameHostToken===q.connectionId&&q.hostAuthorized;
+   },{k:spec.qa,cid:oldHostCid},{timeout:24000});
+   const hostSeq=(await snap(shooter,spec)).stats[attackerId].lastActionSeq;
+   await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
+   await observer.page.waitForFunction(({k,id,seq})=>window[k]?.()?.stats?.[id]?.lastActionSeq>seq,
+    {k:spec.qa,id:attackerId,seq:hostSeq},{timeout:14000});
+   console.log('PASS squad owner RTDB reconnect: host token recovered, next shot replicated');
+
+
   }
   for(const c of clients)assert.deepEqual(c.issues.filter(x=>x.startsWith('JS ')),[],'browser runtime '+c.who);
  }catch(error){
