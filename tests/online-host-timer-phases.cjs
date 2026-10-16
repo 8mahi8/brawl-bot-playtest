@@ -12,7 +12,7 @@ const phases={performance:{now:()=>phaseTime}};
 let phaseTime=0;
 vm.createContext(phases);
 vm.runInContext(html.slice(phaseStart,phaseEnd)+
- '\\nthis.measure=measureTimerPhase;this.metrics=()=>timerPhaseTiming;',phases);
+ '\nthis.measure=measureTimerPhase;this.metrics=()=>timerPhaseTiming;',phases);
 const result=phases.measure('actions',()=>{phaseTime=12;return 'fast';});
 assert.equal(result,'fast','tracing must preserve callback return');
 assert.equal(phases.metrics().actions.calls,1);
@@ -34,7 +34,7 @@ const p={scene:'game',game:{phase:'playing',matchId:'m',round:1},lobby:{},myId:'
  $:id=>{assert.equal(id,'pauseBanner');return banner;}};
 vm.createContext(p);
 vm.runInContext('let pauseBannerMetrics={writes:0,skips:0};'+html.slice(pauseStart,pauseEnd)+
- '\\nthis.verify=checkPaused;this.metrics=()=>pauseBannerMetrics;',p);
+ '\nthis.verify=checkPaused;this.metrics=()=>pauseBannerMetrics;',p);
 p.verify();p.verify();p.verify();
 assert.deepEqual([...hidden],['hidden'],'playing scene has hidden pause banner');
 assert.equal(p.metrics().writes,0,'playing timer never churns pause banner DOM');
