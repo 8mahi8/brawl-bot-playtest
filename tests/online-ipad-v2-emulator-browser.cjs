@@ -154,10 +154,20 @@ async function run(browser,spec,count,botIndex=-1){
    // Four live users send position packets even when stationary. Regression:
    // frequent network positions must not re-run the complete scene layout or
    // force HUD work; the fixed 100ms refresh and game snapshots still do it.
-   const perfBefore=(await snap(shooter,spec)).presentationMetrics;
+   const beforePerf=await snap(shooter,spec),perfBefore=beforePerf.presentationMetrics;
+   const arenaBefore=beforePerf.arenaBackdropMetrics;
    assert(perfBefore,'presentation diagnostics exposed in development HTML');
+   assert(arenaBefore&&!arenaBefore.disabled&&arenaBefore.builds>=1,
+    'static arena canvas paints once in real WebKit');
    await delay(1400);
-   const perfAfter=(await snap(shooter,spec)).presentationMetrics;
+   const afterPerf=await snap(shooter,spec),perfAfter=afterPerf.presentationMetrics;
+   const arenaAfter=afterPerf.arenaBackdropMetrics;
+   assert.equal(arenaAfter.builds,arenaBefore.builds,
+    'no background re-rasterization across steady gameplay frames');
+   assert(arenaAfter.frames>arenaBefore.frames,
+    'real WebKit continues to blit cached arena while playing');
+   console.log('PASS squad cached arena: '+arenaAfter.builds+' background builds; '+
+    (arenaAfter.frames-arenaBefore.frames)+' blits during 1.4s (local WebKit)');
    const received=perfAfter.positionSnapshots-perfBefore.positionSnapshots;
    const hudUpdates=perfAfter.hudRenders-perfBefore.hudRenders;
    const sceneUpdates=perfAfter.gameSceneCalls-perfBefore.gameSceneCalls;
