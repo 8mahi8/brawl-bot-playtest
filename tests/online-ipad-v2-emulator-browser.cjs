@@ -219,6 +219,104 @@ async function run(browser,spec,count,botIndex=-1){
     {k:spec.qa,id:attackerId,seq:hostSeq},{timeout:14000});
    console.log('PASS squad owner RTDB reconnect: host token recovered, next shot replicated');
 
+   // Test actual live skill controls through the host-authoritative Firebase
+   // queue. Both input and effects must replicate, not just local HUD feedback.
+   await shooter.page.waitForFunction(k=>window[k]?.()?.combatReadyNow,spec.qa,{timeout:12000});
+   const gadBefore=(await snap(shooter,spec)).stats[attackerId].gadgets;
+   const gadMotionBefore=(await snap(shooter,spec)).combat.motions[attackerId].rev;
+   assert(gadBefore>0,'tank must have a gadget for online skill E2E');
+   await shooter.page.keyboard.press('q');
+   await observer.page.waitForFunction(({k,id,amount,rev})=>{
+    const q=window[k]?.();return q?.stats?.[id]?.gadgets===amount-1&&
+     q?.combat?.motions?.[id]?.rev>rev;
+   },{k:spec.qa,id:attackerId,amount:gadBefore,rev:gadMotionBefore},{timeout:13000});
+   console.log('PASS squad real online tank GAD: resource spent and authoritative dash replicated');
+
+   // The ULT meter is charged in a LOCAL EMULATOR fixture only. Use the
+   // game's real keyboard control and require the peer to see the ability.
+   await shooter.page.evaluate(async ({roomId,id})=>{
+    const ref=window.firebase.database().ref('rooms2v2/'+roomId+'/game');
+    const result=await ref.transaction(g=>{
+     if(!g||g.phase!=='playing'||!g.stats?.[id])return;
+     g.stats[id].ult=100;return g;
+    },undefined,false);
+    if(!result.committed)throw Error('failed to charge local emulator ULT fixture');
+   },{roomId:id,id:attackerId});
+   await shooter.page.waitForFunction(({k,id})=>window[k]?.()?.stats?.[id]?.ult===100,
+    {k:spec.qa,id:attackerId},{timeout:12000});
+   await delay(350); // Independent local gadget/ULT input cooldown.
+   const ultSeq=(await snap(shooter,spec)).stats[attackerId].lastActionSeq;
+   await shooter.page.keyboard.press('e');
+   await observer.page.waitForFunction(({k,id,seq})=>{
+    const q=window[k]?.();return q?.stats?.[id]?.lastActionSeq>seq&&
+     q.stats[id].ult===0;
+   },{k:spec.qa,id:attackerId,seq:ultSeq},{timeout:15000});
+   console.log('PASS squad real online tank ULT: charged meter spent and accepted by peer');
+
+   // An accepted Tank ULT is airborne for 0.6–1.2s. It is deliberately
+   // impossible to shoot while airborne, so wait for actual landing.
+   await shooter.page.waitForFunction(({k,id})=>{
+    const q=window[k]?.();return q?.combatReadyNow&&
+     !Object.values(q.combat?.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===id);
+   },{k:spec.qa,id:attackerId},{timeout:12000});
+
+   // Force a nearly finished knockout on the LOCAL EMULATOR, then deliver the
+   // decisive shot via the actual touch control. Check scores and KO across
+   // all four browsers, without relying on the short-lived round_end screen.
+   await shooter.page.waitForFunction(k=>window[k]?.()?.combatReadyNow,spec.qa,{timeout:12000});
+   const koState=await snap(shooter,spec);
+   const otherRedId=readyQs.find(v=>v.seat?.startsWith('red')&&v.myId!==victimId)?.myId;
+   assert(otherRedId,'second enemy is available for 2vs2 knockout');
+   const koMoves={
+    [attackerId]:{rev:koState.combat.motions[attackerId].rev+1,x:700,y:540,a:0},
+    [victimId]:{rev:koState.combat.motions[victimId].rev+1,x:760,y:540,a:Math.PI}
+   };
+   await shooter.page.evaluate(async ({roomId,motions,near,other})=>{
+    const ref=window.firebase.database().ref('rooms2v2/'+roomId+'/game');
+    const result=await ref.transaction(g=>{
+     if(!g||g.phase!=='playing')return;
+     Object.assign(g.motions,motions);
+     g.hp[near]=1;
+     g.hp[other]=0;
+     return g;
+    },undefined,false);
+    if(!result.committed)throw Error('failed to stage local emulator KO fixture');
+   },{roomId:id,motions:koMoves,near:victimId,other:otherRedId});
+   await shooter.page.waitForFunction(({k,target})=>{
+    const q=window[k]?.();return q?.combatReadyNow&&Math.abs(q.local?.x-700)<5&&
+     Math.abs(q.positionValues?.[target]?.x-760)<5&&q.hp?.[target]===1;
+   },{k:spec.qa,target:victimId},{timeout:14000});
+   const scoreBefore=koState.scores?.blue||0;
+   const koSeq=(await snap(shooter,spec)).stats[attackerId].lastActionSeq;
+   await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
+   try{
+    await shooter.page.waitForFunction(({k,id,seq})=>
+     (window[k]?.()?.stats?.[id]?.lastActionSeq??0)>seq,
+     {k:spec.qa,id:attackerId,seq:koSeq},{timeout:13000});
+    await Promise.all(clients.map(c=>c.page.waitForFunction(({k,score})=>{
+     const q=window[k]?.();return q?.scores?.blue===score+1&&
+      q?.combat?.battleStats&&Object.values(q.combat.battleStats).some(v=>v.kos>0);
+    },{k:spec.qa,score:scoreBefore},{timeout:15000})));
+   }catch(err){
+    for(const [ix,c]of clients.entries()){
+     const q=await snap(c,spec);
+     console.error('KO DIAGNOSTIC '+ix+' '+JSON.stringify({
+      phase:q.game,round:q.round,score:q.scores,online:q.online,
+      actor:q.myId,host:q.gameHostToken,authorized:q.hostAuthorized,
+      combatReady:q.combatReadyNow,queue:q.hostQueue,scheduled:q.combat?.scheduled,
+      actionSeq:q.stats?.[attackerId]?.lastActionSeq,receipts:q.combat?.usedActions,
+      hp:q.hp,positions:q.positionValues,local:q.local,motions:q.combat?.motions,
+      lastError:q.combatTickLastError
+     }));
+    }
+    throw err;
+   }
+   const koAfter=await snap(observer,spec);
+   assert(['round_end','playing','match_end'].includes(koAfter.game),'resolved or advanced KO phase');
+   assert.equal(koAfter.combat.battleStats[attackerId].kos>=1,true,'host credited with decisive KO');
+   console.log('PASS squad real online KO: last enemy eliminated, blue score increments and all 4 clients agree');
+
+
 
   }
   for(const c of clients)assert.deepEqual(c.issues.filter(x=>x.startsWith('JS ')),[],'browser runtime '+c.who);
