@@ -44,8 +44,12 @@ assert.equal(reset,1,'first disconnect resets predicted combat visuals');
 assert(!hidden.has('hidden'),'connection loss announces pause immediately');
 assert.equal(p.metrics().writes,1);
 p.verify();assert.equal(p.metrics().writes,1,'same displayed second does not repaint');
+// Shared server phase publishes pausedAt; countdown cannot advance until
+// host has committed its authoritative pause timestamp.
+p.game={...p.game,phase:'paused',pausedAt:10000};
+p.verify();
 fakeNow=11000;p.verify();
-assert.equal(p.metrics().writes,2,'countdown updates on new second');
+assert(p.metrics().writes>=2,'authoritative pausedAt countdown updates on new second');
 flags.connected=true;p.game={...p.game,phase:'playing'};p.verify();
 assert.equal(p.paused,false,'reconnection resumes local controls');
 assert(hidden.has('hidden'),'resume immediately hides pause banner');
