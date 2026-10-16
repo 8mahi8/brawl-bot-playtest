@@ -5,7 +5,7 @@ const html=fs.readFileSync(path.join(__dirname,'../online/ipad-squad-v2-lab.html
 const begin=html.indexOf('async function processCombatTick()');
 const end=html.indexOf('function isAuthoritative()',begin);
 assert(begin>0&&end>begin&&end-begin<2900,'real host tick function is present');
-const metricsStart=html.indexOf('let tickTxnTiming='),metricsEnd=html.indexOf('let pauseBannerMetrics=',metricsStart);
+const metricsStart=html.indexOf('let tickTxnTiming='),metricsEnd=html.indexOf('const PERIODIC_HUD_MAX_AGE_MS=',metricsStart);
 assert(metricsStart>0&&metricsEnd>metricsStart&&metricsEnd-metricsStart<1100,'real transaction metrics helper is present');
 const embedded=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(Boolean);
 embedded.forEach((x,i)=>new vm.Script(x,{filename:'embedded 2vs2 js #'+i}));
