@@ -10,6 +10,7 @@ on:
       - 'tests/online-frame-rate-accuracy.cjs'
       - 'tests/online-2v2-canvas-pixel-budget.cjs'
       - 'tests/online-idle-position-traffic.cjs'
+      - 'tests/online-2v2-static-arena-cache.cjs'
       - 'tests/online-hp-preview.cjs'
       - 'tests/online-host-action-batching.cjs'
       - 'tests/online-host-txn-arbiter.cjs'
@@ -27,6 +28,7 @@ on:
       - 'tests/online-frame-rate-accuracy.cjs'
       - 'tests/online-2v2-canvas-pixel-budget.cjs'
       - 'tests/online-idle-position-traffic.cjs'
+      - 'tests/online-2v2-static-arena-cache.cjs'
       - 'tests/online-hp-preview.cjs'
       - 'tests/online-host-action-batching.cjs'
       - 'tests/online-host-txn-arbiter.cjs'
@@ -56,6 +58,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Verify 2vs2 bush-fog backdrop cache and Safari no-canvas fallback
+        run: node tests/online-2v2-static-arena-cache.cjs
       - name: Verify mobile movement and stationary RTDB position publication
         run: node tests/online-idle-position-traffic.cjs
       - name: Verify 2vs2 tablet Canvas memory budget and phone quality

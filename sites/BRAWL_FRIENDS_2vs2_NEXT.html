@@ -1879,14 +1879,32 @@ function ownStealthState(){
  return 'hidden';
 }
 function roundedRect(x,y,w,h,r,fill){ctx.fillStyle=fill;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
+// The grid and bush fog never animate. Rasterize them once per map variant,
+// rather than repeatedly clipping and drawing dozens of paths each frame.
+// Live gas, area capture state, walls, actors, bullets, and hit FX stay dynamic.
+let arenaBackdrop=null,arenaBackdropBushes=null,arenaBackdropRebuilds=0,arenaBackdropFrames=0,arenaBackdropDisabled=false;
+function paintArenaBackdrop(g,bushes){
+ g.fillStyle='#12212d';g.fillRect(0,0,W,H);
+ g.strokeStyle='rgba(117,162,178,.075)';g.lineWidth=1;g.beginPath();
+ for(let x=35;x<W;x+=60){g.moveTo(x,0);g.lineTo(x,H);}
+ for(let y=35;y<H;y+=60){g.moveTo(0,y);g.lineTo(W,y);}g.stroke();
+ g.strokeStyle='rgba(119,196,207,.12)';g.setLineDash([9,15]);
+ g.beginPath();g.moveTo(0,H/2);g.lineTo(W,H/2);g.stroke();g.setLineDash([]);
+ BrawlStealthV1.drawFields(g,bushes,performance.now());
+}
 function drawArena(){
- ctx.fillStyle='#12212d';ctx.fillRect(0,0,W,H);
- ctx.strokeStyle='rgba(117,162,178,.075)';ctx.lineWidth=1;ctx.beginPath();
- for(let x=35;x<W;x+=60){ctx.moveTo(x,0);ctx.lineTo(x,H);}
- for(let y=35;y<H;y+=60){ctx.moveTo(0,y);ctx.lineTo(W,y);}ctx.stroke();
- ctx.strokeStyle='rgba(119,196,207,.12)';ctx.setLineDash([9,15]);
- ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();ctx.setLineDash([]);
- BrawlStealthV1.drawFields(ctx,BUSHES,performance.now());
+ if(!arenaBackdropDisabled&&(!arenaBackdrop||arenaBackdropBushes!==BUSHES)){
+  try{
+   const backing=document.createElement('canvas');
+   backing.width=W;backing.height=H;
+   const g=backing.getContext('2d');
+   if(!g)throw Error('Canvas background context unavailable');
+   paintArenaBackdrop(g,BUSHES);
+   arenaBackdrop=backing;arenaBackdropBushes=BUSHES;arenaBackdropRebuilds++;
+  }catch(_){arenaBackdropDisabled=true;arenaBackdrop=null;}
+ }
+ if(arenaBackdrop){ctx.drawImage(arenaBackdrop,0,0);arenaBackdropFrames++;}
+ else paintArenaBackdrop(ctx,BUSHES);
  const m=scene==='game'?gasMargin():0;
  if(m>0){ctx.fillStyle='rgba(255,50,95,.23)';ctx.fillRect(0,0,W,m);ctx.fillRect(0,H-m,W,m);ctx.fillRect(0,m,m,Math.max(0,H-2*m));ctx.fillRect(W-m,m,m,Math.max(0,H-2*m));ctx.strokeStyle='#ff527a';ctx.lineWidth=3;ctx.strokeRect(m,m,Math.max(0,W-2*m),Math.max(0,H-2*m));}
  if(game?.mode==='area'){ctx.fillStyle=game.area?.contested?'rgba(255,204,110,.14)':'rgba(105,217,255,.10)';ctx.strokeStyle=game.area?.contested?'#ffd17c':'#78eefe';ctx.lineWidth=3;ctx.beginPath();ctx.arc(W/2,H/2,BALANCE.areaRadius,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.textAlign='center';ctx.font='bold 14px system-ui';ctx.fillStyle='#d8eef4';ctx.fillText(game.area?.contested?'CONTESTED':'HOT ZONE',W/2,H/2+5);}
@@ -2214,7 +2232,7 @@ const rememberedRoom=safeSessGet('brawl-v3-lastroom');
 if(/^\d{5}$/.test(rememberedRoom||'')){$('roomInput').value=rememberedRoom;$('homeStatus').textContent='前回のルームIDを入力済み。復帰する場合は「ルームに参加」を押してね。';}
 applyFit();showScene('home');requestAnimationFrame(frame);
 // Read-only diagnostics used by the local mock test harness; no live-server controls.
-window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
+window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},arenaBackdropMetrics:{builds:arenaBackdropRebuilds,frames:arenaBackdropFrames,disabled:arenaBackdropDisabled,width:arenaBackdrop?.width||0,height:arenaBackdrop?.height||0},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
 })();
 </script>
 </body></html>
