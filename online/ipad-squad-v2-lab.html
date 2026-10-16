@@ -2264,13 +2264,45 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  if(scene==='game'&&!paused){const a=ultPointer?.dragged&&!ultPointer.cancelled?ultPointer:aimPointer?.dragged?aimPointer:null;if(a){const dx=a.x-a.ox,dy=a.y-a.oy,angle=Math.atan2(dy,dx),char=game?.stats?.[myId]?.char;ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);ctx.strokeStyle='#e2c7ff';ctx.setLineDash([8,6]);ctx.lineWidth=3;drawShotGuide(char,angle,clamp(Math.hypot(dx,dy)/80*330,55,330),a===ultPointer);ctx.restore();}}
  if(scene==='game'&&pointer&&!paused){const x=pointer.ox,y=pointer.oy;const dx=pointer.x-x,dy=pointer.y-y;ctx.strokeStyle='rgba(160,231,251,.6)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,43,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(107,220,245,.5)';ctx.beginPath();ctx.arc(x+clamp(dx,-44,44),y+clamp(dy,-44,44),18,0,7);ctx.fill();}
 }
+// When the entire KO board is visually static, don't dirty the full Canvas
+// 60 times per second. Keep requestAnimationFrame, input, host 100ms timers
+// and the authoritative state pipeline running at full speed. Drawing resumes
+// on the first observed touch/movement/projectile/ability (no next-tick delay).
+const QUIET_CANVAS_REDRAW_MS=240,QUIET_CANVAS_RESUME_GRACE_MS=500;
+let quietCanvasLastActiveAt=0,quietCanvasLastDrawAt=0;
+let quietCanvasMetrics={skipped:0,quietDraws:0,activeDraws:0};
+function quietCanvasIdleEligible(){
+ if(scene!=='game'||solo||botPilot||!lobby||!game||!combatReady()||
+  !quietKoTickSafe(game,serverNow()-game.clock.wallAt))return false;
+ if(pointer||aimPointer||ultPointer||pcShot||pcKeys.size||pcCursor||
+  fx.length||clientBullets.length||hpPreviewHits.length)return false;
+ if(Math.abs(local.vx||0)>4||Math.abs(local.vy||0)>4)return false;
+ for(const key of SEATS){
+  const player=lobby.seats?.[key];if(!player)return false;
+  const p=positions[player.id];
+  if(p&&(Math.abs(p.vx||0)>4||Math.abs(p.vy||0)>4))return false;
+ }
+ return true;
+}
+function shouldDrawCanvasFrame(now){
+ if(scene!=='game')return scene==='layout';
+ if(!quietCanvasIdleEligible()){
+  quietCanvasLastActiveAt=now;quietCanvasLastDrawAt=now;
+  quietCanvasMetrics.activeDraws++;return true;
+ }
+ if(now-quietCanvasLastActiveAt<QUIET_CANVAS_RESUME_GRACE_MS||
+  now-quietCanvasLastDrawAt>=QUIET_CANVAS_REDRAW_MS){
+  quietCanvasLastDrawAt=now;quietCanvasMetrics.quietDraws++;return true;
+ }
+ quietCanvasMetrics.skipped++;return false;
+}
 // Home/lobby screens fully cover the arena; keep the animation scheduler
 // alive, but do not burn Canvas/GPU time drawing invisible gameplay behind UI.
 function frame(now){const elapsed=Math.max(0,(now-(lastFrame||now))/1000),dt=clamp(elapsed,0,.06);lastFrame=now;if(gadgetToastExpiry&&now>gadgetToastExpiry){gadgetToastExpiry=0;$('skillToast').classList.add('hidden');}if(elapsed>0)fps=fps*.9+.1/elapsed;adjustCanvasQuality(elapsed,now);
  if(scene==='game'&&!document.hidden){workTiming.frameSamples++;if(elapsed>0.1)workTiming.frameGapOver100++;workTiming.frameGapMaxMs=Math.max(workTiming.frameGapMaxMs,elapsed*1000);}
  const workStart=performance.now();update(dt);const afterUpdate=performance.now();updateBots(dt);const afterBots=performance.now();if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}
  const nonDraw=performance.now()-workStart;if(scene==='game'){workTiming.updateTotalMs+=afterUpdate-workStart;workTiming.botTotalMs+=afterBots-afterUpdate;workTiming.nonDrawTotalMs+=nonDraw;workTiming.nonDrawMaxMs=Math.max(workTiming.nonDrawMaxMs,nonDraw);}
- if(scene==='game'||scene==='layout'){const start=performance.now();draw(dt);const cost=performance.now()-start;drawTiming.frames++;drawTiming.lastDrawMs=Math.round(cost*10)/10;drawTiming.totalDrawMs+=cost;drawTiming.maxDrawMs=Math.max(drawTiming.maxDrawMs,cost);}else drawTiming.skippedCoveredFrames++;requestAnimationFrame(frame);}
+ if(shouldDrawCanvasFrame(now)){const start=performance.now();draw(dt);const cost=performance.now()-start;drawTiming.frames++;drawTiming.lastDrawMs=Math.round(cost*10)/10;drawTiming.totalDrawMs+=cost;drawTiming.maxDrawMs=Math.max(drawTiming.maxDrawMs,cost);}else drawTiming.skippedCoveredFrames++;requestAnimationFrame(frame);}
 
 function setLayoutDrag(k,e){if(scene!=='layout')return;e.preventDefault();const el=$(k==='gad'?'mockGad':'mockUlt');let active=e.pointerId;el.setPointerCapture?.(active);
  const move=ev=>{if(ev.pointerId!==active)return;const stage=$('app').getBoundingClientRect(),sz=layout[k].size;
@@ -2372,7 +2404,7 @@ const rememberedRoom=safeSessGet('brawl-v3-lastroom');
 if(/^\d{5}$/.test(rememberedRoom||'')){$('roomInput').value=rememberedRoom;$('homeStatus').textContent='前回のルームIDを入力済み。復帰する場合は「ルームに参加」を押してね。';}
 applyFit();showScene('home');requestAnimationFrame(frame);
 // Read-only diagnostics used by the local mock test harness; no live-server controls.
-window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},workTiming:{...workTiming},timerPhaseTiming:Object.fromEntries(TIMER_PHASES.map(key=>[key,{...timerPhaseTiming[key]}])),pauseBannerMetrics:{...pauseBannerMetrics},tickTxnTiming:{...tickTxnTiming},quietTickMetrics:{...quietTickMetrics},inputTiming:{...inputTiming,lastTouchShot:inputTiming.lastTouchShot?{...inputTiming.lastTouchShot}:null},drawTiming:{...drawTiming,averageDrawMs:drawTiming.frames?Math.round(drawTiming.totalDrawMs/drawTiming.frames*10)/10:0},arenaBackdropMetrics:{builds:arenaBackdropRebuilds,frames:arenaBackdropFrames,disabled:arenaBackdropDisabled,width:arenaBackdrop?.width||0,height:arenaBackdrop?.height||0},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
+window.__brawlV3QA=()=>({ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},workTiming:{...workTiming},timerPhaseTiming:Object.fromEntries(TIMER_PHASES.map(key=>[key,{...timerPhaseTiming[key]}])),pauseBannerMetrics:{...pauseBannerMetrics},tickTxnTiming:{...tickTxnTiming},quietTickMetrics:{...quietTickMetrics},quietCanvasMetrics:{...quietCanvasMetrics},inputTiming:{...inputTiming,lastTouchShot:inputTiming.lastTouchShot?{...inputTiming.lastTouchShot}:null},drawTiming:{...drawTiming,averageDrawMs:drawTiming.frames?Math.round(drawTiming.totalDrawMs/drawTiming.frames*10)/10:0},arenaBackdropMetrics:{builds:arenaBackdropRebuilds,frames:arenaBackdropFrames,disabled:arenaBackdropDisabled,width:arenaBackdrop?.width||0,height:arenaBackdrop?.height||0},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
 })();
 </script>
 </body></html>
