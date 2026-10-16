@@ -127,6 +127,22 @@ async function run(browser,spec,count,botIndex=-1){
    const hostId=q.myId,before=q.stats[hostId].lastActionSeq;
    const startupWait=Math.max(250,Math.min(3500,q.combat.startAt-Date.now()+450));
    await delay(startupWait);
+   // Verify local WebKit+RTDB keeps authoritative clock speed while the host
+   // avoids every other Firebase write during entirely quiet four-human KO.
+   const quietStart=await snap(shooter,spec);
+   assert.equal(quietStart.mode,'ko','quiet-write benchmark requires KO mode');
+   await delay(1700);
+   const quietEnd=await snap(shooter,spec);
+   const idleDefers=quietEnd.quietTickMetrics.deferrals-quietStart.quietTickMetrics.deferrals;
+   const idleBatches=quietEnd.quietTickMetrics.doubleSteps-quietStart.quietTickMetrics.doubleSteps;
+   const idleClockMs=quietEnd.combat.clock.t-quietStart.combat.clock.t;
+   assert(idleDefers>=2&&idleBatches>=2,
+    'real four-client KO idle must save Firebase writes: '+JSON.stringify({idleDefers,idleBatches}));
+   assert(idleClockMs>=1000,
+    'two-step KO write batching must not stall authoritative game time: '+idleClockMs);
+   console.log('PASS squad quiet KO 4-browser: '+idleDefers+' deferred host polls / '+
+    idleBatches+' two-step Firebase writes; game clock '+idleClockMs+
+    'ms advance in 1700ms idle (LOCAL WebKit, not physical iPad)');
    const shotSentAt=Date.now();
    await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
    const touchCompletedAt=Date.now();
@@ -167,14 +183,14 @@ async function run(browser,spec,count,botIndex=-1){
    // frequent network positions must not re-run the complete scene layout or
    // force HUD work; the fixed 100ms refresh and game snapshots still do it.
    const beforePerf=await snap(shooter,spec),perfBefore=beforePerf.presentationMetrics,drawBefore=beforePerf.drawTiming,workBefore=beforePerf.workTiming;
-   const phaseBefore=beforePerf.timerPhaseTiming,pauseBefore=beforePerf.pauseBannerMetrics,txnBefore=beforePerf.tickTxnTiming;
+   const phaseBefore=beforePerf.timerPhaseTiming,pauseBefore=beforePerf.pauseBannerMetrics,txnBefore=beforePerf.tickTxnTiming,quietBefore=beforePerf.quietTickMetrics;
    const arenaBefore=beforePerf.arenaBackdropMetrics;
    assert(perfBefore,'presentation diagnostics exposed in development HTML');
    assert(arenaBefore&&!arenaBefore.disabled&&arenaBefore.builds>=1,
     'static arena canvas paints once in real WebKit');
    await delay(1400);
    const afterPerf=await snap(shooter,spec),perfAfter=afterPerf.presentationMetrics,drawAfter=afterPerf.drawTiming,workAfter=afterPerf.workTiming;
-   const phaseAfter=afterPerf.timerPhaseTiming,pauseAfter=afterPerf.pauseBannerMetrics,txnAfter=afterPerf.tickTxnTiming;
+   const phaseAfter=afterPerf.timerPhaseTiming,pauseAfter=afterPerf.pauseBannerMetrics,txnAfter=afterPerf.tickTxnTiming,quietAfter=afterPerf.quietTickMetrics;
    const arenaAfter=afterPerf.arenaBackdropMetrics;
    assert.equal(arenaAfter.builds,arenaBefore.builds,
     'no background re-rasterization across steady gameplay frames');
@@ -232,6 +248,15 @@ async function run(browser,spec,count,botIndex=-1){
     JSON.stringify({phases,pauseBannerWrites:pauseAfter.writes-pauseBefore.writes,
      pauseBannerSkips:pauseAfter.skips-pauseBefore.skips,
      totalTimerSyncMs:Math.round(delta('timerTotalMs')*10)/10}));
+   assert(quietAfter&&quietBefore&&Number.isSafeInteger(quietAfter.deferrals),
+    'real WebKit exposes local quiet-KO write avoidance diagnostics');
+   console.log('TRACE squad quiet KO double-step writes (local WebKit): '+
+    JSON.stringify({mode:afterPerf.mode,phase:afterPerf.game,
+     deferredPolls:quietAfter.deferrals-quietBefore.deferrals,
+     twoStepsOneWrite:quietAfter.doubleSteps-quietBefore.doubleSteps,
+     activeOneStep:quietAfter.ordinarySteps-quietBefore.ordinarySteps,
+     staleFirebaseFallback:quietAfter.unsafeAtCommit-quietBefore.unsafeAtCommit,
+     shotInterruptionCatchups:quietAfter.actionCatchups-quietBefore.actionCatchups}));
    const diff=key=>txnAfter[key]-txnBefore[key];
    const avg=(key,denom)=>denom?Math.round(diff(key)/denom*10)/10:null;
    console.log('TRACE squad host Firebase transaction CPU vs network wait (local WebKit): '+

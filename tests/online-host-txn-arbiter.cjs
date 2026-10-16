@@ -6,6 +6,8 @@ const begin=html.indexOf('async function processCombatTick()');
 const end=html.indexOf('function isAuthoritative()',begin);
 assert(begin>0&&end>begin&&end-begin<2900,'real host tick function is present');
 const metricsStart=html.indexOf('let tickTxnTiming='),metricsEnd=html.indexOf('const PERIODIC_HUD_MAX_AGE_MS=',metricsStart);
+const quietStart=html.indexOf('const QUIET_KO_WRITE_AGE_MS='),quietEnd=html.indexOf('// Firebase RTDB serializes writes',quietStart);
+assert(quietStart>0&&quietEnd>quietStart&&quietEnd-quietStart<1300,'actual guarded KO batching source');
 assert(metricsStart>0&&metricsEnd>metricsStart&&metricsEnd-metricsStart<1100,'real transaction metrics helper is present');
 const embedded=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(Boolean);
 embedded.forEach((x,i)=>new vm.Script(x,{filename:'embedded 2vs2 js #'+i}));
@@ -36,7 +38,7 @@ function rig(opts={}){
   }})
  };
  vm.createContext(c);
- vm.runInContext(html.slice(metricsStart,metricsEnd)+'\n'+html.slice(begin,end)+
+ vm.runInContext(html.slice(metricsStart,metricsEnd)+'\n'+html.slice(quietStart,quietEnd)+'\n'+html.slice(begin,end)+
   '\nthis.processCombatTick=processCombatTick;this.readTxnStats=()=>({...tickTxnTiming});',c);
  return {c,metrics,run:()=>c.processCombatTick(),read:()=>current,release:()=>complete?.()};
 }
