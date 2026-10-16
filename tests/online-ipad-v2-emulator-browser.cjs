@@ -127,6 +127,22 @@ async function run(browser,spec,count,botIndex=-1){
    const hostId=q.myId,before=q.stats[hostId].lastActionSeq;
    const startupWait=Math.max(250,Math.min(3500,q.combat.startAt-Date.now()+450));
    await delay(startupWait);
+   // Verify local WebKit+RTDB keeps authoritative clock speed while the host
+   // avoids every other Firebase write during entirely quiet four-human KO.
+   const quietStart=await snap(shooter,spec);
+   assert.equal(quietStart.mode,'ko','quiet-write benchmark requires KO mode');
+   await delay(1700);
+   const quietEnd=await snap(shooter,spec);
+   const idleDefers=quietEnd.quietTickMetrics.deferrals-quietStart.quietTickMetrics.deferrals;
+   const idleBatches=quietEnd.quietTickMetrics.doubleSteps-quietStart.quietTickMetrics.doubleSteps;
+   const idleClockMs=quietEnd.combat.clock.t-quietStart.combat.clock.t;
+   assert(idleDefers>=2&&idleBatches>=2,
+    'real four-client KO idle must save Firebase writes: '+JSON.stringify({idleDefers,idleBatches}));
+   assert(idleClockMs>=1000,
+    'two-step KO write batching must not stall authoritative game time: '+idleClockMs);
+   console.log('PASS squad quiet KO 4-browser: '+idleDefers+' deferred host polls / '+
+    idleBatches+' two-step Firebase writes; game clock '+idleClockMs+
+    'ms advance in 1700ms idle (LOCAL WebKit, not physical iPad)');
    const shotSentAt=Date.now();
    await shooter.page.locator('#arena').tap({position:{x:730,y:290},timeout:5000});
    const touchCompletedAt=Date.now();
