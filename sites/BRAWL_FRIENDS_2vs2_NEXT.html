@@ -1331,12 +1331,20 @@ function hudToggleClass(node,name,enabled){
  if(node.classList.contains(name)===enabled){presentationMetrics.hudDomSkips++;return;}
  node.classList.toggle(name,enabled);presentationMetrics.hudDomWrites++;
 }
+const hudReloadPaintPercent=new WeakMap();
+function hudPaintReloadBar(el,fill){
+ const percent=Math.round(fill*100);
+ if(hudReloadPaintPercent.get(el)===percent){presentationMetrics.hudDomSkips++;return;}
+ hudReloadPaintPercent.set(el,percent);
+ el.style.background=`linear-gradient(to right,#f4f9ff ${percent}%,#203646 ${percent}%)`;
+ presentationMetrics.hudDomWrites++;
+}
 function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;lastHudRenderAt=performance.now();presentationMetrics.hudRenders++;renderResultStats();const mine=lobby.seats[mySeat()],me=game.stats[myId],hp=game.hp[myId],hudNow=combatNow(),activeChar=me?.char||mine.char;
  const info=ABILITY_GUIDE[activeChar]||ABILITY_GUIDE.tank;hudWriteValue($('skillInfoTitle'),'textContent',info.title);hudWriteValue($('skillInfoText'),'textContent','GAD：'+info.gad+'\nULT：'+info.ult+'\n操作：タップでガジェット、ULTはドラッグして狙えます。PCは右クリック/Q と Space/E。\n左ドラッグで移動、右タップで射撃、右ドラッグで狙う。');
   const vm=BrawlDesignV1.model({seatKeys:SEATS,seats:lobby.seats,stats:game?.stats||{},hp:predictedEnemyHp(),myId,mySeat:mySeat(),now:hudNow,chars:CHARS,visible:id=>canSeeEnemy(targetPoint(id),id)});
  hudWriteValue($('myLabel'),'textContent',(botPilot?'BOT / ':'YOU / ')+(CHARS[activeChar]?.label||'タンク'));hudWriteValue($('mySeat'),'textContent',mySeat().toUpperCase()+' · '+myTeam().toUpperCase());
  hudWriteValue($('myHP'),'textContent',game.mode==='ko'&&hp===0&&game.phase==='playing'?'KO · BOT観戦中':Number.isFinite(hp)?Math.ceil(hp)+' / '+CHARS[activeChar].hp:'HP -');hudWriteValue($('myHpFill').style,'width',clamp((hp||0)/CHARS[activeChar].hp*100,0,100)+'%');
- const loaded=vm.ammo.ammo;hudWriteValue($('myAmmo'),'textContent','弾 '+loaded+' / 3');[...$('myReload').children].forEach((el,i)=>{const fill=i<loaded?1:i===loaded?vm.ammo.progress:0;hudWriteValue(el.style,'background',`linear-gradient(to right,#f4f9ff ${Math.round(fill*100)}%,#203646 ${Math.round(fill*100)}%)`);});
+ const loaded=vm.ammo.ammo;hudWriteValue($('myAmmo'),'textContent','弾 '+loaded+' / 3');[...$('myReload').children].forEach((el,i)=>{const fill=i<loaded?1:i===loaded?vm.ammo.progress:0;hudPaintReloadBar(el,fill);});
  hudWriteValue($('myUlt'),'textContent','ULT '+Math.floor(vm.ult)+'% · GAD '+vm.gadgets);hudWriteValue($('myUltFill').style,'width',clamp(vm.ult,0,100)+'%');/* Guardian is communicated in-world instead of HUD text. */
  hudWriteValue($('myBuff'),'textContent',me?.overdriveUntil>hudNow?'オーバードライブ中':me?.boostUntil>hudNow?'加速中':me?.armed?'強化爆弾準備中':'');
  hudWriteValue($('allySummary'),'textContent',vm.allies.map(p=>'ALLY '+p.seat.toUpperCase().slice(-1)+' · '+(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO')).join('  '));
