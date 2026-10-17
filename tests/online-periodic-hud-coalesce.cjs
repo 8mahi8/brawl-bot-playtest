@@ -36,4 +36,34 @@ assert.match(html,/onlineTimer=setInterval\(.*processCombatTick\(\).*periodicUiR
  '100ms host combat work remains unaffected');
 assert.match(html,/reconcileRoomView\(\).*gadgetReceipts\(\)/,
  'game snapshots still reconcile immediately');
+// The live helper must preserve immediate state changes without repeated DOM mutations.
+const writeStart=html.indexOf('function hudWriteValue('),writeEnd=html.indexOf('function renderGameHUD(){',writeStart);
+assert(writeStart>0&&writeEnd>writeStart&&writeEnd-writeStart<900,'extract live HUD write gate');
+const node={_text:'',_title:'',attrs:{},writes:0,attributeWrites:0,
+ get textContent(){return this._text;},set textContent(v){this._text=v;this.writes++;},
+ get title(){return this._title;},set title(v){this._title=v;this.writes++;},
+ getAttribute(k){return this.attrs[k]??null;},
+ setAttribute(k,v){this.attrs[k]=v;this.attributeWrites++;}};
+const dom={presentationMetrics:{hudDomWrites:0,hudDomSkips:0}};
+vm.createContext(dom);
+vm.runInContext(html.slice(writeStart,writeEnd)+'this.writeValue=hudWriteValue;this.writeAttr=hudWriteAttribute;',dom);
+dom.writeValue(node,'textContent','HP 100 / 100');
+dom.writeValue(node,'textContent','HP 100 / 100');
+dom.writeValue(node,'textContent','HP 90 / 100');
+dom.writeValue(node,'title','GAD ガード');
+dom.writeValue(node,'title','GAD ガード');
+dom.writeAttr(node,'aria-label','ガジェット ガード');
+dom.writeAttr(node,'aria-label','ガジェット ガード');
+dom.writeAttr(node,'aria-label','ガジェット ダッシュ');
+assert.equal(node.writes,3,'unchanged HP and ability labels avoid setter, HP changes immediately');
+assert.equal(node.attributeWrites,2,'accessibility label updates on content change');
+assert.equal(dom.presentationMetrics.hudDomWrites,5);
+assert.equal(dom.presentationMetrics.hudDomSkips,3);
+const hud=html.slice(html.indexOf('function renderGameHUD(){'),html.indexOf('async function registerPresence(){'));
+for(const id of ['skillInfoText','myHP','myAmmo','myUlt','enemySummary','roundInfo','ultAction']){
+ assert(hud.includes("hudWriteValue($('"+id+"'),'textContent',"),'live HUD still writes changed values: '+id);
+}
+assert(hud.includes("hudWriteValue(gad,'textContent',"),'GAD value always refreshed when changed');
+assert(hud.includes("hudWriteAttribute(gad,'aria-label'"),'GAD accessible label preserved');
+assert(hud.includes("hudWriteAttribute($('ultAction'),'aria-label'"),'ULT accessible label preserved');
 console.log('PASS online HUD gate: immediate state snapshots, ≤250ms idle refresh, no redundant 100ms DOM updates, host tick unchanged');
