@@ -1,0 +1,525 @@
+{
+  "version": "0.1-design",
+  "status": "candidate_only_no_runtime_effects",
+  "description": "Mechanics proposals, not wired to combat; initial numbers are simulation targets, not certified balance.",
+  "tags": {
+    "any": [
+      "ko",
+      "area"
+    ],
+    "winnerFirst": true
+  },
+  "globalCaps": {
+    "moveSpeedPct": 12,
+    "reloadSpeedPct": 20,
+    "damageReductionPct": 12,
+    "damageBonusFlatPerHit": 7,
+    "revealExtraMs": 1200,
+    "ultBonusPointsPerEvent": 4
+  },
+  "rules": {
+    "noRarityOrStatSnowball": true,
+    "duplicateCardPerPlayer": false,
+    "cooldownPersistsAcrossRespawn": true,
+    "resetCooldownAndInventoryOnNewMatch": true,
+    "ownerScopedTeamworkEffects": true,
+    "shotAndHitEventsAreServerAuthoritative": true,
+    "normalModeUnchanged": true
+  },
+  "cards": [
+    {
+      "id": "empty_sprint",
+      "name": "空弾疾走",
+      "family": "mobility",
+      "archetype": "機動",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "残弾0の間、移動速度+9%。弾が補充されると終了。",
+      "hook": "while_ammo_zero",
+      "effect": {
+        "moveSpeedPct": 9
+      },
+      "weakness": "弾切れで逃げられるが、反撃用の弾はない。",
+      "synergies": [
+        "last_shell",
+        "emergency_feed"
+      ],
+      "answers": [
+        "tracking_hit",
+        "exposed_sense"
+      ]
+    },
+    {
+      "id": "hit_stride",
+      "name": "追撃歩法",
+      "family": "mobility",
+      "archetype": "機動",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "通常攻撃でダメージを与えると1.8秒間、移動速度+7%。再発動は6秒後。",
+      "hook": "on_normal_hit",
+      "effect": {
+        "moveSpeedPct": 7,
+        "durationMs": 1800,
+        "cooldownMs": 6000
+      },
+      "weakness": "命中が必要。壁・射線・回避で発動を防げる。",
+      "synergies": [
+        "followthrough",
+        "projectile_tempo"
+      ],
+      "answers": [
+        "opening_guard",
+        "wing_guard"
+      ]
+    },
+    {
+      "id": "rebound_step",
+      "name": "反撃ステップ",
+      "family": "mobility",
+      "archetype": "機動",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "被弾して生存したら1.5秒間、移動速度+9%。再発動は11秒後。",
+      "hook": "on_damage_survive",
+      "effect": {
+        "moveSpeedPct": 9,
+        "durationMs": 1500,
+        "cooldownMs": 11000
+      },
+      "weakness": "一撃KOは防がず、短時間なので追跡可能。",
+      "synergies": [
+        "emergency_feed",
+        "clutch_armor"
+      ],
+      "answers": [
+        "finisher",
+        "tracking_hit"
+      ]
+    },
+    {
+      "id": "moving_reload",
+      "name": "走行装填",
+      "family": "reload",
+      "archetype": "装填",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "0.8秒以上移動入力を継続中、リロード進行速度+12%。",
+      "hook": "moving_input_for",
+      "effect": {
+        "reloadSpeedPct": 12,
+        "requiredMs": 800
+      },
+      "weakness": "止まると消える。移動ルートを制限する遮蔽物や射線に弱い。",
+      "synergies": [
+        "empty_sprint",
+        "last_shell"
+      ],
+      "answers": [
+        "opening_guard",
+        "exposed_sense"
+      ]
+    },
+    {
+      "id": "last_shell",
+      "name": "最後の装填",
+      "family": "reload",
+      "archetype": "装填",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "残弾0の間、リロード進行速度+16%。",
+      "hook": "while_ammo_zero",
+      "effect": {
+        "reloadSpeedPct": 16
+      },
+      "weakness": "空弾中の逃走を早く切り上げられるが、射撃機会は減る。",
+      "synergies": [
+        "empty_sprint",
+        "moving_reload"
+      ],
+      "answers": [
+        "hit_stride",
+        "followthrough"
+      ]
+    },
+    {
+      "id": "emergency_feed",
+      "name": "背水補給",
+      "family": "reload",
+      "archetype": "装填",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "HPが35%を上から下へ跨ぎ、弾が欠けていれば、次の1弾分の装填進捗を25%進める。18秒に1回。",
+      "hook": "on_hp_cross_below",
+      "effect": {
+        "hpThresholdPct": 35,
+        "missingAmmoRequired": true,
+        "reloadProgressPct": 25,
+        "cooldownMs": 18000
+      },
+      "weakness": "十分なHPの間は効果なし。短時間に発動を重ねられない。",
+      "synergies": [
+        "rebound_step",
+        "clutch_armor"
+      ],
+      "answers": [
+        "followthrough",
+        "finisher"
+      ]
+    },
+    {
+      "id": "opening_guard",
+      "name": "先制防壁",
+      "family": "defense",
+      "archetype": "防御",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "6秒間被弾していない状態で次に受ける非DOTダメージを7軽減。発動後14秒再使用不可。",
+      "hook": "on_first_incoming_after_quiet",
+      "effect": {
+        "quietMs": 6000,
+        "flatDamageReduction": 7,
+        "cooldownMs": 14000,
+        "excludeDot": true
+      },
+      "weakness": "一撃を防ぐカード。小さな攻撃で消費させられる。",
+      "synergies": [
+        "wing_guard",
+        "clutch_armor"
+      ],
+      "answers": [
+        "projectile_tempo",
+        "finisher"
+      ]
+    },
+    {
+      "id": "burst_buffer",
+      "name": "連撃緩衝",
+      "family": "defense",
+      "archetype": "防御",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "最初の被弾から0.7秒以内の2回目以降の被ダメージを11%軽減。再発動は8秒後。",
+      "hook": "on_followup_incoming",
+      "effect": {
+        "windowMs": 700,
+        "damageReductionPct": 11,
+        "cooldownMs": 8000
+      },
+      "weakness": "初撃には無効。攻撃間隔を空ければ回避できる。",
+      "synergies": [
+        "opening_guard",
+        "gadget_momentum"
+      ],
+      "answers": [
+        "followthrough",
+        "duo_mark"
+      ]
+    },
+    {
+      "id": "clutch_armor",
+      "name": "崖際装甲",
+      "family": "defense",
+      "archetype": "防御",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "残HPが35%以下の間、被ダメージを8%軽減。",
+      "hook": "while_low_hp",
+      "effect": {
+        "hpThresholdPct": 35,
+        "damageReductionPct": 8
+      },
+      "weakness": "HPを削り切られると無効。低HPでの過剰な居座りを防ぐよう効果は小さめ。",
+      "synergies": [
+        "rebound_step",
+        "emergency_feed"
+      ],
+      "answers": [
+        "finisher",
+        "duo_mark"
+      ]
+    },
+    {
+      "id": "tracking_hit",
+      "name": "追跡痕",
+      "family": "intel",
+      "archetype": "索敵",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "通常攻撃が命中した相手の草むら露出を0.8秒延長。再発動は6秒後。",
+      "hook": "on_normal_hit_reveal",
+      "effect": {
+        "revealExtraMs": 800,
+        "cooldownMs": 6000
+      },
+      "weakness": "視界外の敵を無条件で見つけない。命中が必要。",
+      "synergies": [
+        "projectile_tempo",
+        "followthrough"
+      ],
+      "answers": [
+        "brush_boost",
+        "rebound_step"
+      ]
+    },
+    {
+      "id": "brush_boost",
+      "name": "草影離脱",
+      "family": "intel",
+      "archetype": "索敵",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "草むらを出てから1.5秒間、移動速度+7%。再発動は9秒後。",
+      "hook": "on_bush_exit",
+      "effect": {
+        "moveSpeedPct": 7,
+        "durationMs": 1500,
+        "cooldownMs": 9000
+      },
+      "weakness": "草むらのない局面では使いづらい。再進入の連打でも連続発動しない。",
+      "synergies": [
+        "empty_sprint",
+        "rebound_step"
+      ],
+      "answers": [
+        "tracking_hit",
+        "exposed_sense"
+      ]
+    },
+    {
+      "id": "exposed_sense",
+      "name": "銃声観測",
+      "family": "intel",
+      "archetype": "索敵",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "360距離以内で草むらから攻撃した敵の露出を0.8秒延長。再発動は9秒後。",
+      "hook": "on_enemy_fire_in_bush",
+      "effect": {
+        "maxDistance": 360,
+        "revealExtraMs": 800,
+        "cooldownMs": 9000
+      },
+      "weakness": "射撃しない敵には効かず、距離制限あり。未確認の敵座標は見せない。",
+      "synergies": [
+        "tracking_hit",
+        "projectile_tempo"
+      ],
+      "answers": [
+        "brush_boost",
+        "moving_reload"
+      ]
+    },
+    {
+      "id": "finisher",
+      "name": "仕留めの一押し",
+      "family": "pressure",
+      "archetype": "攻勢",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "HPが35%以下の敵へ通常攻撃を命中させると、その1ヒットだけダメージ+5。再発動は8秒後。",
+      "hook": "on_hit_low_hp_enemy",
+      "effect": {
+        "enemyHpThresholdPct": 35,
+        "bonusFlatDamage": 5,
+        "cooldownMs": 8000
+      },
+      "weakness": "フルHPの敵には効果なし。シールド・退避で対抗できる。",
+      "synergies": [
+        "tracking_hit",
+        "hit_stride"
+      ],
+      "answers": [
+        "clutch_armor",
+        "wing_guard"
+      ]
+    },
+    {
+      "id": "followthrough",
+      "name": "連続圧力",
+      "family": "pressure",
+      "archetype": "攻勢",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "同じ相手に2.5秒以内で再度通常攻撃を命中させると、その2撃目にダメージ+3。8秒に1回。",
+      "hook": "on_repeat_normal_hit",
+      "effect": {
+        "windowMs": 2500,
+        "bonusFlatDamage": 3,
+        "cooldownMs": 8000
+      },
+      "weakness": "同じ敵への連続命中が条件。射線の切替に弱い。",
+      "synergies": [
+        "hit_stride",
+        "projectile_tempo"
+      ],
+      "answers": [
+        "burst_buffer",
+        "rebound_step"
+      ]
+    },
+    {
+      "id": "projectile_tempo",
+      "name": "速達弾",
+      "family": "pressure",
+      "archetype": "攻勢",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "通常攻撃の弾の飛翔速度+8%。投擲弾は飛翔時間を約7.4%短縮。射程・ダメージは不変。",
+      "hook": "on_normal_projectile_spawn",
+      "effect": {
+        "travelSpeedPct": 8
+      },
+      "weakness": "弾を速くするだけで必中ではない。壁と予測回避が有効。",
+      "synergies": [
+        "tracking_hit",
+        "followthrough"
+      ],
+      "answers": [
+        "opening_guard",
+        "rebound_step"
+      ]
+    },
+    {
+      "id": "gadget_momentum",
+      "name": "ガジェット備え",
+      "family": "tempo",
+      "archetype": "技能",
+      "modes": [
+        "1vs1.ko",
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "ガジェット使用後2秒間、受けるダメージを6%軽減。再発動は12秒後。",
+      "hook": "on_gadget_used",
+      "effect": {
+        "damageReductionPct": 6,
+        "durationMs": 2000,
+        "cooldownMs": 12000
+      },
+      "weakness": "使用時に効果が出るため、攻撃側は待ってから撃てる。",
+      "synergies": [
+        "opening_guard",
+        "burst_buffer"
+      ],
+      "answers": [
+        "followthrough",
+        "finisher"
+      ]
+    },
+    {
+      "id": "duo_mark",
+      "name": "連携追撃",
+      "family": "teamwork",
+      "archetype": "連携",
+      "modes": [
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "味方が1.8秒以内に命中させた敵へ自分も命中させるとULTゲージ+4。再発動は10秒後。",
+      "hook": "on_ally_follow_up_hit",
+      "effect": {
+        "windowMs": 1800,
+        "bonusUltPoints": 4,
+        "cooldownMs": 10000
+      },
+      "weakness": "2vs2専用。味方と同じ敵への連続命中が必要。",
+      "synergies": [
+        "tracking_hit",
+        "followthrough"
+      ],
+      "answers": [
+        "wing_guard",
+        "clutch_armor"
+      ]
+    },
+    {
+      "id": "wing_guard",
+      "name": "陣形維持",
+      "family": "teamwork",
+      "archetype": "連携",
+      "modes": [
+        "2vs2.ko",
+        "2vs2.area"
+      ],
+      "rarity": "common",
+      "description": "生存している味方が170以内にいる間、自分の被ダメージ-5%。重複付与なし。",
+      "hook": "while_ally_near",
+      "effect": {
+        "maxDistance": 170,
+        "damageReductionPct": 5
+      },
+      "weakness": "2vs2専用。離れて攻められると消え、範囲攻撃が両者に当たりやすい。",
+      "synergies": [
+        "opening_guard",
+        "clutch_armor"
+      ],
+      "answers": [
+        "finisher",
+        "projectile_tempo"
+      ]
+    }
+  ]
+}
