@@ -4,6 +4,7 @@ on:
     paths:
       - 'draft/**'
       - 'tests/draft-mode-contract.cjs'
+      - 'tests/draft-card-catalog.cjs'
       - 'sites/BRAWL_FRIENDS_1vs1.html'
       - 'sites/BRAWL_FRIENDS_2vs2.html'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
@@ -12,6 +13,7 @@ on:
     paths:
       - 'draft/**'
       - 'tests/draft-mode-contract.cjs'
+      - 'tests/draft-card-catalog.cjs'
       - 'sites/BRAWL_FRIENDS_1vs1.html'
       - 'sites/BRAWL_FRIENDS_2vs2.html'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
@@ -30,5 +32,7 @@ jobs:
           node-version: '22'
       - name: Verify draft winner-first selection and no public/RTDB contamination
         run: node tests/draft-mode-contract.cjs
+      - name: Verify draft card pool, tactical counters and late-pick availability
+        run: node tests/draft-card-catalog.cjs
       - name: Verify unchanged pinned public friend-online releases
         run: node tests/sites-friends-release-freeze.cjs
