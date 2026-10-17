@@ -31,7 +31,9 @@ function assessOffer({mode,roster,winner,draftIndex=0,owned={},offered}){
    new Set(cards).size===cards.length&&cards.every(id=>byId.has(id)&&eligible.has(id)),
    'invalid draft inventory for '+seat);
   const available=offered.filter(id=>!cards.includes(id)).length;
-  const needed=order.length-i;
+  // i earlier players can each remove a different acceptable card.
+  // The later a seat picks, the MORE initial valid cards it must have.
+  const needed=i+1;
   if(available<needed)issues.push(seat+' may be left without a new card at pick '+(i+1));
  }
  return {safe:issues.length===0,issues,categories:categories.size,order};
