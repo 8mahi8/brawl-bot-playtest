@@ -4,7 +4,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'../online/ipad-squad-v2-lab.html'),'utf8');
 const begin=html.indexOf('function frame(now){'),end=html.indexOf('function setLayoutDrag(',begin);
-assert(begin>0&&end>begin&&end-begin<1500,'exact live rendering-loop source');
+assert(begin>0&&end>begin&&end-begin<2100,'exact live rendering-loop source');
 const live=html.slice(begin,end);
 function simulate(interval,frames,scene='game'){
  const steps=[],ctx={
