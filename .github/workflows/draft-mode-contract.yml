@@ -1,0 +1,34 @@
+name: BRAWL Tactical Draft architecture & standard-release isolation
+on:
+  push:
+    paths:
+      - 'draft/**'
+      - 'tests/draft-mode-contract.cjs'
+      - 'sites/BRAWL_FRIENDS_1vs1.html'
+      - 'sites/BRAWL_FRIENDS_2vs2.html'
+      - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
+      - '.github/workflows/draft-mode-contract.yml'
+  pull_request:
+    paths:
+      - 'draft/**'
+      - 'tests/draft-mode-contract.cjs'
+      - 'sites/BRAWL_FRIENDS_1vs1.html'
+      - 'sites/BRAWL_FRIENDS_2vs2.html'
+      - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
+      - '.github/workflows/draft-mode-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  draft-architecture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify draft winner-first selection and no public/RTDB contamination
+        run: node tests/draft-mode-contract.cjs
+      - name: Verify unchanged pinned public friend-online releases
+        run: node tests/sites-friends-release-freeze.cjs

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Four Google Sites pages, two independent room families, shared duel/squad combat where appropriate. Planned drafts are NOT public or playable.",
+  "pages": {
+    "standard.1vs1": {
+      "status": "live",
+      "label": "通常 1vs1",
+      "releaseHtml": "sites/BRAWL_FRIENDS_1vs1.html",
+      "labHtml": "online/ipad-duel-v2-lab.html",
+      "roomRoot": "rooms",
+      "protocol": 31
+    },
+    "standard.2vs2": {
+      "status": "live",
+      "label": "通常 2vs2",
+      "releaseHtml": "sites/BRAWL_FRIENDS_2vs2.html",
+      "labHtml": "online/ipad-squad-v2-lab.html",
+      "roomRoot": "rooms2v2",
+      "protocol": 3012
+    },
+    "draft.1vs1": {
+      "status": "reserved",
+      "label": "ドラフト 1vs1",
+      "releaseHtml": "sites/BRAWL_DRAFT_1vs1.html",
+      "labHtml": "online/draft-duel-lab.html",
+      "roomRoot": "roomsDraft1v1",
+      "protocol": 1031
+    },
+    "draft.2vs2": {
+      "status": "reserved",
+      "label": "ドラフト 2vs2",
+      "releaseHtml": "sites/BRAWL_DRAFT_2vs2.html",
+      "labHtml": "online/draft-squad-lab.html",
+      "roomRoot": "roomsDraft2v2",
+      "protocol": 13012
+    }
+  },
+  "draftDefaults": {
+    "winsToWin": 3,
+    "maxOwnedCards": 3,
+    "initialRoundHasCards": false,
+    "retainCardsUntilMatchEnd": true,
+    "winnerPicksFirst": true,
+    "offerSize": {
+      "1vs1": 4,
+      "2vs2": 6
+    }
+  },
+  "hotZoneDraft": {
+    "status": "to-playtest",
+    "multiRound": true,
+    "captureTargetMs": null,
+    "roundLimitMs": null,
+    "respawnMs": null
+  }
+}
