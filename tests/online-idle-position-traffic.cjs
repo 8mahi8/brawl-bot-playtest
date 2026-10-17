@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../online/ipad-squad-v2-lab.html'),'utf8');
 const begin=html.indexOf('const POSITION_ACTIVE_INTERVAL_MS=');
-const end=html.indexOf('function update(dt)',begin);
+const end=html.indexOf('function update(dt,movementDt=dt)',begin);
 assert(begin>0&&end>begin&&end-begin<2300,'extract live position throttler');
 const c={Math};vm.createContext(c);
 vm.runInContext(html.slice(begin,end)+'\nthis.due=positionPublishDue;',c);
