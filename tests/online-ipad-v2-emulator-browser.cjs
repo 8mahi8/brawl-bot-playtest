@@ -437,7 +437,9 @@ async function run(browser,spec,count,botIndex=-1){
      hostTimerAvgMs:delta('timerPulses')?
       Math.round(delta('timerTotalMs')/delta('timerPulses')*10)/10:null,
      skippedRedundantHud:perfAfter.skippedPeriodicHud-perfBefore.skippedPeriodicHud,
-     fallbackHud:perfAfter.periodicHudRenders-perfBefore.periodicHudRenders}));
+     fallbackHud:perfAfter.periodicHudRenders-perfBefore.periodicHudRenders,
+     foregroundCatchupFrames:delta('movementCatchupFrames'),
+     foregroundCatchupTravelMs:Math.round(delta('movementCatchupTotalMs'))}));
    const phases=Object.fromEntries(Object.entries(phaseAfter).map(([name,p])=>{
     const before=phaseBefore[name],calls=p.calls-before.calls;
     return [name,{calls,avgSyncMs:calls?
