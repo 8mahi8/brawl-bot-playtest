@@ -37,7 +37,7 @@ assert.match(html,/onlineTimer=setInterval\(.*processCombatTick\(\).*periodicUiR
 assert.match(html,/reconcileRoomView\(\).*gadgetReceipts\(\)/,
  'game snapshots still reconcile immediately');
 // The live helper must preserve immediate state changes without repeated DOM mutations.
-const writeStart=html.indexOf('function hudWriteValue('),writeEnd=html.indexOf('function renderGameHUD(){',writeStart);
+const writeStart=html.indexOf('function hudWriteValue('),writeEnd=html.indexOf('function hudToggleClass(',writeStart);
 assert(writeStart>0&&writeEnd>writeStart&&writeEnd-writeStart<900,'extract live HUD write gate');
 const node={_text:'',_title:'',attrs:{},writes:0,attributeWrites:0,
  get textContent(){return this._text;},set textContent(v){this._text=v;this.writes++;},
