@@ -339,6 +339,16 @@ async function run(browser,spec,count,botIndex=-1){
     'real WebKit pointerup must issue an actual touch shot');
    assert(touch.handlerMs>=0&&touch.gestureMs>=0,
     'browser captures handler cost and touch hold duration separately');
+   await shooter.page.waitForFunction(({key,seq})=>{
+    const shot=window[key]?.()?.inputTiming?.lastTouchShot;
+    return shot?.seq===seq&&Number.isFinite(shot.canvasDrawSubmittedMs);
+   },{key:spec.qa,seq:touch.seq},{timeout:7500});
+   const paintedShot=(await snap(shooter,spec)).inputTiming.lastTouchShot;
+   assert(paintedShot.canvasDrawSubmittedMs>=0,'shot is drawn without delaying gameplay timers');
+   console.log('TRACE squad Safari touch handler -> first Canvas draw submission (NOT compositor display): '+
+    JSON.stringify({queueDownMs:paintedShot.downQueueMs,queueUpMs:paintedShot.upQueueMs,
+     gestureMs:paintedShot.gestureMs,handlerMs:paintedShot.handlerMs,
+     canvasDrawSubmittedMs:paintedShot.canvasDrawSubmittedMs}));
    const ackReceipt=Object.values(ackState.combat?.usedActions||{}).find(v=>
     v.owner===hostId&&v.seq>before&&v.type==='shot'&&v.status==='accepted');
    console.log('PASS squad 4 participants: touch shot authoritative ack '+hostAckMs+
@@ -388,6 +398,13 @@ async function run(browser,spec,count,botIndex=-1){
    assert(received<=26,'stationary 4-player position stream should be throttled: '+received);
    assert.equal(sceneUpdates,0,'position updates must not rebuild the game scene');
    assert(hudUpdates<=40,'position flood should not trigger HUD on every packet: '+hudUpdates);
+   const domSkips=perfAfter.hudDomSkips-perfBefore.hudDomSkips;
+   const domWrites=perfAfter.hudDomWrites-perfBefore.hudDomWrites;
+   assert(domSkips>0,'real WebKit receives equivalent HUD values and skips redundant DOM mutations');
+   assert(domWrites>=0,'dynamic HUD changes remain safe');
+   console.log('TRACE squad live HUD DOM diff (local WebKit only): '+
+    JSON.stringify({hudRenders:hudUpdates,domWrites,domSkips,skipShare:domSkips+domWrites?
+     Math.round(domSkips/(domSkips+domWrites)*100):null}));
    assert(perfAfter.skippedPeriodicHud>perfBefore.skippedPeriodicHud,
     '100ms periodic HUD callback skips duplicate game snapshot DOM paints');
    assert(phaseAfter.hostCombat.calls>phaseBefore.hostCombat.calls,

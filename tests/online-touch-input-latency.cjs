@@ -22,4 +22,16 @@ assert.match(html,/gestureMs:Math\.round\(handlerEntered-/,'measure touch gestur
 assert.match(html,/handlerMs:Math\.round\(\(performance\.now\(\)-handlerEntered\)/,'measure handler work separately');
 assert.match(html,/submitted:actionSeq>beforeSeq/,'report whether input actually issued a shot');
 assert.match(html,/skippedCoveredFrames\+\+/,'covered home and lobby avoid needless GPU draw');
+
+const paintBegin=html.indexOf('function recordFirstTouchCanvasPaint('),paintEnd=html.indexOf('let drawTiming=',paintBegin);
+assert(paintBegin>0&&paintEnd>paintBegin&&paintEnd-paintBegin<620,'exact touch-to-Canvas-submit implementation');
+const paintState={inputTiming:{lastTouchShot:null}};vm.createContext(paintState);
+vm.runInContext(html.slice(paintBegin,paintEnd)+'this.paint=recordFirstTouchCanvasPaint;',paintState);
+paintState.paint(100);assert.equal(paintState.inputTiming.lastTouchShot,null,'no touch shot leaves telemetry alone');
+paintState.inputTiming.lastTouchShot={submitted:false,handlerEnteredAt:80,canvasDrawSubmittedMs:null};
+paintState.paint(100);assert.equal(paintState.inputTiming.lastTouchShot.canvasDrawSubmittedMs,null,'rejected shot is never counted as rendered');
+paintState.inputTiming.lastTouchShot={submitted:true,handlerEnteredAt:80,canvasDrawSubmittedMs:null};
+paintState.paint(100);assert.equal(paintState.inputTiming.lastTouchShot.canvasDrawSubmittedMs,20,'first real drawing after accepted touch reports handler-to-Canvas delay');
+paintState.paint(500);assert.equal(paintState.inputTiming.lastTouchShot.canvasDrawSubmittedMs,20,'later Canvas paints never override first sample');
+assert.match(html,/recordFirstTouchCanvasPaint\(performance\.now\(\)\)/,'live frame marks paint after draw');
 console.log('PASS Safari monotonic/epoch input delay, touch-shot gesture/handler instrumentation and occluded Canvas guard');

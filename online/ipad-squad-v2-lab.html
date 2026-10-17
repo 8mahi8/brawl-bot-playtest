@@ -1125,6 +1125,13 @@ function inputEventQueueDelay(e,enteredAt=performance.now()){
  return delay>=-2&&delay<=10000?Math.max(0,Math.round(delay*10)/10):null;
 }
 let inputTiming={touchShots:0,lastTouchShot:null};
+// Handler-to-Canvas-submission timing only. Actual presentation/compositor latency
+// remains device-dependent and cannot be measured from this rAF callback.
+function recordFirstTouchCanvasPaint(paintedAt){
+ const shot=inputTiming.lastTouchShot;
+ if(!shot?.submitted||!Number.isFinite(shot.handlerEnteredAt)||shot.canvasDrawSubmittedMs!==null)return;
+ shot.canvasDrawSubmittedMs=Math.max(0,Math.round((paintedAt-shot.handlerEnteredAt)*10)/10);
+}
 let drawTiming={frames:0,totalDrawMs:0,maxDrawMs:0,lastDrawMs:0,skippedCoveredFrames:0};
 // HUD-only local hit predictions; authoritative damage, KO and score never change.
 const HP_PREVIEW_TTL=1400;
@@ -1320,12 +1327,24 @@ function hudWriteAttribute(node,name,value){
  if(node.getAttribute(name)===value){presentationMetrics.hudDomSkips++;return;}
  node.setAttribute(name,value);presentationMetrics.hudDomWrites++;
 }
+function hudToggleClass(node,name,enabled){
+ if(node.classList.contains(name)===enabled){presentationMetrics.hudDomSkips++;return;}
+ node.classList.toggle(name,enabled);presentationMetrics.hudDomWrites++;
+}
+const hudReloadPaintPercent=new WeakMap();
+function hudPaintReloadBar(el,fill){
+ const percent=Math.round(fill*100);
+ if(hudReloadPaintPercent.get(el)===percent){presentationMetrics.hudDomSkips++;return;}
+ hudReloadPaintPercent.set(el,percent);
+ el.style.background=`linear-gradient(to right,#f4f9ff ${percent}%,#203646 ${percent}%)`;
+ presentationMetrics.hudDomWrites++;
+}
 function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;lastHudRenderAt=performance.now();presentationMetrics.hudRenders++;renderResultStats();const mine=lobby.seats[mySeat()],me=game.stats[myId],hp=game.hp[myId],hudNow=combatNow(),activeChar=me?.char||mine.char;
  const info=ABILITY_GUIDE[activeChar]||ABILITY_GUIDE.tank;hudWriteValue($('skillInfoTitle'),'textContent',info.title);hudWriteValue($('skillInfoText'),'textContent','GAD：'+info.gad+'\nULT：'+info.ult+'\n操作：タップでガジェット、ULTはドラッグして狙えます。PCは右クリック/Q と Space/E。\n左ドラッグで移動、右タップで射撃、右ドラッグで狙う。');
   const vm=BrawlDesignV1.model({seatKeys:SEATS,seats:lobby.seats,stats:game?.stats||{},hp:predictedEnemyHp(),myId,mySeat:mySeat(),now:hudNow,chars:CHARS,visible:id=>canSeeEnemy(targetPoint(id),id)});
  hudWriteValue($('myLabel'),'textContent',(botPilot?'BOT / ':'YOU / ')+(CHARS[activeChar]?.label||'タンク'));hudWriteValue($('mySeat'),'textContent',mySeat().toUpperCase()+' · '+myTeam().toUpperCase());
  hudWriteValue($('myHP'),'textContent',game.mode==='ko'&&hp===0&&game.phase==='playing'?'KO · BOT観戦中':Number.isFinite(hp)?Math.ceil(hp)+' / '+CHARS[activeChar].hp:'HP -');hudWriteValue($('myHpFill').style,'width',clamp((hp||0)/CHARS[activeChar].hp*100,0,100)+'%');
- const loaded=vm.ammo.ammo;hudWriteValue($('myAmmo'),'textContent','弾 '+loaded+' / 3');[...$('myReload').children].forEach((el,i)=>{const fill=i<loaded?1:i===loaded?vm.ammo.progress:0;el.style.background=`linear-gradient(to right,#f4f9ff ${Math.round(fill*100)}%,#203646 ${Math.round(fill*100)}%)`;});
+ const loaded=vm.ammo.ammo;hudWriteValue($('myAmmo'),'textContent','弾 '+loaded+' / 3');[...$('myReload').children].forEach((el,i)=>{const fill=i<loaded?1:i===loaded?vm.ammo.progress:0;hudPaintReloadBar(el,fill);});
  hudWriteValue($('myUlt'),'textContent','ULT '+Math.floor(vm.ult)+'% · GAD '+vm.gadgets);hudWriteValue($('myUltFill').style,'width',clamp(vm.ult,0,100)+'%');/* Guardian is communicated in-world instead of HUD text. */
  hudWriteValue($('myBuff'),'textContent',me?.overdriveUntil>hudNow?'オーバードライブ中':me?.boostUntil>hudNow?'加速中':me?.armed?'強化爆弾準備中':'');
  hudWriteValue($('allySummary'),'textContent',vm.allies.map(p=>'ALLY '+p.seat.toUpperCase().slice(-1)+' · '+(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO')).join('  '));
@@ -1338,10 +1357,10 @@ function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;la
  const armedBomber=activeChar==='bomber'&&!!me?.armed;
  // A hidden opponent must not leak via whether the Sniper GAD button is enabled.
  const sniperInRange=true;
- const gad=$('gadAction');hudWriteValue(gad,'title',info.gad);hudWriteAttribute(gad,'aria-label','ガジェット '+info.gad);hudWriteValue($('ultAction'),'title',info.ult);hudWriteAttribute($('ultAction'),'aria-label','ウルト '+info.ult);gad.disabled=botPilot||!can||!(me?.gadgets>0)||armedBomber||!sniperInRange;
+ const gad=$('gadAction');hudWriteValue(gad,'title',info.gad);hudWriteAttribute(gad,'aria-label','ガジェット '+info.gad);hudWriteValue($('ultAction'),'title',info.ult);hudWriteAttribute($('ultAction'),'aria-label','ウルト '+info.ult);hudWriteValue(gad,'disabled',botPilot||!can||!(me?.gadgets>0)||armedBomber||!sniperInRange);
  hudWriteValue(gad,'textContent',armedBomber?'GAD\n次弾強化中':!sniperInRange&&me?.gadgets>0?'GAD\n近距離限定':!can&&me?.gadgets>0?'GAD\n準備中':me?.gadgets>0?'GAD '+me.gadgets:game?.mode==='area'?'GAD\n'+Math.ceil(Math.max(0,(me?.gadgetReadyAt||hudNow)-hudNow)/1000)+'秒':'GAD 0');
- $('ultAction').disabled=botPilot||!can||!(me?.ult>=100);$('ultAction').classList.toggle('ready',!!(me?.ult>=100));hudWriteValue($('ultAction'),'textContent',activeChar==='tank'?'JUMP':activeChar==='gunner'?'DRIVE':activeChar==='bomber'?'BOMB':'LASER');
- $('rematchBtn').disabled=!!lobby?.rematch?.[myId];hudWriteValue($('rematchBtn'),'textContent',lobby?.rematch?.[myId]?'承認済み ✓':'もう一度戦う');hudWriteValue($('rematchStatus'),'textContent','再戦希望 '+SEATS.filter(k=>lobby?.rematch?.[lobby?.seats?.[k]?.id]).length+' / 4');
+ hudWriteValue($('ultAction'),'disabled',botPilot||!can||!(me?.ult>=100));hudToggleClass($('ultAction'),'ready',!!(me?.ult>=100));hudWriteValue($('ultAction'),'textContent',activeChar==='tank'?'JUMP':activeChar==='gunner'?'DRIVE':activeChar==='bomber'?'BOMB':'LASER');
+ hudWriteValue($('rematchBtn'),'disabled',!!lobby?.rematch?.[myId]);hudWriteValue($('rematchBtn'),'textContent',lobby?.rematch?.[myId]?'承認済み ✓':'もう一度戦う');hudWriteValue($('rematchStatus'),'textContent','再戦希望 '+SEATS.filter(k=>lobby?.rematch?.[lobby?.seats?.[k]?.id]).length+' / 4');
 }
 
 async function registerPresence(){if(!room||!myId||!connected||pageSuspended)return;
@@ -1985,7 +2004,7 @@ function endPointer(e){const handlerEntered=performance.now();if(pointer?.id===e
  inputTiming.lastTouchShot={downQueueMs:a.downQueueMs??null,upQueueMs:inputEventQueueDelay(e,handlerEntered),
   gestureMs:Math.round(handlerEntered-(a.downAt??handlerEntered)),
   handlerMs:Math.round((performance.now()-handlerEntered)*10)/10,
-  submitted:actionSeq>beforeSeq,seq:actionSeq,at:Date.now()};
+  submitted:actionSeq>beforeSeq,seq:actionSeq,at:Date.now(),handlerEnteredAt:handlerEntered,canvasDrawSubmittedMs:null};
  inputTiming.touchShots++;
 }}
 canvas.addEventListener('pointerup',endPointer);canvas.addEventListener('pointercancel',endPointer);
@@ -2325,7 +2344,7 @@ function frame(now){const elapsed=Math.max(0,(now-(lastFrame||now))/1000),dt=cla
  if(scene==='game'&&!document.hidden){workTiming.frameSamples++;if(elapsed>0.1)workTiming.frameGapOver100++;workTiming.frameGapMaxMs=Math.max(workTiming.frameGapMaxMs,elapsed*1000);}
  const workStart=performance.now();update(dt);const afterUpdate=performance.now();updateBots(dt);const afterBots=performance.now();if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}
  const nonDraw=performance.now()-workStart;if(scene==='game'){workTiming.updateTotalMs+=afterUpdate-workStart;workTiming.botTotalMs+=afterBots-afterUpdate;workTiming.nonDrawTotalMs+=nonDraw;workTiming.nonDrawMaxMs=Math.max(workTiming.nonDrawMaxMs,nonDraw);}
- if(shouldDrawCanvasFrame(now)){const start=performance.now();draw(dt);const cost=performance.now()-start;drawTiming.frames++;drawTiming.lastDrawMs=Math.round(cost*10)/10;drawTiming.totalDrawMs+=cost;drawTiming.maxDrawMs=Math.max(drawTiming.maxDrawMs,cost);}else if(scene!=='game')drawTiming.skippedCoveredFrames++;requestAnimationFrame(frame);}
+ if(shouldDrawCanvasFrame(now)){const start=performance.now();draw(dt);const cost=performance.now()-start;drawTiming.frames++;drawTiming.lastDrawMs=Math.round(cost*10)/10;drawTiming.totalDrawMs+=cost;drawTiming.maxDrawMs=Math.max(drawTiming.maxDrawMs,cost);if(scene==='game')recordFirstTouchCanvasPaint(performance.now());}else if(scene!=='game')drawTiming.skippedCoveredFrames++;requestAnimationFrame(frame);}
 
 function setLayoutDrag(k,e){if(scene!=='layout')return;e.preventDefault();const el=$(k==='gad'?'mockGad':'mockUlt');let active=e.pointerId;el.setPointerCapture?.(active);
  const move=ev=>{if(ev.pointerId!==active)return;const stage=$('app').getBoundingClientRect(),sz=layout[k].size;

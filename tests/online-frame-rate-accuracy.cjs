@@ -12,7 +12,7 @@ function simulate(interval,frames,scene='game'){
   performance:{now:()=>4},document:{hidden:false},
   workTiming:{frameSamples:0,frameGapOver100:0,frameGapMaxMs:0,updateTotalMs:0,botTotalMs:0,nonDrawTotalMs:0,nonDrawMaxMs:0},
   drawTiming:{frames:0,totalDrawMs:0,lastDrawMs:0,maxDrawMs:0,skippedCoveredFrames:0},
-  clamp:(n,a,b)=>Math.max(a,Math.min(b,n)),adjustCanvasQuality:()=>{},update:dt=>steps.push(dt),
+  clamp:(n,a,b)=>Math.max(a,Math.min(b,n)),adjustCanvasQuality:()=>{},recordFirstTouchCanvasPaint:()=>{},update:dt=>steps.push(dt),
   updateBots:()=>{},combatReady:()=>false,draw:()=>{},shouldDrawCanvasFrame:()=>scene==='game'||scene==='layout',requestAnimationFrame:()=>{}
  };
  vm.createContext(ctx);

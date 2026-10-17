@@ -37,7 +37,7 @@ assert.match(html,/onlineTimer=setInterval\(.*processCombatTick\(\).*periodicUiR
 assert.match(html,/reconcileRoomView\(\).*gadgetReceipts\(\)/,
  'game snapshots still reconcile immediately');
 // The live helper must preserve immediate state changes without repeated DOM mutations.
-const writeStart=html.indexOf('function hudWriteValue('),writeEnd=html.indexOf('function renderGameHUD(){',writeStart);
+const writeStart=html.indexOf('function hudWriteValue('),writeEnd=html.indexOf('function hudToggleClass(',writeStart);
 assert(writeStart>0&&writeEnd>writeStart&&writeEnd-writeStart<900,'extract live HUD write gate');
 const node={_text:'',_title:'',attrs:{},writes:0,attributeWrites:0,
  get textContent(){return this._text;},set textContent(v){this._text=v;this.writes++;},
@@ -66,4 +66,32 @@ for(const id of ['skillInfoText','myHP','myAmmo','myUlt','enemySummary','roundIn
 assert(hud.includes("hudWriteValue(gad,'textContent',"),'GAD value always refreshed when changed');
 assert(hud.includes("hudWriteAttribute(gad,'aria-label'"),'GAD accessible label preserved');
 assert(hud.includes("hudWriteAttribute($('ultAction'),'aria-label'"),'ULT accessible label preserved');
+
+const dynamicStyles={background:'',writes:0},dynamicButton={disabled:false,writes:0,_ready:false,
+ classList:{contains(name){assert.equal(name,'ready');return dynamicButton._ready;},toggle(name,on){dynamicButton._ready=on;dynamicButton.writes++;}}};
+Object.defineProperty(dynamicStyles,'background',{get(){return this._background||'';},set(v){this._background=v;this.writes++;}});
+Object.defineProperty(dynamicButton,'disabled',{get(){return this._disabled||false;},set(v){this._disabled=v;this.writes++;}});
+const classGate=html.slice(html.indexOf('function hudToggleClass('),html.indexOf('const hudReloadPaintPercent='));
+assert(classGate.length<450&&classGate.includes('classList.contains'),'live class mutation guard');
+vm.runInContext(classGate+'this.toggleClass=hudToggleClass;',dom);
+const reloadBegin=html.indexOf('const hudReloadPaintPercent='),reloadEnd=html.indexOf('function renderGameHUD(){',reloadBegin);
+assert(reloadBegin>0&&reloadEnd>reloadBegin&&reloadEnd-reloadBegin<650,'live reloader fill tracking');
+vm.runInContext(html.slice(reloadBegin,reloadEnd)+'this.paintReload=hudPaintReloadBar;',dom);
+const gradientEl={style:{set background(v){dynamicStyles.writes++;this._background=v;},get background(){return 'normalized: '+this._background;}}};
+dom.paintReload(gradientEl,1);
+dom.paintReload(gradientEl,1);
+dom.paintReload(gradientEl,.95);
+dom.writeValue(dynamicButton,'disabled',false);
+dom.writeValue(dynamicButton,'disabled',true);
+dom.writeValue(dynamicButton,'disabled',true);
+dom.toggleClass(dynamicButton,'ready',true);
+dom.toggleClass(dynamicButton,'ready',true);
+dom.toggleClass(dynamicButton,'ready',false);
+assert.equal(dynamicStyles.writes,2,'semantic fill cache skips equivalent backgrounds even if CSS getter normalizes values');
+assert.equal(dynamicButton.writes,3,'unchanged ability disabled/ready state has no DOM mutations');
+const changedHud=html.slice(html.indexOf('function renderGameHUD(){'),html.indexOf('async function registerPresence(){'));
+assert(changedHud.includes('hudPaintReloadBar(el,fill);'),'reloader bars use semantic fill guard');
+for(const id of ['ultAction','rematchBtn'])assert(changedHud.includes("hudWriteValue($('"+id+"'),'disabled',"),'disable state guarded for '+id);
+assert(changedHud.includes("hudWriteValue(gad,'disabled',"),'gadget disabled guard');
+assert(changedHud.includes("hudToggleClass($('ultAction'),'ready',"),'ULT readiness class guard');
 console.log('PASS online HUD gate: immediate state snapshots, ≤250ms idle refresh, no redundant 100ms DOM updates, host tick unchanged');
