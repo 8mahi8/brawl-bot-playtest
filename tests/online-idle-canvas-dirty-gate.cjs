@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'../online/ipad-squad-v2-lab.html'),'utf8');
 const begin=html.indexOf('const QUIET_CANVAS_REDRAW_MS='),end=html.indexOf('// Home/lobby screens fully cover the arena;',begin);
-assert(begin>0&&end>begin&&end-begin<2400,'exact live Canvas gate source');
+assert(begin>0&&end>begin&&end-begin<4200,'exact live Canvas gate source');
 const SEATS=['blue1','blue2','red1','red2'];
 const seats=Object.fromEntries(SEATS.map((key,i)=>[key,{id:'p'+i}]));
 const state={
@@ -14,7 +14,8 @@ const state={
  pointer:null,aimPointer:null,ultPointer:null,pcShot:false,pcKeys:new Set(),pcCursor:null,
  fx:[],clientBullets:[],hpPreviewHits:[],SEATS,
  serverNow:()=>3000,combatReady:()=>state.game.phase==='playing',
- quietKoTickSafe:g=>g.mode==='ko'&&g.phase==='playing'
+ quietKoTickSafe:g=>g.mode==='ko'&&g.phase==='playing',
+ combatNow:()=>3000,CHARS:{tank:{hp:100}}
 };
 vm.createContext(state);
 vm.runInContext(html.slice(begin,end)+'\nthis.drawAt=shouldDrawCanvasFrame;this.counters=()=>({...quietCanvasMetrics});',state);
@@ -49,7 +50,7 @@ assert(state.drawAt(1972),'any moving remote disables Canvas idle gate immediate
 state.positions.p2.vx=0;state.game.phase='paused';
 assert(state.drawAt(2030),'pause and transitions are always displayed');
 state.game.phase='playing';state.game.mode='area';
-assert(state.drawAt(2050),'Hot Zone / area capture never gates Canvas animation');
+assert(state.drawAt(2050),'changing to HOT ZONE redraws mode immediately');
 state.game.mode='ko';state.fx.push({type:'hit',t:.2});
 assert(state.drawAt(2070),'active hit FX never skipped');
 state.fx.length=0;state.clientBullets.push({id:'predicted'});
@@ -80,7 +81,39 @@ assert(!state.drawAt(3830),'heartbeat with unchanged remote pose does not dirty 
 state.rawPositions.p2={...state.rawPositions.p2,seq:4,a:.1};
 state.ingestPositions();
 assert(state.drawAt(3840),'zero-velocity rotation correction invalidates Canvas');
+// In HOT ZONE, unchanged stationary boards need far fewer GPU flushes,
+// but capture contest changes and combat visuals must wake immediately.
+state.game.mode='area';state.game.area={contested:false};
+state.game.projectiles={};state.game.scheduled={};state.game.debuffs={};state.game.protection={};
+state.game.stats={p0:{char:'tank'}};state.game.hp={p0:100};
+assert(state.drawAt(3900),'mode switch from KO to HOT ZONE renders immediately');
+assert(state.drawAt(4300),'HOT ZONE remains full rate during camera smoothing grace');
+assert(!state.drawAt(4400),'unchanged HOT ZONE skips GPU after 500ms grace');
+assert(state.drawAt(4420),'HOT ZONE refreshes every 120ms rather than KO 240ms');
+assert(!state.drawAt(4436),'consecutive static HOT ZONE frames do not redraw');
+assert(state.counters().areaSkipped>=2&&state.counters().areaQuietDraws>0,
+ 'area idle draw/skip diagnostics are distinct from KO');
+state.game.area.contested=true;
+assert(state.drawAt(4440),'capture contested change wakes next frame immediately');
+state.game.projectiles={shot:{x:100}};
+assert(state.drawAt(4460),'authoritative projectile disables HOT ZONE idle gate');
+state.game.projectiles={};state.game.scheduled={bomb:{until:3200}};
+assert(state.drawAt(4480),'scheduled attack must animate at full Canvas cadence');
+state.game.scheduled={};state.game.debuffs={p0:{dotUntil:3200}};
+assert(state.drawAt(4500),'active damage-over-time VFX disable area idle gate');
+state.game.debuffs={};state.game.protection={p0:3200};
+assert(state.drawAt(4520),'respawn shield animation disables area idle gate');
+state.game.protection={};state.game.stats.p0.guardUntil=3200;
+assert(state.drawAt(4540),'guardian effect disables area idle gate');
+state.game.stats.p0.guardUntil=0;state.game.hp.p0=70;state.game.combatAt={p0:0};
+assert(state.drawAt(4560),'in-world low-HP regeneration animation stays live');
+state.game.hp.p0=100;state.positions.p2.vx=30;
+assert(state.drawAt(4580),'remote movement resumes 60Hz area drawing immediately');
+state.positions.p2.vx=0;state.pointer={id:20};
+assert(state.drawAt(4600),'touch input resumes 60Hz area drawing immediately');
+state.pointer=null;
+
 
 assert.match(html,/if\(shouldDrawCanvasFrame\(now\)\)\{const start=performance\.now\(\);draw\(dt\)/,
  'live rAF frame calls redraw guard before writing to main Canvas');
-console.log('PASS quiet KO canvas gate: no idle GPU dirties, 240ms refresh, instantaneous movement/shot/skill/FX resume, full area/layout redraw');
+console.log('PASS quiet KO + HOT ZONE canvas gates: 240ms KO, 120ms area, instant combat/mode/contest wake, live timer independent');

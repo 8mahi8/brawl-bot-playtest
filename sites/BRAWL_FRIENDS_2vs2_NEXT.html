@@ -2303,16 +2303,33 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  if(scene==='game'&&!paused){const a=ultPointer?.dragged&&!ultPointer.cancelled?ultPointer:aimPointer?.dragged?aimPointer:null;if(a){const dx=a.x-a.ox,dy=a.y-a.oy,angle=Math.atan2(dy,dx),char=game?.stats?.[myId]?.char;ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);ctx.strokeStyle='#e2c7ff';ctx.setLineDash([8,6]);ctx.lineWidth=3;drawShotGuide(char,angle,clamp(Math.hypot(dx,dy)/80*330,55,330),a===ultPointer);ctx.restore();}}
  if(scene==='game'&&pointer&&!paused){const x=pointer.ox,y=pointer.oy;const dx=pointer.x-x,dy=pointer.y-y;ctx.strokeStyle='rgba(160,231,251,.6)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,43,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(107,220,245,.5)';ctx.beginPath();ctx.arc(x+clamp(dx,-44,44),y+clamp(dy,-44,44),18,0,7);ctx.fill();}
 }
-// When the entire KO board is visually static, don't dirty the full Canvas
-// 60 times per second. Keep requestAnimationFrame, input, host 100ms timers
-// and the authoritative state pipeline running at full speed. Drawing resumes
-// on the first observed touch/movement/projectile/ability (no next-tick delay).
-const QUIET_CANVAS_REDRAW_MS=240,QUIET_CANVAS_RESUME_GRACE_MS=500;
+// Skip GPU presentation work during genuinely static KO and HOT ZONE boards.
+// Inputs, host clock and authoritative game snapshots continue independently.
+// HOT ZONE refreshes at least every 120ms to keep its zone indicator fresh.
+const QUIET_CANVAS_REDRAW_MS=240,QUIET_AREA_CANVAS_REDRAW_MS=120,QUIET_CANVAS_RESUME_GRACE_MS=500;
 let quietCanvasLastActiveAt=0,quietCanvasLastDrawAt=0,quietCanvasViewportKey=null,quietCanvasPoseRevision=0;
-let quietCanvasMetrics={skipped:0,quietDraws:0,activeDraws:0};
+let quietCanvasMetrics={skipped:0,quietDraws:0,activeDraws:0,areaSkipped:0,areaQuietDraws:0};
+// Area capture progresses on the 100ms authoritative timer, not Canvas.
+// Do not gate a board with projectiles, scheduled attacks or animated statuses.
+function quietAreaCanvasSafe(g){
+ if(g.mode!=='area'||g.phase!=='playing'||!g.clock)return false;
+ if(Object.values(g.projectiles||{}).some(Boolean)||
+    Object.values(g.scheduled||{}).some(Boolean))return false;
+ const at=combatNow();
+ if(Object.values(g.debuffs||{}).some(d=>d&&(d.dotUntil>at||d.slowUntil>at)))return false;
+ if(Object.values(g.protection||{}).some(until=>until>at))return false;
+ for(const [id,st] of Object.entries(g.stats||{})){
+  if(!st)continue;
+  if(st.guardUntil>at||st.boostUntil>at||st.overdriveUntil>at)return false;
+  // The low-HP regeneration indicator animates continuously in-world.
+  const maxHp=CHARS[st.char]?.hp;
+  if(maxHp&&g.hp?.[id]>0&&g.hp[id]<maxHp&&at-(g.combatAt?.[id]||0)>=3000)return false;
+ }
+ return true;
+}
 function quietCanvasIdleEligible(){
- if(scene!=='game'||solo||botPilot||!lobby||!game||!combatReady()||
-  !quietKoTickSafe(game,serverNow()-game.clock.wallAt))return false;
+ if(scene!=='game'||solo||botPilot||!lobby||!game||!combatReady())return false;
+ if(!quietAreaCanvasSafe(game)&&!quietKoTickSafe(game,serverNow()-game.clock.wallAt))return false;
  if(pointer||aimPointer||ultPointer||pcShot||pcKeys.size||pcCursor||
   fx.length||clientBullets.length||hpPreviewHits.length)return false;
  if(Math.abs(local.vx||0)>4||Math.abs(local.vy||0)>4)return false;
@@ -2325,9 +2342,9 @@ function quietCanvasIdleEligible(){
 }
 function shouldDrawCanvasFrame(now){
  if(scene!=='game')return scene==='layout';
- // Invalidate a static KO frame immediately when the user toggles camera
- // or viewport/backing scale/remote pose changes; no 240ms visual delay.
- const viewportKey=(view.overhead?'overhead':'follow')+':'+canvas.clientWidth+'x'+canvas.clientHeight+':'+(devicePixelRatio||1)+':'+canvasQualityCap+':'+quietCanvasPoseRevision;
+ // Invalidate on camera, remote pose, quality, mode or HOT ZONE contested
+ // change. No stale capture indicator after an authoritative snapshot.
+ const viewportKey=(view.overhead?'overhead':'follow')+':'+canvas.clientWidth+'x'+canvas.clientHeight+':'+(devicePixelRatio||1)+':'+canvasQualityCap+':'+quietCanvasPoseRevision+':'+(game?.mode||'')+':'+(game?.matchId||'')+':'+(game?.round||0)+':'+!!game?.area?.contested;
  if(quietCanvasViewportKey===null)quietCanvasViewportKey=viewportKey;
  else if(quietCanvasViewportKey!==viewportKey){
   quietCanvasViewportKey=viewportKey;
@@ -2338,11 +2355,16 @@ function shouldDrawCanvasFrame(now){
   quietCanvasLastActiveAt=now;quietCanvasLastDrawAt=now;
   quietCanvasMetrics.activeDraws++;return true;
  }
+ const isArea=game?.mode==='area';
+ const refreshMs=isArea?QUIET_AREA_CANVAS_REDRAW_MS:QUIET_CANVAS_REDRAW_MS;
  if(now-quietCanvasLastActiveAt<QUIET_CANVAS_RESUME_GRACE_MS||
-  now-quietCanvasLastDrawAt>=QUIET_CANVAS_REDRAW_MS){
-  quietCanvasLastDrawAt=now;quietCanvasMetrics.quietDraws++;return true;
+  now-quietCanvasLastDrawAt>=refreshMs){
+  quietCanvasLastDrawAt=now;quietCanvasMetrics.quietDraws++;
+  if(isArea)quietCanvasMetrics.areaQuietDraws++;
+  return true;
  }
- quietCanvasMetrics.skipped++;return false;
+ quietCanvasMetrics.skipped++;if(isArea)quietCanvasMetrics.areaSkipped++;
+ return false;
 }
 // Home/lobby screens fully cover the arena; keep the animation scheduler
 // alive, but do not burn Canvas/GPU time drawing invisible gameplay behind UI.
