@@ -83,10 +83,10 @@ for(const {mode,teams,seats} of modes)for(const winner of teams){
 }
 const roster=rosterFor('2vs2'),pool=eligibleCards('2vs2.ko').map(c=>c.id);
 const bad={roster,winner:'blue',draftIndex:0,mode:'2vs2.ko',
- owned:{blue1:pool.slice(0,3)},offered:pool.slice(0,6)};
+ owned:{blue2:pool.slice(0,3)},offered:pool.slice(0,6)};
 const result=assessOffer(bad);
-assert.equal(result.safe,false,'the first player cannot be offered only 3 new choices for 4 remaining picks');
-assert(result.issues.some(x=>x.includes('blue1')));
+assert.equal(result.safe,false,'the fourth player cannot be offered only 3 new choices after 3 earlier picks');
+assert(result.issues.some(x=>x.includes('blue2')));
 assert.throws(()=>proposeOffer({mode:'2vs2.ko',roster,winner:'blue',seed:-1}),/server-picked seed/);
 assert.throws(()=>assessOffer({mode:'2vs2.ko',roster,winner:'red',offered:[...pool.slice(0,5),pool[0]]}),/duplicate offers/);
 // Early game two-player offer still exposes multiple families.
