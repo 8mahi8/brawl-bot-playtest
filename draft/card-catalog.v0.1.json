@@ -74,7 +74,8 @@
       "weakness": "命中が必要。壁・射線・回避で発動を防げる。",
       "synergies": [
         "followthrough",
-        "projectile_tempo"
+        "projectile_tempo",
+        "finisher"
       ],
       "answers": [
         "opening_guard",
@@ -295,7 +296,8 @@
       "weakness": "視界外の敵を無条件で見つけない。命中が必要。",
       "synergies": [
         "projectile_tempo",
-        "followthrough"
+        "followthrough",
+        "brush_boost"
       ],
       "answers": [
         "brush_boost",
@@ -324,7 +326,8 @@
       "weakness": "草むらのない局面では使いづらい。再進入の連打でも連続発動しない。",
       "synergies": [
         "empty_sprint",
-        "rebound_step"
+        "rebound_step",
+        "exposed_sense"
       ],
       "answers": [
         "tracking_hit",
@@ -409,7 +412,8 @@
       "weakness": "同じ敵への連続命中が条件。射線の切替に弱い。",
       "synergies": [
         "hit_stride",
-        "projectile_tempo"
+        "projectile_tempo",
+        "duo_mark"
       ],
       "answers": [
         "burst_buffer",
