@@ -8,6 +8,7 @@ const SEATS=['blue1','blue2','red1','red2'];
 const seats=Object.fromEntries(SEATS.map((key,i)=>[key,{id:'p'+i}]));
 const state={
  scene:'game',solo:false,botPilot:false,lobby:{seats},
+ view:{overhead:false},canvas:{clientWidth:1024,clientHeight:620},
  game:{mode:'ko',phase:'playing',clock:{wallAt:0}},
  local:{vx:0,vy:0},positions:Object.fromEntries(SEATS.map((key,i)=>['p'+i,{vx:0,vy:0}])),
  pointer:null,aimPointer:null,ultPointer:null,pcShot:false,pcKeys:new Set(),pcCursor:null,
@@ -30,6 +31,11 @@ assert(state.drawAt(1290),'camera and remote positions get 500ms post-input sett
 assert(state.drawAt(1700),'resume grace still allows complete animation');
 assert(state.drawAt(1940),'first refresh after settling displays the scene');
 assert(!state.drawAt(1956),'stable board resumes skipping draws');
+state.view.overhead=true;
+assert(state.drawAt(1960),'camera toggle redraws on next rAF');
+assert(state.drawAt(1966),'camera transition gets smoothing grace');
+state.canvas.clientWidth=850;
+assert(state.drawAt(1969),'resize redraws immediately even while players are static');
 state.positions.p2.vx=30;
 assert(state.drawAt(1972),'any moving remote disables Canvas idle gate immediately');
 state.positions.p2.vx=0;state.game.phase='paused';
