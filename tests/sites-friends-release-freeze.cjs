@@ -23,7 +23,7 @@ for(const release of releases){
  assert(scripts.length>=2,'public Firebase configuration and inline engine present');
  scripts.forEach((s,i)=>{if(s[1].trim())new vm.Script(s[1],{filename:release.file+'#'+i});});
  if(release.file.includes('2vs2')){
-  for(const keyword of ['function quietAreaCanvasSafe(g)','const QUIET_AREA_CANVAS_REDRAW_MS=120',
+  for(const keyword of ['function quietAreaCanvasSafe(g)','QUIET_AREA_CANVAS_REDRAW_MS=120',
     'function moveWithWallSubsteps(dx,dy)','function recordFirstTouchCanvasPaint(paintedAt)',
     'REMOTE_VISUAL_EXTRAPOLATE_MS=90','const HOST_ACTION_BATCH_LIMIT=6;'])
    assert(html.includes(keyword),'2vs2 public release must include tested optimization: '+keyword);
