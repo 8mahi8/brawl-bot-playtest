@@ -1052,33 +1052,62 @@ const BrawlAbilityV1=Object.freeze({
     }
     setTimeout(()=>$('copyCodeBtn').textContent='コピー',1600);
   }
+  // Only write real HUD changes; RTDB snapshots and gameplay remain synchronous.
+  const duelReloadFillCache=new WeakMap();
+  let duelHudWrites=0,duelHudSkips=0;
+  function duelHudText(el,value){
+    const str=String(value);
+    if(el.textContent===str){duelHudSkips++;return;}
+    el.textContent=str;duelHudWrites++;
+  }
+  function duelHudWidth(el,pct){
+    const val=clamp(pct,0,100)+'%';
+    if(el.style.width===val){duelHudSkips++;return;}
+    el.style.width=val;duelHudWrites++;
+  }
+  function duelHudDisabled(el,disabled){
+    if(el.disabled===!!disabled){duelHudSkips++;return;}
+    el.disabled=!!disabled;duelHudWrites++;
+  }
+  function duelHudClass(el,name,enabled){
+    if(el.classList.contains(name)===!!enabled){duelHudSkips++;return;}
+    el.classList.toggle(name,!!enabled);duelHudWrites++;
+  }
+  function duelHudReload(el,pct){
+    const percent=Math.round(pct*100);
+    // CSSOM may normalize gradients; cache the integer fill percentage.
+    if(duelReloadFillCache.get(el)===percent){duelHudSkips++;return;}
+    duelReloadFillCache.set(el,percent);
+    el.style.background=`linear-gradient(to right,#f4f9ff ${percent}%,#243445 ${percent}%)`;
+    duelHudWrites++;
+  }
   function updateHUD() {
     const enemyHP=(game && game.hp && Number.isFinite(game.hp[other])) ? game.hp[other] : maxHp(remote.char);
     const mineHP=(game && game.hp && Number.isFinite(game.hp[role])) ? game.hp[role] : local.hp;
     local.hp=mineHP;
-    $('myHp').style.width=clamp(100*mineHP/maxHp(local.char),0,100)+'%';
-    $('theirHp').style.width=clamp(100*enemyHP/maxHp(remote.char),0,100)+'%';
-    $('myHpText').textContent=`${Math.ceil(mineHP)} / ${maxHp(local.char)}`;
-    $('theirHpText').textContent=`${Math.ceil(enemyHP)} / ${maxHp(remote.char)}`;
-    $('myUlt').style.width=clamp(local.ult,0,100)+'%';
-    $('ultBtn').textContent=local.char==='tank'?'JUMP':local.char==='gunner'?'DRIVE':local.char==='bomber'?'BOMB':'LASER';
-    $('ammoText').textContent=local.ammo+' / 3';
-    $('ammoText').classList.toggle('empty',local.ammo===0);
-    document.querySelector('.hudCard:not(.enemy) .hudName').textContent='YOU  /  '+(CHARS[local.char]?.label||'');
-    document.querySelector('.hudCard.enemy .hudName').textContent='ENEMY  /  '+(CHARS[remote.char]?.label||'');
+    duelHudWidth($('myHp'),100*mineHP/maxHp(local.char));
+    duelHudWidth($('theirHp'),100*enemyHP/maxHp(remote.char));
+    duelHudText($('myHpText'),`${Math.ceil(mineHP)} / ${maxHp(local.char)}`);
+    duelHudText($('theirHpText'),`${Math.ceil(enemyHP)} / ${maxHp(remote.char)}`);
+    duelHudWidth($('myUlt'),local.ult);
+    duelHudText($('ultBtn'),local.char==='tank'?'JUMP':local.char==='gunner'?'DRIVE':local.char==='bomber'?'BOMB':'LASER');
+    duelHudText($('ammoText'),local.ammo+' / 3');
+    duelHudClass($('ammoText'),'empty',local.ammo===0);
+    duelHudText(document.querySelector('.hudCard:not(.enemy) .hudName'),'YOU  /  '+(CHARS[local.char]?.label||''));
+    duelHudText(document.querySelector('.hudCard.enemy .hudName'),'ENEMY  /  '+(CHARS[remote.char]?.label||''));
     const bar=$('reloadStrip');
     if(bar){const total=CHARS[local.char]?.reload||1;
       [...bar.children].forEach((el,i)=>{
         const pct=i<local.ammo?1:i===local.ammo?clamp(local.reload/total,0,1):0;
-        el.style.background=`linear-gradient(to right,#f4f9ff ${Math.round(pct*100)}%,#243445 ${Math.round(pct*100)}%)`;
+        duelHudReload(el,pct);
       });
     }
-    $('gadgetBtn').textContent=`GADGET ${local.gadgets}`;
-    $('gadgetBtn').disabled=!layoutEditing&&((bomberGadgetBusy||local.char==='bomber'&&game?.bomberArmed?.[role]||local.gadgets<=0&&!soloDebug('gadgets')) || !isPlaying());
-    $('ultBtn').disabled=!layoutEditing&&((local.ult<100&&!soloDebug('ult')) || !isPlaying());
-    $('ultBtn').classList.toggle('ready',local.ult>=100);
-    $('scores').textContent=`${'★'.repeat(score(role))}${'☆'.repeat(2-score(role))}  -  ${'★'.repeat(score(other))}${'☆'.repeat(2-score(other))}`;
-    $('roundLabel').textContent=game ? `ROUND ${game.round || 1} / 2勝先取` : '';
+    duelHudText($('gadgetBtn'),`GADGET ${local.gadgets}`);
+    duelHudDisabled($('gadgetBtn'),!layoutEditing&&((bomberGadgetBusy||local.char==='bomber'&&game?.bomberArmed?.[role]||local.gadgets<=0&&!soloDebug('gadgets')) || !isPlaying()));
+    duelHudDisabled($('ultBtn'),!layoutEditing&&((local.ult<100&&!soloDebug('ult')) || !isPlaying()));
+    duelHudClass($('ultBtn'),'ready',local.ult>=100);
+    duelHudText($('scores'),`${'★'.repeat(score(role))}${'☆'.repeat(2-score(role))}  -  ${'★'.repeat(score(other))}${'☆'.repeat(2-score(other))}`);
+    duelHudText($('roundLabel'),game ? `ROUND ${game.round || 1} / 2勝先取` : '');
   }
   function listen(path,event,callback) {
     const r=ref.child(path); r.on(event,callback, e=>{console.error('Firebase listener',path,e); alertStatus('通信権限か接続のエラー',e);});
@@ -2038,21 +2067,36 @@ const BrawlAbilityV1=Object.freeze({
     }
     ctx.stroke();ctx.restore();
   }
+  // Cache immutable floor, grid and fog. Retain direct Canvas fallback.
+  let duelBackdrop=null,duelBackdropFailed=false,duelBackdropBuilds=0,duelBackdropBlits=0;
+  function paintDuelBackdrop(g){
+    g.fillStyle='#12212d';g.fillRect(0,0,W,H);
+    g.strokeStyle='rgba(117,162,178,.075)';g.lineWidth=1;g.beginPath();
+    for(let x=35;x<W;x+=60){g.moveTo(x,0);g.lineTo(x,H);}
+    for(let y=35;y<H;y+=60){g.moveTo(0,y);g.lineTo(W,y);}g.stroke();
+    g.strokeStyle='rgba(119,196,207,.12)';g.setLineDash([9,15]);
+    g.beginPath();g.moveTo(0,H/2);g.lineTo(W,H/2);g.stroke();g.setLineDash([]);
+    BrawlStealthV1.drawFields(g,bushes,performance.now());
+  }
+  function drawDuelBackdrop(){
+    if(!duelBackdrop&&!duelBackdropFailed){
+      try{
+        const backing=document.createElement('canvas');
+        backing.width=W;backing.height=H;
+        const g=backing.getContext('2d');
+        if(!g)throw Error('Canvas background context unavailable');
+        paintDuelBackdrop(g);duelBackdrop=backing;duelBackdropBuilds++;
+      }catch(_){duelBackdropFailed=true;duelBackdrop=null;}
+    }
+    if(duelBackdrop){ctx.drawImage(duelBackdrop,0,0);duelBackdropBlits++;}
+    else paintDuelBackdrop(ctx);
+  }
   function draw() {
     const dpr=Math.min(window.devicePixelRatio||1,2);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.fillStyle='#0c1520';ctx.fillRect(0,0,view.sw,view.sh);
     ctx.save();ctx.translate(view.ox,view.oy);ctx.scale(view.scale,view.scale);
-    // Tactical Minimal floor and quiet cover, identical visual language to 2vs2.
-    ctx.fillStyle='#12212d';ctx.fillRect(0,0,W,H);
-    ctx.strokeStyle='rgba(117,162,178,.075)';ctx.lineWidth=1;
-    ctx.beginPath();
-    for(let x=35;x<W;x+=60){ctx.moveTo(x,0);ctx.lineTo(x,H);}
-    for(let y=35;y<H;y+=60){ctx.moveTo(0,y);ctx.lineTo(W,y);}
-    ctx.stroke();
-    ctx.strokeStyle='rgba(119,196,207,.12)';ctx.setLineDash([9,15]);
-    ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();ctx.setLineDash([]);
-    BrawlStealthV1.drawFields(ctx,bushes,performance.now());
+    drawDuelBackdrop();
     if(pcShot&&pcAim&&isPlaying()){
       const angle=pcAngle(),range=CHARS[local.char]?.range||300;
       ctx.save();ctx.strokeStyle='rgba(208,242,255,.85)';ctx.lineWidth=2;ctx.setLineDash([9,7]);
