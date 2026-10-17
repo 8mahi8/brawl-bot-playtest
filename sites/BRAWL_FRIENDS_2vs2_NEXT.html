@@ -1094,7 +1094,7 @@ const PERIODIC_HUD_MAX_AGE_MS=250,NETWORK_STATUS_UPDATE_MS=250;
 let lastHudRenderAt=-Infinity,lastNetworkStatusAt=-Infinity;
 let workTiming={timerPulses:0,timerTotalMs:0,timerMaxMs:0,gameSnapshots:0,gameSnapshotTotalMs:0,gameSnapshotMaxMs:0,
  positionSnapshots:0,positionSnapshotTotalMs:0,frameSamples:0,frameGapOver100:0,frameGapMaxMs:0,
- updateTotalMs:0,botTotalMs:0,nonDrawTotalMs:0,nonDrawMaxMs:0};
+ movementCatchupFrames:0,movementCatchupTotalMs:0,updateTotalMs:0,botTotalMs:0,nonDrawTotalMs:0,nonDrawMaxMs:0};
 // These measurements cover synchronous JS work only, NOT RTDB round-trip
 // time or WebKit rendering/compositing outside this callback.
 const TIMER_PHASES=['lifecycle','pauseCheck','actions','pauseControl','hostCombat','roundOps','botRematch','ui'];
@@ -1936,6 +1936,12 @@ async function considerRematch(){if(rematchBusy||!isAuthoritative()||game?.phase
 function touchingWall(x,y){return WALLS.some(w=>x+R>w.x&&x-R<w.x+w.w&&y+R>w.y&&y-R<w.y+w.h);}
 function moveWithWall(dx,dy){const nx=clamp(local.x+dx,R,W-R),ny=clamp(local.y+dy,R,H-R);
  if(!touchingWall(nx,local.y))local.x=nx;if(!touchingWall(local.x,ny))local.y=ny;}
+// Recover foreground movement lost to rAF stalls without jumping through
+// thin walls. Keep segments smaller than half the actor collision radius.
+function moveWithWallSubsteps(dx,dy){
+ const steps=Math.max(1,Math.ceil(Math.max(Math.abs(dx),Math.abs(dy))/Math.max(8,R*.45)));
+ for(let i=0;i<steps;i++)moveWithWall(dx/steps,dy/steps);
+}
 // Only active motion needs the 80ms network cadence. Static players still
 // heartbeat every 500ms; facing changes, motion start/stop, and new
 // Firebase connection IDs immediately trigger a position packet.
@@ -1949,12 +1955,12 @@ function positionPublishDue(previous,next,elapsedMs){
  const turned=Math.abs(Math.atan2(Math.sin(next.a-previous.a),Math.cos(next.a-previous.a)))>.04;
  return moving||turned||Math.hypot(next.x-previous.x,next.y-previous.y)>.4;
 }
-function update(dt){if(botPilot)return;if(!combatReady()||!alive(myId)||engine().flying(game,myId))return;
+function update(dt,movementDt=dt){if(botPilot)return;if(!combatReady()||!alive(myId)||engine().flying(game,myId))return;
  let dx=0,dy=0;if(pointer){dx=pointer.x-pointer.ox;dy=pointer.y-pointer.oy;const d=Math.hypot(dx,dy);if(d>8){const intensity=clamp((d-8)/42,0,1);dx=dx/d*intensity;dy=dy/d*intensity;}else{dx=dy=0;}}
  else{dx=Number(pcKeys.has('d')||pcKeys.has('arrowright'))-Number(pcKeys.has('a')||pcKeys.has('arrowleft'));dy=Number(pcKeys.has('s')||pcKeys.has('arrowdown'))-Number(pcKeys.has('w')||pcKeys.has('arrowup'));const d=Math.hypot(dx,dy);if(d>0){dx/=d;dy/=d;}}
  const oldX=local.x,oldY=local.y;const boost=game.stats?.[myId]?.boostUntil>combatNow()?1.5:1;
  if(performance.now()<dashUntil){dx=Math.cos(dashA)*6;dy=Math.sin(dashA)*6;}
- const slow=game.debuffs?.[myId]?.slowUntil>combatNow()?BALANCE.bomberSlowFactor:1;const speed=CHARS[game.stats[myId].char].speed;moveWithWall(dx*speed*boost*slow*dt,dy*speed*boost*slow*dt);local.vx=(local.x-oldX)/(dt||1);local.vy=(local.y-oldY)/(dt||1);
+ const slow=game.debuffs?.[myId]?.slowUntil>combatNow()?BALANCE.bomberSlowFactor:1;const speed=CHARS[game.stats[myId].char].speed;moveWithWallSubsteps(dx*speed*boost*slow*movementDt,dy*speed*boost*slow*movementDt);local.vx=(local.x-oldX)/(movementDt||1);local.vy=(local.y-oldY)/(movementDt||1);
  if(pcAim)local.a=Math.atan2(pcAim.y-local.y,pcAim.x-local.x);else if(Math.hypot(dx,dy)>.1)local.a=Math.atan2(dy,dx);
  const now=performance.now();if(room&&myId){
   const payload={motionRev:appliedMotionRev,life:game.stats[myId].life,x:Math.round(local.x*10)/10,y:Math.round(local.y*10)/10,vx:Math.round(local.vx),vy:Math.round(local.vy),a:Math.round(local.a*100)/100,connectionId:myConnection,matchId:game.matchId,round:game.round};
@@ -2340,9 +2346,14 @@ function shouldDrawCanvasFrame(now){
 }
 // Home/lobby screens fully cover the arena; keep the animation scheduler
 // alive, but do not burn Canvas/GPU time drawing invisible gameplay behind UI.
-function frame(now){const elapsed=Math.max(0,(now-(lastFrame||now))/1000),dt=clamp(elapsed,0,.06);lastFrame=now;if(gadgetToastExpiry&&now>gadgetToastExpiry){gadgetToastExpiry=0;$('skillToast').classList.add('hidden');}if(elapsed>0)fps=fps*.9+.1/elapsed;adjustCanvasQuality(elapsed,now);
+function frame(now){const elapsed=Math.max(0,(now-(lastFrame||now))/1000),dt=clamp(elapsed,0,.06);
+ // Preserve real travel time across short foreground stalls (e.g. 120ms rAF).
+ // Longer freezes, background tabs and resume still use the safe 60ms cap.
+ const movementDt=scene==='game'&&!document.hidden&&elapsed<=.25?Math.min(elapsed,.15):dt;
+ lastFrame=now;if(gadgetToastExpiry&&now>gadgetToastExpiry){gadgetToastExpiry=0;$('skillToast').classList.add('hidden');}if(elapsed>0)fps=fps*.9+.1/elapsed;adjustCanvasQuality(elapsed,now);
  if(scene==='game'&&!document.hidden){workTiming.frameSamples++;if(elapsed>0.1)workTiming.frameGapOver100++;workTiming.frameGapMaxMs=Math.max(workTiming.frameGapMaxMs,elapsed*1000);}
- const workStart=performance.now();update(dt);const afterUpdate=performance.now();updateBots(dt);const afterBots=performance.now();if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}
+ if(scene==='game'&&movementDt>dt+.001){workTiming.movementCatchupFrames++;workTiming.movementCatchupTotalMs+=(movementDt-dt)*1000;}
+ const workStart=performance.now();update(dt,movementDt);const afterUpdate=performance.now();updateBots(dt);const afterBots=performance.now();if(combatReady())projectileStep(clientBullets,dt,false);for(let i=fx.length-1;i>=0;i--){fx[i].t-=dt;if(fx[i].t<=0)fx.splice(i,1);}
  const nonDraw=performance.now()-workStart;if(scene==='game'){workTiming.updateTotalMs+=afterUpdate-workStart;workTiming.botTotalMs+=afterBots-afterUpdate;workTiming.nonDrawTotalMs+=nonDraw;workTiming.nonDrawMaxMs=Math.max(workTiming.nonDrawMaxMs,nonDraw);}
  if(shouldDrawCanvasFrame(now)){const start=performance.now();draw(dt);const cost=performance.now()-start;drawTiming.frames++;drawTiming.lastDrawMs=Math.round(cost*10)/10;drawTiming.totalDrawMs+=cost;drawTiming.maxDrawMs=Math.max(drawTiming.maxDrawMs,cost);if(scene==='game')recordFirstTouchCanvasPaint(performance.now());}else if(scene!=='game')drawTiming.skippedCoveredFrames++;requestAnimationFrame(frame);}
 
