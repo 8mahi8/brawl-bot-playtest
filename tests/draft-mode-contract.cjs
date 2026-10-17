@@ -82,7 +82,7 @@ assertThrows(()=>beginDraft({roster:b,winner:'blue',draftIndex:0,offered:['a','a
 assertThrows(()=>beginDraft({roster:b,winner:'blue',draftIndex:0,offered:['a','b']}),/one available card per seat/);
 const public1=fs.readFileSync(path.join(root,manifest.pages['standard.1vs1'].releaseHtml));
 const public2=fs.readFileSync(path.join(root,manifest.pages['standard.2vs2'].releaseHtml));
-function gitBlob(b){return crypto.createHash('sha1').update(Buffer.from('blob '+b.length+'\\0')).update(b).digest('hex');}
+function gitBlob(b){return crypto.createHash('sha1').update(Buffer.from('blob '+b.length+'\0')).update(b).digest('hex');}
 assert.equal(gitBlob(public1),'2737ddf5ec2e32dc3a1be8cb320b90079739d433','published 1vs1 frozen');
 assert.equal(gitBlob(public2),'53baf2e70f9a0ff9339fab121697b47a5e2a9d31','published 2vs2 frozen');
 console.log('PASS draft foundation: 4 isolated pages/roots, winner-first snake, alternating teammates, accumulative cards, cap exchange, published builds frozen');
