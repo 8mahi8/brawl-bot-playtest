@@ -1,5 +1,17 @@
 # BRAWL — 学校iPad用・Google SitesのHTML直接埋め込み
 
+## 友達とのオンライン対戦・正式公開版（2026-10-18）
+
+- **1vs1**：[`BRAWL_FRIENDS_1vs1.html`](./BRAWL_FRIENDS_1vs1.html) — 動作確認済みの既存公開版を継続
+- **2vs2**：[`BRAWL_FRIENDS_2vs2.html`](./BRAWL_FRIENDS_2vs2.html) — NEXT／開発版で検証した通信・描画最適化を正式版に昇格
+- 公開版の保守・再公開手順は [`FRIENDS_ONLINE_RELEASE.md`](./FRIENDS_ONLINE_RELEASE.md) を参照。
+- **注意：GitHubのHTMLを更新しても、Google Sitesにすでに貼り付けたコードは自動更新されません。** Google Sites編集画面で新しいHTML全文への差し替えと「公開」が必要です。
+- オンライン対戦には、自分で管理するFirebase Realtime DatabaseのURLと適切なRulesが必要です。5桁の部屋番号は認証用パスワードではありません。
+
+---
+
+## BOT専用オフライン練習版（従来の資料）
+
 Google Sitesへの貼り付けはユーザー本人がPCから行います。ここに置くのは **GitHub PagesのURLを読み込まない、完全なHTML全文** です。
 
 | モード | PCから開くファイル | 内容 |
@@ -23,4 +35,4 @@ Google Sitesへの貼り付けはユーザー本人がPCから行います。こ
 - GitHubの開発元やオンライン試作は別管理。BOT版の変更を公開する場合は、この `sites/` のHTMLも作り直し、`node tests/sites-embed-regression.cjs` で差分・ブラウザ試遊を検査する。
 - **Google SitesへのHTML貼付けは手動反映**。GitHubだけ更新しても埋め込みHTMLは自動では更新されない。
 - Google Sitesのiframe制約と学校管理Safariの動作は、最終的に実機で確認する。学校のフィルタリング・利用規則も尊重する。
-- オンラインの開発候補は別ブランチの [Draft PR #8](https://github.com/8mahi8/brawl-bot-playtest/pull/8)。模擬接続まで確認できたが、実Firebase認証・権限制御・多人数通信は未確認で**公開用の完成品ではない**。
+- オンライン試作の旧履歴（Draft PR #8）は当時の参考資料です。現在の友達対戦公開版は上記 `BRAWL_FRIENDS_*` を使用します。
