@@ -299,7 +299,8 @@
       ],
       "answers": [
         "brush_boost",
-        "rebound_step"
+        "rebound_step",
+        "empty_sprint"
       ]
     },
     {
@@ -327,7 +328,8 @@
       ],
       "answers": [
         "tracking_hit",
-        "exposed_sense"
+        "exposed_sense",
+        "gadget_momentum"
       ]
     },
     {
@@ -411,7 +413,9 @@
       ],
       "answers": [
         "burst_buffer",
-        "rebound_step"
+        "rebound_step",
+        "last_shell",
+        "emergency_feed"
       ]
     },
     {
