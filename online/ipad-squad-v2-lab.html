@@ -2287,8 +2287,8 @@ function quietCanvasIdleEligible(){
 function shouldDrawCanvasFrame(now){
  if(scene!=='game')return scene==='layout';
  // Invalidate a static KO frame immediately when the user toggles camera
- // or the CSS viewport changes; no 240ms wait for visible UI reactions.
- const viewportKey=(view.overhead?'overhead':'follow')+':'+canvas.clientWidth+'x'+canvas.clientHeight;
+ // or viewport/backing pixel scale changes; no 240ms wait for visible UI reactions.
+ const viewportKey=(view.overhead?'overhead':'follow')+':'+canvas.clientWidth+'x'+canvas.clientHeight+':'+(devicePixelRatio||1)+':'+canvasQualityCap;
  if(quietCanvasViewportKey===null)quietCanvasViewportKey=viewportKey;
  else if(quietCanvasViewportKey!==viewportKey){
   quietCanvasViewportKey=viewportKey;
