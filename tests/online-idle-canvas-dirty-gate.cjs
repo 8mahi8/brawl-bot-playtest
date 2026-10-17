@@ -18,6 +18,10 @@ const state={
 };
 vm.createContext(state);
 vm.runInContext(html.slice(begin,end)+'\nthis.drawAt=shouldDrawCanvasFrame;this.counters=()=>({...quietCanvasMetrics});',state);
+const ingestStart=html.indexOf('function ingestPositions(){'),ingestEnd=html.indexOf('function attachRoom(){',ingestStart);
+assert(ingestStart>0&&ingestEnd>ingestStart&&ingestEnd-ingestStart<1900,'exact live packet ingestion source');
+state.playerSeat=id=>id==='p2'?'red1':null;state.validPosition=p=>!!p;state.performance={now:()=>1000};
+vm.runInContext(html.slice(ingestStart,ingestEnd)+'\nthis.ingestPositions=ingestPositions;',state);
 assert(state.drawAt(1000),'first visually quiet tick draws full scene');
 assert(!state.drawAt(1016),'no-op 16ms frame skips touching Canvas');
 assert(!state.drawAt(1200),'no-op 200ms frame leaves static image untouched');
@@ -57,6 +61,26 @@ state.scene='layout';
 assert(state.drawAt(2130),'layout editor keeps full live rendering');
 state.scene='lobby';
 assert.equal(state.drawAt(2146),false,'fully covered lobby never renders Canvas');
+state.scene='game';state.game.mode='ko';state.game.phase='playing';
+assert(state.drawAt(3000),'quiet mode resumes after exiting lobby');
+assert(state.drawAt(3240),'periodic draw after previous quiet refresh');
+assert(!state.drawAt(3256),'stable canvas remains gated');
+state.game.matchId='m';state.game.round=1;state.game.motions={p2:{rev:0}};state.game.stats={p2:{life:0}};
+state.myId='p0';state.positionScope='m:1';state.presence={p2:{c2:true}};
+state.remotePositionReceivedAt=new Map();state.rawPositions={p2:{x:121,y:100,a:0,vx:0,vy:0,seq:2,life:0,motionRev:0,connectionId:'c2',matchId:'m',round:1}};
+state.positions.p2={x:100,y:100,a:0,vx:0,vy:0,seq:1,life:0,motionRev:0,connectionId:'c2',matchId:'m',round:1};
+state.ingestPositions();
+assert(state.drawAt(3260),'zero-velocity remote position correction redraws next frame');
+assert(state.drawAt(3276),'remote pose correction receives settle grace for smooth interpolation');
+assert(state.drawAt(3800),'quiet frame is periodically refreshed after settle');
+assert(!state.drawAt(3816),'static canvas skips again after settle');
+state.rawPositions.p2={...state.rawPositions.p2,seq:3};
+state.ingestPositions();
+assert(!state.drawAt(3830),'heartbeat with unchanged remote pose does not dirty Canvas');
+state.rawPositions.p2={...state.rawPositions.p2,seq:4,a:.1};
+state.ingestPositions();
+assert(state.drawAt(3840),'zero-velocity rotation correction invalidates Canvas');
+
 assert.match(html,/if\(shouldDrawCanvasFrame\(now\)\)\{const start=performance\.now\(\);draw\(dt\)/,
  'live rAF frame calls redraw guard before writing to main Canvas');
 console.log('PASS quiet KO canvas gate: no idle GPU dirties, 240ms refresh, instantaneous movement/shot/skill/FX resume, full area/layout redraw');
