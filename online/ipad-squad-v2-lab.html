@@ -1080,7 +1080,7 @@ let solo=false,botPilot=false,liveDB=null,sdkPromise=null,botActors={},botPanelO
 let lastSnapshotAt=0,snapshotGap=0,fps=60,lastBotSettingsAt=0;
 // Diagnostics count received position packets versus heavy HUD/scene work.
 // Read-only: does not influence authority, game state, or rendering cadence.
-let presentationMetrics={positionSnapshots:0,hudRenders:0,gameSceneCalls:0,positionWrites:0,positionIdleSkips:0,periodicHudRenders:0,skippedPeriodicHud:0};
+let presentationMetrics={positionSnapshots:0,hudRenders:0,gameSceneCalls:0,positionWrites:0,positionIdleSkips:0,periodicHudRenders:0,skippedPeriodicHud:0,hudDomWrites:0,hudDomSkips:0};
 let tickTxnTiming={starts:0,committed:0,rejected:0,errors:0,
  snapshotMs:0,snapshotMaxMs:0,callMs:0,callMaxMs:0,
  updaterCalls:0,updaterMs:0,updaterMaxMs:0,engineCalls:0,engineMs:0,engineMaxMs:0,
@@ -1310,28 +1310,38 @@ function renderResultStats(){
  }).join('');
  $('resultStats').innerHTML='<div style="font-weight:850;margin-bottom:3px">MATCH REPORT · ダメージ / 撃破 / デス</div>'+rows;
 }
+// Game-state/HUD updates retain their cadence. Suppress identical DOM writes
+// that otherwise invalidate WebKit text/layout/style work every snapshot.
+function hudWriteValue(node,key,value){
+ if(node[key]===value){presentationMetrics.hudDomSkips++;return;}
+ node[key]=value;presentationMetrics.hudDomWrites++;
+}
+function hudWriteAttribute(node,name,value){
+ if(node.getAttribute(name)===value){presentationMetrics.hudDomSkips++;return;}
+ node.setAttribute(name,value);presentationMetrics.hudDomWrites++;
+}
 function renderGameHUD(){if(!lobby||!mySeat()||!game?.stats||!game?.hp)return;lastHudRenderAt=performance.now();presentationMetrics.hudRenders++;renderResultStats();const mine=lobby.seats[mySeat()],me=game.stats[myId],hp=game.hp[myId],hudNow=combatNow(),activeChar=me?.char||mine.char;
- const info=ABILITY_GUIDE[activeChar]||ABILITY_GUIDE.tank;$('skillInfoTitle').textContent=info.title;$('skillInfoText').textContent='GAD：'+info.gad+'\nULT：'+info.ult+'\n操作：タップでガジェット、ULTはドラッグして狙えます。PCは右クリック/Q と Space/E。\n左ドラッグで移動、右タップで射撃、右ドラッグで狙う。';
+ const info=ABILITY_GUIDE[activeChar]||ABILITY_GUIDE.tank;hudWriteValue($('skillInfoTitle'),'textContent',info.title);hudWriteValue($('skillInfoText'),'textContent','GAD：'+info.gad+'\nULT：'+info.ult+'\n操作：タップでガジェット、ULTはドラッグして狙えます。PCは右クリック/Q と Space/E。\n左ドラッグで移動、右タップで射撃、右ドラッグで狙う。');
   const vm=BrawlDesignV1.model({seatKeys:SEATS,seats:lobby.seats,stats:game?.stats||{},hp:predictedEnemyHp(),myId,mySeat:mySeat(),now:hudNow,chars:CHARS,visible:id=>canSeeEnemy(targetPoint(id),id)});
- $('myLabel').textContent=(botPilot?'BOT / ':'YOU / ')+(CHARS[activeChar]?.label||'タンク');$('mySeat').textContent=mySeat().toUpperCase()+' · '+myTeam().toUpperCase();
- $('myHP').textContent=game.mode==='ko'&&hp===0&&game.phase==='playing'?'KO · BOT観戦中':Number.isFinite(hp)?Math.ceil(hp)+' / '+CHARS[activeChar].hp:'HP -';$('myHpFill').style.width=clamp((hp||0)/CHARS[activeChar].hp*100,0,100)+'%';
- const loaded=vm.ammo.ammo;$('myAmmo').textContent='弾 '+loaded+' / 3';[...$('myReload').children].forEach((el,i)=>{const fill=i<loaded?1:i===loaded?vm.ammo.progress:0;el.style.background=`linear-gradient(to right,#f4f9ff ${Math.round(fill*100)}%,#203646 ${Math.round(fill*100)}%)`;});
- $('myUlt').textContent='ULT '+Math.floor(vm.ult)+'% · GAD '+vm.gadgets;$('myUltFill').style.width=clamp(vm.ult,0,100)+'%';/* Guardian is communicated in-world instead of HUD text. */
- $('myBuff').textContent=me?.overdriveUntil>hudNow?'オーバードライブ中':me?.boostUntil>hudNow?'加速中':me?.armed?'強化爆弾準備中':'';
- $('allySummary').textContent=vm.allies.map(p=>'ALLY '+p.seat.toUpperCase().slice(-1)+' · '+(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO')).join('  ');
- $('enemyLabel').textContent=(myTeam()==='blue'?'RED':'BLUE')+' TEAM';$('enemyTeam').textContent='';
- $('enemySummary').textContent=vm.enemies.map((p,i)=>(i+1)+'  '+(p.known?(p.hp>0?(hpPreviewHits.some(q=>q.victim===p.id)?'≈':'')+Math.ceil(p.hp)+'/'+p.maxHp:'KO'):'?')).join('\n');
- $('roundInfo').textContent='ROUND '+(game?.round||1)+' · BLUE '+(game?.scores?.blue||0)+' - '+(game?.scores?.red||0)+' RED'+(gasMargin()>0?' · GAS':'');
- if(game?.mode==='area'){$('roundInfo').textContent=`BLUE ${Math.floor((game.area?.blueMs||0)/BALANCE.areaCaptureMs*100)}% : ${Math.floor((game.area?.redMs||0)/BALANCE.areaCaptureMs*100)}% RED · ${Math.floor(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)/60)}:${String(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)%60).padStart(2,'0')}`;if(hp===0)$('myHP').textContent='復活まで '+Math.ceil(Math.max(0,(game.respawns?.[myId]||hudNow)-hudNow)/1000)+'秒';}
- $('gameBanner').firstChild.textContent=game?.mode==='area'?'2vs2 · HOT ZONE':'2vs2 · KNOCKOUT';
+ hudWriteValue($('myLabel'),'textContent',(botPilot?'BOT / ':'YOU / ')+(CHARS[activeChar]?.label||'タンク'));hudWriteValue($('mySeat'),'textContent',mySeat().toUpperCase()+' · '+myTeam().toUpperCase());
+ hudWriteValue($('myHP'),'textContent',game.mode==='ko'&&hp===0&&game.phase==='playing'?'KO · BOT観戦中':Number.isFinite(hp)?Math.ceil(hp)+' / '+CHARS[activeChar].hp:'HP -');hudWriteValue($('myHpFill').style,'width',clamp((hp||0)/CHARS[activeChar].hp*100,0,100)+'%');
+ const loaded=vm.ammo.ammo;hudWriteValue($('myAmmo'),'textContent','弾 '+loaded+' / 3');[...$('myReload').children].forEach((el,i)=>{const fill=i<loaded?1:i===loaded?vm.ammo.progress:0;el.style.background=`linear-gradient(to right,#f4f9ff ${Math.round(fill*100)}%,#203646 ${Math.round(fill*100)}%)`;});
+ hudWriteValue($('myUlt'),'textContent','ULT '+Math.floor(vm.ult)+'% · GAD '+vm.gadgets);hudWriteValue($('myUltFill').style,'width',clamp(vm.ult,0,100)+'%');/* Guardian is communicated in-world instead of HUD text. */
+ hudWriteValue($('myBuff'),'textContent',me?.overdriveUntil>hudNow?'オーバードライブ中':me?.boostUntil>hudNow?'加速中':me?.armed?'強化爆弾準備中':'');
+ hudWriteValue($('allySummary'),'textContent',vm.allies.map(p=>'ALLY '+p.seat.toUpperCase().slice(-1)+' · '+(p.hp>0?Math.ceil(p.hp)+'/'+p.maxHp:'KO')).join('  '));
+ hudWriteValue($('enemyLabel'),'textContent',(myTeam()==='blue'?'RED':'BLUE')+' TEAM');hudWriteValue($('enemyTeam'),'textContent','');
+ hudWriteValue($('enemySummary'),'textContent',vm.enemies.map((p,i)=>(i+1)+'  '+(p.known?(p.hp>0?(hpPreviewHits.some(q=>q.victim===p.id)?'≈':'')+Math.ceil(p.hp)+'/'+p.maxHp:'KO'):'?')).join('\n'));
+ hudWriteValue($('roundInfo'),'textContent','ROUND '+(game?.round||1)+' · BLUE '+(game?.scores?.blue||0)+' - '+(game?.scores?.red||0)+' RED'+(gasMargin()>0?' · GAS':''));
+ if(game?.mode==='area'){hudWriteValue($('roundInfo'),'textContent',`BLUE ${Math.floor((game.area?.blueMs||0)/BALANCE.areaCaptureMs*100)}% : ${Math.floor((game.area?.redMs||0)/BALANCE.areaCaptureMs*100)}% RED · ${Math.floor(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)/60)}:${String(Math.ceil(Math.max(0,BALANCE.areaLimitMs-hudNow)/1000)%60).padStart(2,'0')}`);if(hp===0)hudWriteValue($('myHP'),'textContent','復活まで '+Math.ceil(Math.max(0,(game.respawns?.[myId]||hudNow)-hudNow)/1000)+'秒');}
+ hudWriteValue($('gameBanner').firstChild,'textContent',game?.mode==='area'?'2vs2 · HOT ZONE':'2vs2 · KNOCKOUT');
  const can=combatReady()&&!!hp&&hp>0&&!engine().flying(game,myId);
  const armedBomber=activeChar==='bomber'&&!!me?.armed;
  // A hidden opponent must not leak via whether the Sniper GAD button is enabled.
  const sniperInRange=true;
- const gad=$('gadAction');gad.title=info.gad;gad.setAttribute('aria-label','ガジェット '+info.gad);$('ultAction').title=info.ult;$('ultAction').setAttribute('aria-label','ウルト '+info.ult);gad.disabled=botPilot||!can||!(me?.gadgets>0)||armedBomber||!sniperInRange;
- gad.textContent=armedBomber?'GAD\n次弾強化中':!sniperInRange&&me?.gadgets>0?'GAD\n近距離限定':!can&&me?.gadgets>0?'GAD\n準備中':me?.gadgets>0?'GAD '+me.gadgets:game?.mode==='area'?'GAD\n'+Math.ceil(Math.max(0,(me?.gadgetReadyAt||hudNow)-hudNow)/1000)+'秒':'GAD 0';
- $('ultAction').disabled=botPilot||!can||!(me?.ult>=100);$('ultAction').classList.toggle('ready',!!(me?.ult>=100));$('ultAction').textContent=activeChar==='tank'?'JUMP':activeChar==='gunner'?'DRIVE':activeChar==='bomber'?'BOMB':'LASER';
- $('rematchBtn').disabled=!!lobby?.rematch?.[myId];$('rematchBtn').textContent=lobby?.rematch?.[myId]?'承認済み ✓':'もう一度戦う';$('rematchStatus').textContent='再戦希望 '+SEATS.filter(k=>lobby?.rematch?.[lobby?.seats?.[k]?.id]).length+' / 4';
+ const gad=$('gadAction');hudWriteValue(gad,'title',info.gad);hudWriteAttribute(gad,'aria-label','ガジェット '+info.gad);hudWriteValue($('ultAction'),'title',info.ult);hudWriteAttribute($('ultAction'),'aria-label','ウルト '+info.ult);gad.disabled=botPilot||!can||!(me?.gadgets>0)||armedBomber||!sniperInRange;
+ hudWriteValue(gad,'textContent',armedBomber?'GAD\n次弾強化中':!sniperInRange&&me?.gadgets>0?'GAD\n近距離限定':!can&&me?.gadgets>0?'GAD\n準備中':me?.gadgets>0?'GAD '+me.gadgets:game?.mode==='area'?'GAD\n'+Math.ceil(Math.max(0,(me?.gadgetReadyAt||hudNow)-hudNow)/1000)+'秒':'GAD 0');
+ $('ultAction').disabled=botPilot||!can||!(me?.ult>=100);$('ultAction').classList.toggle('ready',!!(me?.ult>=100));hudWriteValue($('ultAction'),'textContent',activeChar==='tank'?'JUMP':activeChar==='gunner'?'DRIVE':activeChar==='bomber'?'BOMB':'LASER');
+ $('rematchBtn').disabled=!!lobby?.rematch?.[myId];hudWriteValue($('rematchBtn'),'textContent',lobby?.rematch?.[myId]?'承認済み ✓':'もう一度戦う');hudWriteValue($('rematchStatus'),'textContent','再戦希望 '+SEATS.filter(k=>lobby?.rematch?.[lobby?.seats?.[k]?.id]).length+' / 4');
 }
 
 async function registerPresence(){if(!room||!myId||!connected||pageSuspended)return;
