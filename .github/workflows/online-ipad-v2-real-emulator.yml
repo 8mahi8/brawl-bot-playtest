@@ -8,6 +8,7 @@ on:
       - 'tests/online-remote-presentation.cjs'
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-frame-rate-accuracy.cjs'
+      - 'tests/online-idle-canvas-dirty-gate.cjs'
       - 'tests/online-periodic-hud-coalesce.cjs'
       - 'tests/online-host-timer-phases.cjs'
       - 'tests/online-touch-input-latency.cjs'
@@ -30,6 +31,7 @@ on:
       - 'tests/online-remote-presentation.cjs'
       - 'tests/online-host-fast-dispatch.cjs'
       - 'tests/online-frame-rate-accuracy.cjs'
+      - 'tests/online-idle-canvas-dirty-gate.cjs'
       - 'tests/online-periodic-hud-coalesce.cjs'
       - 'tests/online-host-timer-phases.cjs'
       - 'tests/online-touch-input-latency.cjs'
@@ -78,6 +80,8 @@ jobs:
         run: node tests/online-host-timer-phases.cjs
       - name: Verify periodic HUD coalescing without slowing authoritative state updates
         run: node tests/online-periodic-hud-coalesce.cjs
+      - name: Verify KO idle Canvas draw skips and immediate touch/movement/skill redraw
+        run: node tests/online-idle-canvas-dirty-gate.cjs
       - name: Verify actual FPS telemetry with clamped simulation delta
         run: node tests/online-frame-rate-accuracy.cjs
       - name: Verify visual-only position prediction and HTML syntax
@@ -94,6 +98,8 @@ jobs:
         run: node tests/online-host-txn-arbiter.cjs
       - name: Verify Firebase-safe null guardian in 2vs2 hit events
         run: node tests/online-guardian-null-hit.cjs
+      - name: Verify E2E browser test JavaScript syntax before WebKit download
+        run: node --check tests/online-ipad-v2-emulator-browser.cjs
       - name: Install local Firebase emulator CLI and WebKit
         run: |
           npm install --no-save --package-lock=false firebase-tools@14.24.0 playwright-core@1.56.1
