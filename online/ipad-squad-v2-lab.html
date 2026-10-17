@@ -1355,6 +1355,10 @@ function ingestPositions(){if(!game)return;
   const prior=positions[id];
   if(prior&&prior.connectionId===p.connectionId&&prior.life===p.life&&prior.motionRev===p.motionRev&&p.seq<=prior.seq)continue;
   if(p.connectionId&&!presence[id]?.[p.connectionId])continue;
+  // A stopped remote may receive a position/heading correction with zero velocity.
+  // Wake the quiet KO Canvas once for visual changes, not for sequence-only heartbeats.
+  if(id!==myId&&(!prior||prior.x!==p.x||prior.y!==p.y||prior.a!==p.a||
+    prior.motionRev!==p.motionRev||prior.life!==p.life||prior.connectionId!==p.connectionId))quietCanvasPoseRevision++;
   positions[id]={...p};
   remotePositionReceivedAt.set(id,performance.now());
  }
@@ -2269,7 +2273,7 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
 // and the authoritative state pipeline running at full speed. Drawing resumes
 // on the first observed touch/movement/projectile/ability (no next-tick delay).
 const QUIET_CANVAS_REDRAW_MS=240,QUIET_CANVAS_RESUME_GRACE_MS=500;
-let quietCanvasLastActiveAt=0,quietCanvasLastDrawAt=0,quietCanvasViewportKey=null;
+let quietCanvasLastActiveAt=0,quietCanvasLastDrawAt=0,quietCanvasViewportKey=null,quietCanvasPoseRevision=0;
 let quietCanvasMetrics={skipped:0,quietDraws:0,activeDraws:0};
 function quietCanvasIdleEligible(){
  if(scene!=='game'||solo||botPilot||!lobby||!game||!combatReady()||
@@ -2287,8 +2291,8 @@ function quietCanvasIdleEligible(){
 function shouldDrawCanvasFrame(now){
  if(scene!=='game')return scene==='layout';
  // Invalidate a static KO frame immediately when the user toggles camera
- // or viewport/backing pixel scale changes; no 240ms wait for visible UI reactions.
- const viewportKey=(view.overhead?'overhead':'follow')+':'+canvas.clientWidth+'x'+canvas.clientHeight+':'+(devicePixelRatio||1)+':'+canvasQualityCap;
+ // or viewport/backing scale/remote pose changes; no 240ms visual delay.
+ const viewportKey=(view.overhead?'overhead':'follow')+':'+canvas.clientWidth+'x'+canvas.clientHeight+':'+(devicePixelRatio||1)+':'+canvasQualityCap+':'+quietCanvasPoseRevision;
  if(quietCanvasViewportKey===null)quietCanvasViewportKey=viewportKey;
  else if(quietCanvasViewportKey!==viewportKey){
   quietCanvasViewportKey=viewportKey;
