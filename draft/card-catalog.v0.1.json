@@ -148,7 +148,7 @@
         "2vs2.area"
       ],
       "rarity": "common",
-      "description": "残弾0の間、リロード進行速度+16%。",
+      "description": "残弾が0になっている間、次の弾を補充するリロード進行速度が16%上昇。",
       "hook": "while_ammo_zero",
       "effect": {
         "reloadSpeedPct": 16
