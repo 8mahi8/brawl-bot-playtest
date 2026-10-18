@@ -95,12 +95,23 @@ async function run(){
     const id=await p.locator('#squadDraftOverlay button[data-squad-draft]:not([disabled])').first().getAttribute('data-squad-draft');
     await p.locator('#squadDraftOverlay button[data-squad-draft="'+id+'"]').click();
     cardChosen.push(id);
-    await host.waitForFunction(n=>window.__brawlV3QA?.()?.draft?.turn===n||window.__brawlV3QA?.()?.draft?.complete&&n===4,i+1,{timeout:12000});
+    await host.waitForFunction(n=>{
+      const d=window.__brawlV3QA?.()?.draft;
+      return d&&(d.turn>=n||d.complete===true);
+    },i+1,{timeout:20000});
    }
    assert.equal(new Set(cardChosen).size,4);
    await Promise.all(clients.map(c=>wait(c.page,'round_end')));
-   const finished=(await get(host)).draft;
-   assert.equal(finished.complete,true);
+   let finished=null;
+   const draftDeadline=Date.now()+12000;
+   while(Date.now()<draftDeadline){
+     const committed=await committedGame(code);
+     if(committed?.phase==='round_end'&&committed?.draft?.complete){
+       finished=committed.draft;break;
+     }
+     await new Promise(resolve=>setTimeout(resolve,200));
+   }
+   assert(finished?.complete,'all four draft selections must be committed on emulator, not just locally');
    for(const seat of Object.keys(bySeat))assert.equal((finished.owned?.[seat]||[]).length,Math.min(3,round));
    await Promise.all(clients.map(c=>c.page.waitForFunction(r=>window.__brawlV3QA?.()?.game==='playing'&&window.__brawlV3QA?.()?.round===r,round+1,{timeout:20000})));
   }
