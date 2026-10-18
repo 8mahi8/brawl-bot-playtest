@@ -26,6 +26,7 @@ function createCombat({mode,participants,owned={},at=0}){
  assert(Number.isFinite(at)&&at>=0,'invalid start time');
  const size=mode.slice(0,4),teams=rosterFor(size),seats=Object.keys(teams);
  assert(participants&&typeof participants==='object'&&Object.keys(participants).length===seats.length,'invalid player roster');
+ assert(Object.keys(owned).every(seat=>seats.includes(seat)),'unknown owned-card seat');
  const players={};
  for(const seat of seats){
   const input=participants[seat];assert(input&&input.team===teams[seat]&&hpSpec[input.char],'wrong seat/team/character');
@@ -34,7 +35,7 @@ function createCombat({mode,participants,owned={},at=0}){
   assert(inventory.every(id=>cards.has(id)&&cards.get(id).modes.includes(mode)),'card not eligible for this mode');
   players[seat]={team:input.team,char:input.char,maxHp:hpSpec[input.char],
    hp:hpSpec[input.char],ammo:3,ult:0,reloadProgress:0,cards:[...inventory],
-   moveSince:null,lastDamageAt:at,lastNormalHits:{},chainStartAt:null,
+   moveSince:null,lastReloadAt:at,lastDamageAt:at,lastNormalHits:{},chainStartAt:null,
    cooldowns:{},buffs:{},revealedUntil:0};
  }
  return {mode,at,round:1,players};
@@ -76,6 +77,8 @@ function applyEvent(state,event){
  }else if(event.type==='reload'){
   const p=player(next,event.seat);
   assert(Number.isFinite(event.dtMs)&&event.dtMs>=0&&event.dtMs<=250,'host-bounded reload dtMs required');
+  assert(event.dtMs<=at-p.lastReloadAt,'cannot credit a repeated/overlapping reload interval');
+  p.lastReloadAt=at;
   const base=contract.common.characters[p.char].reloadMs;
   if(p.ammo<3&&p.hp>0){
    const mod=modifiers(next,event.seat);
@@ -118,6 +121,7 @@ function applyEvent(state,event){
    bonus+=effect('followthrough').bonusFlatDamage;fire(a,'followthrough',at);trigger('followthrough');
   }
   bonus=capped(bonus,caps.damageBonusFlatPerHit);
+  assert(event.victimAllyDistance===undefined||(Number.isFinite(event.victimAllyDistance)&&event.victimAllyDistance>=0),'trusted ally distance required');
   const baseDefense=modifiers(next,event.victim,{allyDistance:event.victimAllyDistance??Infinity}).damageReductionPct;
   let pct=baseDefense,flat=0;
   if(event.kind!=='dot'&&event.kind!=='gas'){
@@ -137,10 +141,14 @@ function applyEvent(state,event){
   pct=capped(pct,caps.damageReductionPct);
   const beforeHp=v.hp,raw=event.baseDamage+bonus;
   // Fixed barrier applies to post-percentage damage; rounded integer HP damage.
-  const net=Math.min(v.hp,Math.max(0,Math.round(raw*(1-pct/100)-flat)));
+  const mitigated=Math.max(0,Math.round(raw*(1-pct/100)-flat));
+  const net=Math.min(v.hp,mitigated);
   v.hp=Math.max(0,v.hp-net);
   v.lastDamageAt=at;
-  result.rawDamage=raw;result.bonusDamage=bonus;result.preventedDamage=raw-net;
+  result.rawDamage=raw;result.bonusDamage=bonus;
+  // Damage prevented by cards is NOT the same as hit damage lost to overkill.
+  result.preventedDamage=Math.max(0,raw-mitigated);
+  result.overkillDamage=Math.max(0,mitigated-net);
   result.damage=net;result.victimHp=v.hp;result.damageReductionPct=pct;
   if(ordinary&&net>0){
    a.lastNormalHits[event.victim]=at;
@@ -191,14 +199,14 @@ function applyEvent(state,event){
   assert(next.mode==='2vs2.area','KO cannot respawn');
   const p=player(next,event.seat);
   assert(p.hp===0,'only defeated actors respawn');
-  p.hp=p.maxHp;p.ammo=3;p.reloadProgress=0;p.moveSince=null;
+  p.hp=p.maxHp;p.ammo=3;p.reloadProgress=0;p.moveSince=null;p.lastReloadAt=at;
   p.lastDamageAt=at;p.chainStartAt=null;p.lastNormalHits={};p.buffs={};p.revealedUntil=0;
   // Intentionally retain cooldowns and inventories to avoid zone death exploits.
  }else if(event.type==='round_start'){
   assert(event.round===next.round+1&&Number.isSafeInteger(event.round),'next sequential round required');
   next.round=event.round;
   for(const p of Object.values(next.players)){
-   p.hp=p.maxHp;p.ammo=3;p.ult=0;p.reloadProgress=0;p.moveSince=null;
+   p.hp=p.maxHp;p.ammo=3;p.ult=0;p.reloadProgress=0;p.moveSince=null;p.lastReloadAt=at;
    p.lastDamageAt=at;p.chainStartAt=null;p.lastNormalHits={};p.buffs={};p.revealedUntil=0;
    // Cooldowns survive round changes; cards survive until a new match.
   }
