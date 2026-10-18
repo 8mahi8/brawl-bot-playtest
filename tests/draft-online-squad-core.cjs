@@ -223,6 +223,58 @@ assert(html.includes("if(!draftSolid(g,px,py,R+3))")===false,
 assert(html.includes("Object.keys(g.gad2Walls||{}).length"),
  'quiet host tick must not defer temporary wall expiry');
 
+// Actual host hologram movement and sight geometry: no duplicate simulation.
+const holoStart=html.indexOf('  function draftHoloRayClear(g,a,b){');
+const holoEnd=html.indexOf('  function initialize(matchId,seats,mode,startAt){',holoStart);
+assert(holoStart>0&&holoEnd>holoStart,'hologram helpers must live inside host engine');
+const holoFns=vm.runInNewContext(
+ "const R=18,W=1000,H=600,seatKeys=['blue1','red1'];"+
+ "const team=k=>k.startsWith('blue')?'blue':'red';"+
+ "const seatOf=(g,id)=>seatKeys.find(k=>g.seats[k]?.id===id);"+
+ "const draftSolid=(g,x,y,r)=>x+r>450&&x-r<490&&y+r>80&&y-r<220;"+
+ "const move=(p,dx,dy,g)=>{let x=p.x,y=p.y;"+
+ "for(let i=0;i<24;i++){const nx=x+dx/24,ny=y+dy/24;"+
+ "if(!draftSolid(g,nx,y,R))x=nx;if(!draftSolid(g,x,ny,R))y=ny;}"+
+ "return {...p,x,y}};"+
+ html.slice(holoStart,holoEnd)+"\n({draftHoloAdvance,draftHoloRayClear})",
+ {},{timeout:1000});
+const holoGame={hp:{blue:160,red:100},
+ seats:{blue1:{id:'blue'},red1:{id:'red'}}};
+const holo={kind:'hologram',id:'h',owner:'blue',team:'blue',char:'tank',
+ x:300,y:150,a:0,strafe:1,swapAt:1450,fireAt:800,shotCount:0};
+const holoTarget={red:{x:700,y:150}};
+const oldHolo={...holo};
+const ai=holoFns.draftHoloAdvance(holoGame,holo,holoTarget,.1,1000);
+assert(ai&&ai.enemy===holoTarget.red,'hologram targets an actual enemy seat');
+assert(Math.hypot(holo.x-oldHolo.x,holo.y-oldHolo.y)<=9.701&&
+ Math.hypot(holo.x-oldHolo.x,holo.y-oldHolo.y)>0,
+ 'hologram autonomously moves within 97 world units/s');
+assert(Math.abs(holo.a)<.01,'hologram aims at opponent rather than facing a static angle');
+assert.equal(holoFns.draftHoloRayClear(holoGame,{x:300,y:150},{x:700,y:150}),false,
+ 'hologram cannot fire blank shots through solid walls');
+assert.equal(holoFns.draftHoloRayClear(holoGame,{x:300,y:270},{x:700,y:270}),true,
+ 'hologram may fake-shoot only along a clear lane');
+assert(src.includes("id:'hologram'")&&
+ src.includes("'portable_wall','hologram'"),'fifth GAD2 offered after implementation');
+assert(html.includes("g.gad2Holograms[seat]={kind:'hologram'"),'single host decoy per seat');
+assert(html.includes("start:t,until:t+7000")&&html.includes("g.draft.gadget2ReadyAt[seat]=t+14000"),
+ 'seven-second decoy and fourteen-second cooldown');
+assert(html.includes("g.gad2FakeShots[k]={kind:'hologramFakeShot'")&&
+ html.includes("until:t+380,damage:0"),'blank bullets have exactly zero damage');
+assert(html.includes("for(const fake of Object.values(game?.gad2FakeShots||{}))"),
+ 'client renders fake bullets separately');
+assert(!html.includes("g.projectiles[k]={kind:'hologramFakeShot'"),
+ 'fake shots cannot enter real normal projectiles');
+assert(html.includes("g.draftCardStats.gad2HologramsDissolved")&&
+ html.includes("emit('hologramDissolve'"),
+ 'host marks one-action destruction with readable visual dissolve');
+assert(html.includes("label:ally?'分身':'ENEMY'"),
+ 'allies must see a decoy marker and enemies no giveaway');
+assert(html.includes("if(h.team===bullet.team||h.until<=t"),
+ 'friendly shots cannot destroy allied holograms');
+assert(html.includes("Object.keys(g.gad2Holograms||{}).length"),
+ 'host combat clock cannot defer a living decoy');
+
 const singleVolley=squadNewMatch();
 singleVolley.owned.blue1=['followthrough'];
 const sameG={draft:singleVolley,seats:Object.fromEntries(seats.map(s=>[s,{id:s+'_id'}])),
