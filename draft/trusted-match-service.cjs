@@ -10,9 +10,12 @@ async function consumeIntent({db,roomId,uid,actionId,now=Date.now()}){
   throw Error('Invalid trusted coordinator arguments');
  const root='draftStagingRooms/'+roomId;
  const at=sub=>ref(db,root+'/'+sub);
- const [inputSnap,memberSnap,sessionSnap]=await Promise.all([
-  get(at('inputs/'+uid+'/'+actionId)),get(at('members/'+uid)),get(at('sessions/'+uid))
+ const [inputSnap,memberSnap,sessionSnap,receiptSnap]=await Promise.all([
+  get(at('inputs/'+uid+'/'+actionId)),get(at('members/'+uid)),
+  get(at('sessions/'+uid)),get(at('receipts/'+uid+'/'+actionId))
  ]);
+ // Retry after successful publication must be idempotent.
+ if(receiptSnap.exists())return receiptSnap.val();
  const intent=inputSnap.val(),member=memberSnap.val(),session=sessionSnap.val();
  if(!intent)return {accepted:false,reason:'input_not_found'};
  const deny=reason=>({accepted:false,reason});
