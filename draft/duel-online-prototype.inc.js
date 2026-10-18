@@ -12,7 +12,8 @@
     {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
     {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃の威力+10%／一射撃で後方60移動（反動CD1.2秒）'},
     {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'},
-    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常攻撃の初回命中後0.7秒で小爆発（3秒CD）'}
+    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常攻撃の初回命中後0.7秒で小爆発（3秒CD）'},
+    {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾は壁で最大1回反射・威力70%（角は停止）'}
   ];
   const netDraftCardMap=new Map(NET_DRAFT_CARDS.map(c=>[c.id,c]));
   function netDraftNewMatch(){

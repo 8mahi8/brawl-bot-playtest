@@ -140,6 +140,32 @@ async function run(){
   assert((await qa(host)).game.hp.guest<triggered.hp.guest,
     '700ms delayed blast executes and further reduces the real guest HP');
 
+  // Isolated 1v1 real WebKit: host fires toward the west wall at x=295.
+  // Only Ricochet owners get reflections; server-issued normal/ULT stay unchanged.
+  await host.evaluate(async()=>{
+    const q=window.__brawlV29QA();
+    await window.firebase.database().ref('roomsDraft1v1/'+q.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.draft.owned.host=['ricochet','split_round','delayed_blast'];
+      return g;
+    },undefined,false);
+  });
+  await host.waitForFunction(()=>window.__brawlV29QA()?.game?.draft?.owned?.host?.includes('ricochet'),
+    null,{timeout:10000});
+  assert.equal(await host.evaluate(()=>window.__brawlDraftMoveQA(220,200)),true,
+    'real host moves beside verified west terrain wall');
+  await host.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.ammo>0,null,{timeout:11000});
+  const beforeBounce=await host.evaluate(()=>window.__brawlDraftRicochetCountQA());
+  assert.equal(await host.evaluate(()=>window.__brawlDraftFireQA(0)),true,
+    'real online host fires into the wall');
+  await host.waitForFunction(n=>window.__brawlDraftRicochetCountQA?.()>n,
+    beforeBounce,{timeout:11000});
+  await host.waitForTimeout(350);
+  const bounces=await host.evaluate(()=>window.__brawlDraftRicochetCountQA());
+  assert(bounces>=beforeBounce+1&&bounces<=beforeBounce+5,
+    'one Tank volley may reflect at most five original pellets, no recursive explosion');
+  console.log('PASS 1vs1 real WebKit host ricochet: one wall bounce per normal projectile');
+
   await host.evaluate(()=>{
     const state=window.__brawlV29QA(),g=state.game;
     g.scores.host=3;g.scores.guest=2;g.loser='guest';g.phase='match_end';
