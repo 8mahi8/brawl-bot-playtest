@@ -588,7 +588,20 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
     if(g.mode==='area'&&g.stats[id].gadgets<1&&g.stats[id].gadgetReadyAt>0&&t>=g.stats[id].gadgetReadyAt){g.stats[id].gadgets=1;g.stats[id].gadgetReadyAt=0;}}
    const emit=(type,data)=>{const id=g.combatRev+':'+Object.keys(g.events).length;g.events[id]={type,at:t,...data};};
    const canHit=id=>g.hp[id]>0&&!(g.protection[id]>t)&&!flying(g,id);
-   function hit(key,owner,victim,amount,extra={}){if(!g.usedHits[key]&&canHit(victim)){g.usedHits[key]=1;hits.push({key,owner,victim,amount,...extra});}}
+   function hit(key,owner,victim,amount,extra={}){
+    if(g.usedHits[key]||!canHit(victim))return;
+    g.usedHits[key]=1;hits.push({key,owner,victim,amount,...extra});
+    // Once per NORMAL volley; only host reducer schedules actual damage.
+    const seat=seatOf(g,owner),actionId=String(key).split(':')[0],draft=g.draft;
+    if(extra.kind!=='normal'||!seat||!squadHand(draft,seat).includes('delayed_blast'))return;
+    if(!squadBlastAuthorize(draft,seat,actionId,t))return;
+    const p=targets[victim];
+    g.scheduled['draftBlast:'+actionId]={
+      kind:'draftBlast',owner,ownerLife:g.stats[owner].life,matchId:g.matchId,
+      round:g.round,x:p.x,y:p.y,until:t+700,damage:10,radius:55
+    };
+    emit('blastWarning',{owner,x:p.x,y:p.y});
+   }
    for(const [id,b]of Object.entries(g.projectiles)){
     if(b.spawnAt>t)continue;
     const activeMs=b.spawnAt>oldT?Math.max(0,t-b.spawnAt):dt;
@@ -614,6 +627,17 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
    for(const [key]of due)delete g.scheduled[key];
    for(const [key,u]of due){
     if(u.kind==='shock'){if(g.stats[u.victim]?.life===u.victimLife)hit(key,u.owner,u.victim,u.damage);emit('shockwave',{owner:u.owner,x:u.x,y:u.y});continue;}
+    if(u.kind==='draftBlast'){
+      if(g.stats[u.owner]?.life!==u.ownerLife)continue;
+      for(const k of seatKeys){
+        const victim=g.seats[k].id;
+        if(team(k)===team(seatOf(g,u.owner))||!canHit(victim))continue;
+        const p=targets[victim];
+        if(Math.hypot(p.x-u.x,p.y-u.y)<=u.radius+R)
+          hit(key+':'+victim,u.owner,victim,u.damage,{kind:'effect'});
+      }
+      emit('bombImpact',{owner:u.owner,x:u.x,y:u.y});continue;
+    }
     if(u.kind==='jump'&&(!(g.hp[u.owner]>0)||g.stats[u.owner]?.life!==u.ownerLife))continue;
     for(const k of seatKeys){const v=g.seats[k].id;if(team(k)===team(seatOf(g,u.owner))||!canHit(v))continue;const p=targets[v];let impact;
      if(u.kind==='laser'){const dx=Math.cos(u.angle)*900,dy=Math.sin(u.angle)*900,f=clamp(((p.x-u.x)*dx+(p.y-u.y)*dy)/(dx*dx+dy*dy),0,1);impact=Math.hypot(p.x-u.x-dx*f,p.y-u.y-dy*f)<=R+15;}
@@ -727,7 +751,8 @@ const BrawlProjectileV1=Object.freeze({
     {id:'clutch_armor',name:'崖際装甲',family:'defense',desc:'HP35%以下で通常射撃-8%'},
     {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
     {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
-    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'}
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'},
+    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常射撃の最初の命中から0.7秒後に10ダメージの小爆発（3秒CD）'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
@@ -735,7 +760,7 @@ const SQUAD_SEATS=['blue1','blue2','red1','red2'];
 const squadTeam=seat=>seat.startsWith('blue')?'blue':'red';
 function squadNewMatch(){
   return {owned:Object.fromEntries(SQUAD_SEATS.map(s=>[s,[]])),cooldown:{},
-    lastDamage:{},lastNormal:{},strideUntil:{},complete:false};
+    lastDamage:{},lastNormal:{},strideUntil:{},blastCooldown:{},blastUsed:{},complete:false};
 }
 function squadHand(d,seat){return Array.isArray(d?.owned?.[seat])?d.owned[seat]:[];}
 function squadOrder(winner,index){
@@ -792,11 +817,23 @@ function squadPick(g,actorSeat,id,replaceId=null){
   const turn=d.turn+1,complete=turn===4;
   return {...g,phase:complete?'round_end':'draft',draft:{...d,owned,taken:[...(d.taken||[]),id],turn,complete}};
 }
+function squadBlastAuthorize(d,seat,fireActionId,t){
+  if(!d||!SQUAD_SEATS.includes(seat)||typeof fireActionId!=='string'||
+     fireActionId.length<1||fireActionId.length>128||!Number.isFinite(t)||
+     !squadHand(d,seat).includes('delayed_blast'))return false;
+  d.blastUsed ||= {};d.blastCooldown ||= {};
+  if(d.blastUsed[fireActionId]||(d.blastCooldown[seat]||0)>t)return false;
+  d.blastUsed[fireActionId]=1;d.blastCooldown[seat]=t+3000;
+  // Even unusually long matches must not grow this RTDB map without bound.
+  const keys=Object.keys(d.blastUsed);
+  if(keys.length>80)for(const key of keys.slice(0,keys.length-80))delete d.blastUsed[key];
+  return true;
+}
 function squadNextRound(d){
   const last=d||squadNewMatch();
   return {...last,owned:Object.fromEntries(SQUAD_SEATS.map(s=>[s,[...squadHand(last,s)]])),
     complete:false,turn:0,order:[],offered:[],taken:[],
-    lastDamage:{},lastNormal:{},strideUntil:{},cooldown:{}};
+    lastDamage:{},lastNormal:{},strideUntil:{},cooldown:{},blastCooldown:{},blastUsed:{}};
 }
 function squadDamage(g,h,t){
   if(!g.draft)return h;
@@ -2447,7 +2484,17 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
  const a=targetPoint(owner),b=targetPoint(st.guardTargetId);if(!a||!b)continue;
  ctx.save();ctx.strokeStyle='#7effdc';ctx.globalAlpha=.47;ctx.lineWidth=5;ctx.setLineDash([10,8]);ctx.lineDashOffset=-performance.now()/50;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.restore();
  }
- for(const u of Object.values(game?.scheduled||{})){if(u.matchId!==game?.matchId||u.round!==game?.round)continue;if(u.kind==='bomb'){if(visualCombatNow()<u.start)continue;const f=clamp((visualCombatNow()-u.start)/(u.until-u.start),0,1),x=u.fromX+(u.x-u.fromX)*f,y=u.fromY+(u.y-u.fromY)*f-Math.sin(f*Math.PI)*80;ctx.fillStyle='#ffab65';ctx.beginPath();ctx.arc(x,y,9,0,7);ctx.fill();ctx.fillStyle='#fff1ba';ctx.fillRect(x+4,y-13,3,6);continue;}ctx.save();ctx.strokeStyle=u.kind==='laser'?'#dcb8f9':'#ffd48d';ctx.globalAlpha=.65;ctx.lineWidth=3;ctx.setLineDash([8,6]);ctx.beginPath();if(u.kind==='laser'){ctx.moveTo(u.x,u.y);ctx.lineTo(u.x+Math.cos(u.angle)*900,u.y+Math.sin(u.angle)*900);}else ctx.arc(u.x,u.y,76,0,Math.PI*2);ctx.stroke();ctx.restore();}drawSmoothProjectiles(dt);for(const f of fx){ctx.save();if(f.type==='laserWarn'||f.type==='laser'){ctx.strokeStyle='#dfb9f5';ctx.lineWidth=f.type==='laser'?16:3;ctx.globalAlpha=f.type==='laser'?.84:.66;ctx.setLineDash(f.type==='laser'?[]:[9,7]);ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x+Math.cos(f.angle)*900,f.y+Math.sin(f.angle)*900);ctx.stroke();}
+ for(const u of Object.values(game?.scheduled||{})){if(u.matchId!==game?.matchId||u.round!==game?.round)continue;if(u.kind==='bomb'){if(visualCombatNow()<u.start)continue;const f=clamp((visualCombatNow()-u.start)/(u.until-u.start),0,1),x=u.fromX+(u.x-u.fromX)*f,y=u.fromY+(u.y-u.fromY)*f-Math.sin(f*Math.PI)*80;ctx.fillStyle='#ffab65';ctx.beginPath();ctx.arc(x,y,9,0,7);ctx.fill();ctx.fillStyle='#fff1ba';ctx.fillRect(x+4,y-13,3,6);continue;}ctx.save();ctx.strokeStyle=u.kind==='laser'?'#dcb8f9':'#ffd48d';ctx.globalAlpha=.65;ctx.lineWidth=3;ctx.setLineDash([8,6]);ctx.beginPath();if(u.kind==='laser'){ctx.moveTo(u.x,u.y);ctx.lineTo(u.x+Math.cos(u.angle)*900,u.y+Math.sin(u.angle)*900);}else ctx.arc(u.x,u.y,76,0,Math.PI*2);ctx.stroke();ctx.restore();}drawSmoothProjectiles(dt);// Canonical 700ms delayed-blast warning, drawn from replicated host schedule.
+ for(const warning of Object.values(game?.scheduled||{})){
+  if(warning.kind!=='draftBlast'||warning.round!==game?.round)continue;
+  const left=Math.max(0,Math.min(1,(warning.until-combatNow())/700));
+  ctx.save();ctx.strokeStyle='#ffbf57';ctx.lineWidth=3;ctx.globalAlpha=.62+(1-left)*.32;
+  ctx.setLineDash([8,6]);ctx.beginPath();ctx.arc(warning.x,warning.y,warning.radius||55,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);ctx.fillStyle='rgba(255,153,53,.12)';
+  ctx.beginPath();ctx.arc(warning.x,warning.y,(warning.radius||55)*(1-left),0,Math.PI*2);ctx.fill();
+  ctx.restore();
+ }
+ for(const f of fx){ctx.save();if(f.type==='laserWarn'||f.type==='laser'){ctx.strokeStyle='#dfb9f5';ctx.lineWidth=f.type==='laser'?16:3;ctx.globalAlpha=f.type==='laser'?.84:.66;ctx.setLineDash(f.type==='laser'?[]:[9,7]);ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x+Math.cos(f.angle)*900,f.y+Math.sin(f.angle)*900);ctx.stroke();}
  else {ctx.strokeStyle=f.type==='shockwave'?'#bd75ff':f.type==='hit'?'#ffe476':'#ffcc75';ctx.lineWidth=f.type==='jumpWarn'?3:f.type==='hit'?5:4;ctx.beginPath();const max=f.type==='shockwave'?140:f.type==='jumpWarn'?76:40;ctx.arc(f.x,f.y,f.type==='jumpWarn'?76:max*(1-Math.max(0,f.t||0)/.5)+4,0,Math.PI*2);ctx.stroke();
  if(f.type==='hit'&&Number.isFinite(f.amount)){
   ctx.font='bold 15px system-ui';ctx.textAlign='center';ctx.fillStyle='#fff0aa';
