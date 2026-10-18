@@ -1255,7 +1255,7 @@ const BrawlAbilityV1=Object.freeze({
       requestBotReady();
       requestBotRematch();
       if(isHost&&game&&game.phase!=='select'&&!(players.guest&&players.guest.online))returnToSelect();
-      if(isHost&&game&&game.phase==='round_end'&&!roundAdvanceTimer &&
+      if(isHost&&game&&game.phase==='round_end'&&game.draft?.complete&&!roundAdvanceTimer &&
           players.guest?.online && players.host?.online)scheduleNextRound();
       if(game && game.phase==='match_end' && isHost) {
         if(players.guest&&players.guest.back)watchBackToSelect();
@@ -1294,10 +1294,16 @@ const BrawlAbilityV1=Object.freeze({
         if(!previous || previous.round!==game.round || previous.phase!=='playing')startLocalRound();
         showScreen('game');
       } else if(game.phase==='round_end') {
-        if(isHost && (!previous||previous.phase!=='round_end'||previous.round!==game.round))scheduleNextRound();
+        if(isHost){
+          if(game.draft?.complete){if(!roundAdvanceTimer)scheduleNextRound();}
+          else netDraftBeginRemote();
+        }
         clearControls();
         showScreen('game');
         setMessage(game.loser==='draw'?'DRAW!':game.loser===role?'ROUND LOSE':'ROUND WIN',1600);
+      } else if(game.phase==='draft') {
+        if(roundAdvanceTimer){clearTimeout(roundAdvanceTimer);roundAdvanceTimer=null;}
+        clearControls();showScreen('game');setMessage('');
       } else if(game.phase==='match_end') {
         if(roundAdvanceTimer){clearTimeout(roundAdvanceTimer);roundAdvanceTimer=null;}
         showScreen('end');
@@ -1308,7 +1314,7 @@ const BrawlAbilityV1=Object.freeze({
         if(isHost)considerRematch();
         requestBotRematch();
       }
-      updateHUD();
+      updateHUD();netDraftRender();
     });
     listen('positions/'+other,'value',snap=>{
       const p=snap.val();
@@ -1410,7 +1416,7 @@ const BrawlAbilityV1=Object.freeze({
         const value={ v:PROTOCOL, createdAt:firebase.database.ServerValue.TIMESTAMP,
           players:{host:{online:true,ready:false,char:'tank',rematch:false,back:false,session:sessionId}},
           botConfig:{char:'gunner',level:'normal'},
-          game:{phase:'select',round:0, scores:{host:0,guest:0},hp:{host:160,guest:160}} };
+          game:{phase:'select',round:0, scores:{host:0,guest:0},hp:{host:160,guest:160},draft:netDraftNewMatch()} };
         const result=await candidate.transaction(old=>old===null?value:undefined,undefined,false);
         if(result.committed){ref=candidate;roomId=code;won=true;break;}
       }
@@ -1477,6 +1483,7 @@ const BrawlAbilityV1=Object.freeze({
       const next=resetScores?1:(Number(game.round)||0)+1;
       const resources=resetScores||next===1?initialResources():sanitizeResources(game.resources);
       const state={phase:'playing',round:next,scores,chars,resources,
+        draft:netDraftNextRound(resetScores||next===1?netDraftNewMatch():game.draft,Math.round(time()+2700)),
         hp:{host:maxHp(chars.host),guest:maxHp(chars.guest)},
         startAt:Math.round(time()+2700),loser:'',
         combatAt:{host:0,guest:0},healAt:{host:0,guest:0}};
@@ -1520,7 +1527,7 @@ const BrawlAbilityV1=Object.freeze({
         'host/back':false,'guest/back':false
       });
       await ref.child('game').set({phase:'select',round:0,
-        scores:{host:0,guest:0},hp:{host:180,guest:180}});
+        scores:{host:0,guest:0},hp:{host:160,guest:160},draft:netDraftNewMatch()});
       if(roundAdvanceTimer){clearTimeout(roundAdvanceTimer);roundAdvanceTimer=null;}
     } catch(e){console.error('returnToSelect',e);$('networkStatus').textContent='画面切替に失敗';}
     finally{returningToSelect=false;}
@@ -1811,12 +1818,12 @@ const BrawlAbilityV1=Object.freeze({
      targetHit:bullet=>{
       const victim=bullet.owner==='host'?'guest':'host',pos=victim===role?local:getRemotePredicted();
       if(!BrawlProjectileV1.hitCircle(bullet.x,bullet.y,pos.x,pos.y,RADIUS+bullet.radius))return false;
-      if(isHost&&game.phase==='playing')applyDamage(victim,BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage),bullet.owner,bullet.x,bullet.y);
+      if(isHost&&game.phase==='playing')applyDamage(victim,BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage),bullet.owner,bullet.x,bullet.y,bullet.ult?'effect':'normal');
       return true;
      }
     });
   }
-  function applyDamage(victim,amount,owner,x,y) {
+  function applyDamage(victim,amount,owner,x,y,kind='effect') {
     if(solo){applySoloDamage(victim,amount,owner,x,y);return;}
     if(!isHost||!ref||!game||game.phase!=='playing'||time()<game.startAt)return;
     if(victim!=='host'&&victim!=='guest')return;
@@ -1825,11 +1832,13 @@ const BrawlAbilityV1=Object.freeze({
       if(!current||current.phase!=='playing'||current.round!==expectedRound||time()<current.startAt)return;
       const hp={...current.hp};
       if(!Number.isFinite(hp[victim])||hp[victim]<=0)return;
-      hp[victim]=Math.max(0,hp[victim]-amount);
+      const hit=netDraftHit(current.draft,current.chars,current.hp,victim,amount,owner,kind,time());
+      const dealt=hit.amount;
+      hp[victim]=Math.max(0,hp[victim]-dealt);
       const combatAt={...current.combatAt};combatAt[victim]=Math.max(Number(combatAt[victim])||0,time());
       if(owner)combatAt[owner]=Math.max(Number(combatAt[owner])||0,time());
-      const resources=owner?recordDamageResources(current,victim,owner,amount):sanitizeResources(current.resources);
-      const next={...current,hp,combatAt,resources};
+      const resources=owner?recordDamageResources(current,victim,owner,dealt):sanitizeResources(current.resources);
+      const next={...current,hp,combatAt,resources,draft:hit.draft};
       if(hp[victim]<=0){
         const winner=victim==='host'?'guest':'host';
         const scores={...current.scores};
@@ -1847,11 +1856,12 @@ const BrawlAbilityV1=Object.freeze({
     }).catch(e=>{console.error('damage',e);$('networkStatus').textContent='HP同期エラー';});
   }
   function scheduleNextRound(){
+    if(!game?.draft?.complete||game?.phase!=='round_end')return;
     if(roundAdvanceTimer)clearTimeout(roundAdvanceTimer);
     const round=game.round;
     roundAdvanceTimer=setTimeout(()=>{
       roundAdvanceTimer=null;
-      if(ref&&connected&&game&&game.phase==='round_end'&&game.round===round &&
+      if(ref&&connected&&game&&game.phase==='round_end'&&game.round===round&&game.draft?.complete&&
          players.host?.online&&players.guest?.online&&!startPending)publishRound(false);
     },2700);
   }
