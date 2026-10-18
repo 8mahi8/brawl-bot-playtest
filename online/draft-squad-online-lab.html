@@ -581,7 +581,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
         fireId:a.eventId,blastEligible:(s.draftCards||[]).includes('delayed_blast'),
         x:dst.x+px,y:dst.y+py,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,
         damage:BALANCE.bomberDamage*(half?.5:1),radius:BALANCE.bomberRadius*(half?.72:1),
-        enhanced:!!s.armed&&!half,normalAttack:true};
+        enhanced:!!s.armed&&(!half||i===0),normalAttack:true};
      }
      s.armed=false;
     }else{const shots=burst({...a,x:pos.x,y:pos.y},s,g);
@@ -2312,6 +2312,16 @@ function drawArena(){
   ctx.fillStyle='#425d6d';ctx.fillRect(w.x+3,w.y+3,w.w-6,w.h-8);
   ctx.fillStyle='#7b9aa8';ctx.fillRect(w.x+3,w.y+3,w.w-6,4);
   ctx.strokeStyle='#587887';ctx.lineWidth=1.2;ctx.strokeRect(w.x+.5,w.y+.5,w.w-1,w.h-1);
+ }
+ // Server-owned delayed blast warnings persist for their full 700ms telegraph.
+ for(const b of Object.values(game?.scheduled||{})){
+   if(b.kind!=='draft_blast'||b.until<=combatNow())continue;
+   const fraction=Math.max(0,Math.min(1,(b.until-combatNow())/700));
+   ctx.save();ctx.strokeStyle='#ffb35d';ctx.lineWidth=3.5;ctx.setLineDash([8,7]);
+   ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,Math.PI*2);ctx.stroke();
+   ctx.setLineDash([]);ctx.fillStyle='rgba(255,135,69,'+(.13+.12*(1-fraction))+')';
+   ctx.beginPath();ctx.arc(b.x,b.y,b.radius*(1-fraction*.25),0,Math.PI*2);ctx.fill();
+   ctx.restore();
  }
 }
 function drawPlayer(p,seat,mine,isVisible=true){if(!isVisible)return;const id=lobby?.seats?.[seat]?.id,st=game?.stats?.[id],char=st?.char||p.char,chr=CHARS[char]||CHARS.tank,team=teamOfSeat(seat),mate=team===myTeam(),now=combatNow();
