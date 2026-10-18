@@ -84,3 +84,20 @@ for(const [mode,normal,lab,beta,room,protocol] of [
  }
  console.log('PASS friends beta '+mode+': standalone + inline JS + existing UI + normal Firebase root + draft protocol');
 }
+
+// A separate 2vs2 trial page is allowed, but the current published friend-beta
+// HTML remains frozen until actual school iPad acceptance.
+const liveSquad=file('sites/BRAWL_DRAFT_FRIENDS_BETA_2vs2.html');
+const candidate=file('sites/BRAWL_DRAFT_FRIENDS_BETA_2vs2_LAYOUT_PREVIEW.html');
+assert.notEqual(candidate,liveSquad,'layout preview must not replace shipped beta');
+assert(candidate.includes('id="mockGad2"')&&candidate.includes('id="gad2Size"')&&candidate.includes('id="gad2Val"'),
+ 'GAD2 edit button and size control are visible in the layout editor');
+assert(candidate.includes("setLayoutDrag('gad2',e)")&&candidate.includes('DRAFT_GAD2_LAYOUT_KEY'),
+ 'GAD2 is draggable and persists separately from existing GAD/ULT preferences');
+assert(candidate.includes('squadGad2ButtonPosition();')&&candidate.includes("b.style.transform='translate(-50%, -50%)'"),
+ 'battle button uses the same center-relative model as the layout preview');
+assert(!liveSquad.includes('DRAFT_GAD2_LAYOUT_KEY')&&!liveSquad.includes('id="mockGad2"'),
+ 'main 2vs2 friend beta retains its previous behavior');
+const cScripts=[...candidate.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+cScripts.forEach((script,i)=>{if(script[1].trim())new vm.Script(script[1],{filename:'2v2 gad2 layout candidate#'+i});});
+console.log('PASS standalone 2vs2 GAD2 trial HTML parses, original beta unchanged, editor wired without cloud writes');
