@@ -406,6 +406,10 @@
          x<RADIUS||x>W-RADIUS||y<RADIUS||y>H-RADIUS||circleWall(x,y,RADIUS+3))return false;
       local.x=x;local.y=y;return true;
     },
+    setBotFireCooldownForTest:(seconds)=>{
+      if(!solo||game?.phase!=='playing'||!Number.isFinite(seconds)||seconds<0||seconds>30)return false;
+      botBrain.fire=seconds;return true;
+    },
     setBotPosition:(x,y)=>{
       if(!solo||game?.phase!=='playing'||!Number.isFinite(x)||!Number.isFinite(y)||
          x<RADIUS||x>W-RADIUS||y<RADIUS||y>H-RADIUS||circleWall(x,y,RADIUS+3))return false;
