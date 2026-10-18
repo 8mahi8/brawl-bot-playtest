@@ -1,0 +1,49 @@
+name: BRAWL Draft FRIEND beta — Google Sites release and WebKit emulator
+on:
+  push:
+    paths:
+      - 'sites/BRAWL_DRAFT_FRIENDS_BETA_*.html'
+      - 'tests/draft-friends-beta-*.cjs'
+      - 'firebase.draft-friends-beta-e2e.json'
+      - 'network/emulator/DRAFT_FRIENDS_BETA_E2E_TEST_ONLY.rules.json'
+      - '.github/workflows/draft-friends-beta-release.yml'
+  pull_request:
+    paths:
+      - 'sites/BRAWL_DRAFT_FRIENDS_BETA_*.html'
+      - 'tests/draft-friends-beta-*.cjs'
+      - 'firebase.draft-friends-beta-e2e.json'
+      - 'network/emulator/DRAFT_FRIENDS_BETA_E2E_TEST_ONLY.rules.json'
+      - '.github/workflows/draft-friends-beta-release.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  friends-beta-webkit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      FIREBASE_CLI_DISABLE_TELEMETRY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '21'}
+      - name: Validate both standalone published friend beta pages (no real Firebase writes)
+        run: |
+          node tests/draft-friends-beta-release.cjs
+          node --check tests/draft-friends-beta-webkit.cjs
+      - name: Install Firebase local emulator and Safari-like WebKit
+        run: |
+          npm install --no-save --package-lock=false firebase-tools@14.24.0 playwright-core@1.56.1
+          npx playwright-core install --with-deps webkit
+      - name: Pin compatible Firebase browser SDK locally for emulator
+        run: |
+          mkdir -p artifacts/firebase-sdk
+          curl -fsSL --retry 3 --max-time 25 https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js -o artifacts/firebase-sdk/firebase-app-compat.js
+          curl -fsSL --retry 3 --max-time 25 https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js -o artifacts/firebase-sdk/firebase-database-compat.js
+          test -s artifacts/firebase-sdk/firebase-app-compat.js
+          test -s artifacts/firebase-sdk/firebase-database-compat.js
+      - name: Run 2-client and 4-client beta HTML on LOCAL RTDB emulator only
+        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-draft-beta --config firebase.draft-friends-beta-e2e.json "node tests/draft-friends-beta-webkit.cjs"
