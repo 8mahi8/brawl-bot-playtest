@@ -56,6 +56,14 @@ for(const item of registry.cards) {
     '2vs2 split must affect authoritative projectiles and normal Bomber bombs');
   assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damageScale:(b.damageScale||1)*.6"),
    '1vs1 central shot must generate two 60% children');
+ }else if(item.id==='trap_mine'){
+  assert(!online1.includes("id:'trap_mine'"),'1vs1 mine remains gated');
+  assert(online2.includes("id:'trap_mine'"),'2vs2 only offers host-owned mine');
+  assert(squadLab.includes("g.gad2Mines[seat]={kind:'trap_mine'")&&
+    squadLab.includes("g.draft.gadget2ReadyAt[seat]=t+12000")&&
+    squadLab.includes("hit('gad2mine:'+mine.id+':'+victim,mine.owner,victim,8")&&
+    squadLab.includes("window.__brawlDraftGad2FireQA"),
+    'mine requires authoritative cooldown, damage, separate button and live E2E');
  }else if(item.id==='ricochet'){
   assert(online1.includes("id:'ricochet'"),'1vs1 ricochet is offered only after implementation');
   assert(duelLab.includes('function netDraftAdvanceBullet(b,dt,targetHit)')&&
@@ -85,4 +93,4 @@ for(const item of registry.cards) {
   assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
  }
 }
-console.log('PASS ricochet/recoil/split/delayed in both isolated online draft labs; five GAD2 gated');
+console.log('PASS four shot modifier cards in both online labs; mine-only 2v2 GAD2, others gated');
