@@ -3016,9 +3016,9 @@ function squadGad2ButtonRefresh(){
  b.style.display=active?'block':'none';if(!active)return;
  const ready=game.draft?.gadget2ReadyAt?.[seat]||0,
    remaining=Math.max(0,ready-combatNow());
- b.disabled=(remaining>0&&!activeBeacon)||!combatReady()||!alive(myId);
  const beacon=id==='warp_beacon'&&game?.gad2Beacons?.[seat];
  const activeBeacon=!!(beacon&&beacon.owner===myId&&beacon.until>combatNow());
+ b.disabled=(remaining>0&&!activeBeacon)||!combatReady()||!alive(myId);
  const name=id==='smoke'?'煙幕':id==='warp_beacon'?(activeBeacon?'帰還':'ビーコン'):'地雷';
  b.textContent=remaining>0?name+'\n'+Math.ceil(remaining/1000)+'秒':'GAD2\n'+name;
  b.setAttribute('aria-label','GAD2 '+(id==='warp_beacon'?(activeBeacon?'ビーコンに帰還':'ワープビーコン'):id==='smoke'?'スモーク':'トラップマイン')+(remaining>0?' 再使用まで'+Math.ceil(remaining/1000)+'秒':''));
