@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "purpose": "Four Google Sites pages, two independent room families, shared duel/squad combat where appropriate. Planned drafts are NOT public or playable.",
+  "purpose": "Four separate Google Sites releases; the published standard pages remain frozen. Both Tactical Draft KO modes now have local-Firebase-emulator online prototypes but no public draft release.",
   "pages": {
     "standard.1vs1": {
       "status": "live",
@@ -24,7 +24,9 @@
       "releaseHtml": "sites/BRAWL_DRAFT_1vs1.html",
       "labHtml": "online/draft-duel-lab.html",
       "roomRoot": "roomsDraft1v1",
-      "protocol": 1031
+      "protocol": 1031,
+      "onlineLabHtml": "online/draft-duel-online-lab.html",
+      "onlineLabStatus": "local_emulator_only_not_public"
     },
     "draft.2vs2": {
       "status": "reserved",
@@ -32,7 +34,9 @@
       "releaseHtml": "sites/BRAWL_DRAFT_2vs2.html",
       "labHtml": "online/draft-squad-lab.html",
       "roomRoot": "roomsDraft2v2",
-      "protocol": 13012
+      "protocol": 13012,
+      "onlineLabHtml": "online/draft-squad-online-lab.html",
+      "onlineLabStatus": "local_emulator_only_not_public"
     }
   },
   "draftDefaults": {
