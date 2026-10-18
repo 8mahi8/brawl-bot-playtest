@@ -86,6 +86,29 @@ assert(html.includes("motion(g,a.owner,{...delta,a:a.angle})"),'recoil motion be
 assert(html.includes("s.draftRecoilUntil=t+1200"),'one movement per volley under 1.2 second cooldown');
 assert(html.includes("normalAttack:true"),'ordinary Bomber bombs distinguish from ultimate bomb fan');
 assert(html.includes("kind:u.normalAttack===true?'normal':'effect'"),'ULT does not receive recoil damage bonus');
+// Execute exact online-host split step in a pure VM: one central shot -> two 60%-damage children.
+const advStart=html.indexOf('  function draftAdvance(b,dt,g,targetHit,now){');
+const advEnd=html.indexOf('  function initialize(matchId,seats,mode,startAt){',advStart);
+assert(advStart>0&&advEnd>advStart,'exact host split physics must be embedded');
+const advance=vm.runInNewContext(
+ 'const W=1000,H=600,tankDamage=()=>10,wall=()=>false;'+
+ 'const BrawlProjectileV1={damage:b=>b.damage,advance:()=>true};'+
+ html.slice(advStart,advEnd)+'\n draftAdvance',
+ {},{timeout:1000});
+const splitGame={projectiles:{}},original={id:'volley:2',fireId:'volley',x:120,y:300,vx:600,vy:0,
+ dist:0,range:240,radius:6,damage:10,char:'gunner',splitCenter:true,blastEligible:true};
+assert.equal(advance(original,.25,splitGame,()=>false,1000),false,'center bullet replaced at halfway');
+const kids=Object.values(splitGame.projectiles);
+assert.equal(kids.length,2,'only two daughter projectiles');
+assert.deepEqual(kids.map(b=>b.damage),[6,6],'60% damage per child');
+assert(kids.every(b=>b.fireId==='volley'&&!b.splitCenter&&b.splitChild&&b.range===240),
+ 'children inherit a common fireActionId and cannot split again');
+assert.equal(advance(kids[0],.05,splitGame,()=>false,1050),true,'daughter cannot divide again');
+assert.equal(Object.keys(splitGame.projectiles).length,2,'no exponential bullet growth');
+assert(html.includes("g.scheduled['blast:'+fireId]"),'one canonical blast slot per fire action');
+assert(html.includes("st.draftBlastReadyAt=t+3000"),'authoritative blast cooldown 3000ms');
+assert(html.includes("kind:'draft_blast'")&&html.includes("until:t+700"),'blast is a delayed authoritative effect');
+assert(html.includes("normalAttack:true"),'normal Bomber bombs use normal-hit modifiers');
 assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
 assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
 assert.equal(squadReloadFactor({owned:{blue1:['moving_reload']}},'blue1',1,900,600),1);
