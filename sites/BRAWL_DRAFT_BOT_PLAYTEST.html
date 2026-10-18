@@ -1646,7 +1646,9 @@ const BrawlAbilityV1=Object.freeze({
   function drawBombFlights(){for(const p of Object.values(game?.bombs||{})){if(p.round!==game.round||time()<p.start)continue;const f=clamp((time()-p.start)/(p.until-p.start),0,1),x=p.fromX+(p.x-p.fromX)*f,y=p.fromY+(p.y-p.fromY)*f-Math.sin(f*Math.PI)*80;ctx.fillStyle='#ffb16a';ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff1ba';ctx.fillRect(x+4,y-13,3,6);}}
   function drawDebuff(p,who){const d=game?.debuffs?.[who];if(d?.slowUntil>time()){ctx.strokeStyle='#64ccff';ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(p.x,p.y+18,26,8,0,0,7);ctx.stroke();}if(d?.dotUntil>=time()){ctx.fillStyle='#ffab54';for(let i=0;i<6;i++){const a=i*Math.PI/3+performance.now()/160;ctx.beginPath();ctx.arc(p.x+Math.cos(a)*29,p.y+Math.sin(a)*29,3,0,7);ctx.fill();}}}
   function throwBomb(owner,actor,angle,reach,ultimate){if(!isPlaying())return;const now=time(),p={id:solo?'solo_bomb_'+(++soloShotNumber):ref.child('shots').push().key,round:game.round,owner,x:actor.x,y:actor.y,angle,reach:clamp(reach,55,BALANCE.bomberRange),ultimate,debug:soloDebug('ult')};
-    if(solo){const before=syncSoloResources(),n=bomberCore.queue(before,p,now);if(n===before)return;game=n;local.ult=game.resources.host.ult;botBrain.ult=game.resources.guest.ult;markAttack(owner);updateHUD();return;}
+    if(solo){const before=syncSoloResources(),n=bomberCore.queue(before,p,now);if(n===before)return;
+      if(!ultimate&&draftHas(owner,'recoil_shot')&&n.bombs?.[p.id+':0'])n.bombs[p.id+':0'].damage*=1.10;
+      game=n;local.ult=game.resources.host.ult;botBrain.ult=game.resources.guest.ult;markAttack(owner);updateHUD();return;}
     const activeRef=ref,startAt=game.startAt;const stillHere=()=>ref===activeRef&&role===owner&&game?.round===p.round&&game?.startAt===startAt;activeRef.child('game').transaction(g=>{if(!g||g.round!==p.round||g.startAt!==startAt)return;const n=bomberCore.queue(g,p,now);return n===g?undefined:n;},undefined,false).then(r=>{if(!stillHere())return;if(!r.committed&&!ultimate)local.ammo=Math.min(3,local.ammo+1);if(r.committed)markAttack(owner);updateHUD();}).catch(e=>{if(!stillHere())return;if(!ultimate)local.ammo=Math.min(3,local.ammo+1);alertStatus('爆弾の送信に失敗',e);});
   }
   async function useBomberGadget(){if(!isPlaying()||bomberGadgetBusy||game?.bomberArmed?.[role]||local.gadgets<1&&!soloDebug('gadgets'))return;bomberGadgetBusy=true;updateHUD();const round=game.round,startAt=game.startAt,activeRef=ref,owner=role;try{
@@ -1654,7 +1656,14 @@ const BrawlAbilityV1=Object.freeze({
     else{const result=await activeRef.child('game').transaction(g=>{if(g?.round!==round||g.startAt!==startAt)return;const n=bomberCore.arm(g,owner);return n===g?undefined:n;},undefined,false);if(!result.committed)return;}
     if(game?.round===round&&game?.startAt===startAt&&role===owner&&(solo||ref===activeRef)){local.ammo=Math.min(3,local.ammo+1);if(local.ammo===3)local.reload=0;actionFeedback('1弾回復＋次の爆弾を強化！','gadgetBtn');sendPosition();}
    }catch(e){alertStatus('ガジェットの同期に失敗',e);}finally{bomberGadgetBusy=false;updateHUD();}}
-  function afterSoloBombs(previous){local.ult=game.resources.host.ult;local.gadgets=game.resources.host.gadgets;botBrain.ult=game.resources.guest.ult;renderBombEvents();updateHUD();if(previous.phase==='playing'&&game.phase!=='playing'){clearControls();if(game.phase==='round_end'){setMessage(game.loser==='draw'?'DRAW':game.loser==='host'?'ROUND LOSE':'ROUND WIN',1400);if(game.loser==='draw'){soloRoundTimer=setTimeout(()=>{soloRoundTimer=null;if(solo&&game?.phase==='round_end')publishSoloRound(false);},1000);}else draftBegin(game.loser==='host'?'guest':'host');}else{showScreen('end');$('finalResult').textContent=game.scores.host>=3?'VICTORY!':'DEFEAT…';$('finalScore').textContent=`${game.scores.host} - ${game.scores.guest}`;}}}
+  function afterSoloBombs(previous){
+    if(game?.phase==='playing')for(const [key,event] of Object.entries(game.bombEvents||{})){
+      if(event.type!=='hit'||!key.endsWith(':hit'))continue;
+      const bomb=previous.bombs?.[key.slice(0,-4)];
+      if(bomb&&bomb.damage!==BALANCE.bomberUltDamage&&draftHas(bomb.owner,'delayed_blast'))
+        extraOnBulletHit({owner:bomb.owner,fireId:bomb.id,x:event.x,y:event.y,ult:false});
+    }
+    local.ult=game.resources.host.ult;local.gadgets=game.resources.host.gadgets;botBrain.ult=game.resources.guest.ult;renderBombEvents();updateHUD();if(previous.phase==='playing'&&game.phase!=='playing'){clearControls();if(game.phase==='round_end'){setMessage(game.loser==='draw'?'DRAW':game.loser==='host'?'ROUND LOSE':'ROUND WIN',1400);if(game.loser==='draw'){soloRoundTimer=setTimeout(()=>{soloRoundTimer=null;if(solo&&game?.phase==='round_end')publishSoloRound(false);},1000);}else draftBegin(game.loser==='host'?'guest':'host');}else{showScreen('end');$('finalResult').textContent=game.scores.host>=3?'VICTORY!':'DEFEAT…';$('finalScore').textContent=`${game.scores.host} - ${game.scores.guest}`;}}}
   function processBombs(){if(!isHost||bombBusy||performance.now()-lastBombTick<50||!Object.keys(game?.bombs||{}).length&&!Object.keys(game?.debuffs||{}).length)return;lastBombTick=performance.now();const round=game.round,startAt=game.startAt,now=time(),positions={};positions[role]={x:local.x,y:local.y};positions[other]=solo?{x:remote.x,y:remote.y}:getRemotePredicted();
     if(solo){const previous=syncSoloResources(),n=bomberCore.settle(previous,positions,now,soloDebug('invincible'));if(n!==previous){game=n;afterSoloBombs(previous);}return;}
     bombBusy=true;ref.child('game').transaction(g=>{if(g?.round!==round||g.startAt!==startAt)return;const n=bomberCore.settle(g,positions,now);return n===g?undefined:n;},undefined,false).catch(e=>console.warn('Bomber tick',e)).finally(()=>{bombBusy=false;});
@@ -2915,7 +2924,7 @@ const BrawlAbilityV1=Object.freeze({
     const distance=clamp(reach,55,BALANCE.bomberRange),x=actor.x+Math.cos(angle)*distance,y=actor.y+Math.sin(angle)*distance;
     const px=-Math.sin(angle),py=Math.cos(angle),now=time();
     for(const sign of [-1,1]){
-      extraState.bombs.push({side,x:x+px*30*sign,y:y+py*30*sign,damage:BALANCE.bomberDamage*.5,radius:BALANCE.bomberRadius*.72,
+      extraState.bombs.push({side,x:x+px*30*sign,y:y+py*30*sign,damage:BALANCE.bomberDamage*.5*(draftHas(side,'recoil_shot')?1.10:1),radius:BALANCE.bomberRadius*.72,
         due:now+BALANCE.bomberFlightMs,round:game.round,fireId});
     }
     fx.push({type:'impact',x,y,ttl:.35,max:.35});
@@ -2994,6 +3003,7 @@ const BrawlAbilityV1=Object.freeze({
         fx.push({type:'impact',x:blast.x,y:blast.y,ttl:.32,max:.32});
         const side=extraOther(blast.side),actor=extraSideActor(side);
         if(Math.hypot(actor.x-blast.x,actor.y-blast.y)<blast.radius+RADIUS){
+          if(blast.fireId)extraOnBulletHit({owner:blast.side,fireId:blast.fireId,x:blast.x,y:blast.y,ult:false});
           applySoloDamage(side,blast.damage,blast.side,blast.x,blast.y,'effect');
           if(game.phase!=='playing')return;
         }
@@ -3048,7 +3058,8 @@ const BrawlAbilityV1=Object.freeze({
     cards:EXTRA_CARDS.map(c=>c.id),manual:[...extraManualDeck],owned:structuredClone(draftOwned),
     gadget:extraGadget('host'),state:structuredClone(extraState),
     choose:(cards)=>{if(!Array.isArray(cards)||cards.length>3||cards.some(id=>!draftById.has(id)))return false;extraManualDeck=[...cards];return true;},
-    useGadget:()=>extraUseGadget('host')
+    useGadget:()=>extraUseGadget('host'),
+    fire:(angle=0)=>{if(!solo||!isPlaying())return false;shoot(false,angle);return true;}
   });
 
   function soloDebug(flag){return solo&&!!testFlags[flag];}

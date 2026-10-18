@@ -53,6 +53,12 @@ async function run(){
   }
   const gunner=await play(['split_round','recoil_shot','delayed_blast'],'gunner');
   assert.equal((await gunner.page.evaluate(()=>window.__brawlPlaystyleQA().owned.host)).length,3);
+  // Fire a real Gunner volley: check one recoil impulse and actual split children.
+  const before=await gunner.page.evaluate(()=>window.__brawlV29QA().local.x);
+  assert.equal(await gunner.page.evaluate(()=>window.__brawlPlaystyleQA().fire(0)),true);
+  const after=await gunner.page.evaluate(()=>window.__brawlV29QA().local.x);
+  assert(before-after>=17&&before-after<=25,'recoil must be one short backward move, not three impulses');
+  await gunner.page.waitForFunction(()=>window.__brawlV29QA().shots.some(s=>s.splitChild),null,{timeout:3500});
   assert.deepEqual(gunner.errors,[]);
   await gunner.page.close();
   console.log('PASS WebKit: solo match setup, 3-card selectable loadout, 5 different GAD2 effects, 7s hologram, 9-card registry, normal release isolation');
