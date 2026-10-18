@@ -110,6 +110,10 @@ async function run(){
 
   // Real 1vs1 center-bullet split from Tank/Gunner volley (other pellets unchanged).
   assert.equal(await host.evaluate(()=>window.__brawlDraftMoveQA(150,300)),true);
+  // Earlier volleys can still be travelling while the next shot is being prepared.
+  // Exhaust previous projectiles first, otherwise their delayed split inflates this
+  // shot's delta even though the engine itself splits each center only once.
+  await host.waitForFunction(()=>window.__brawlV29QA?.()?.shots?.length===0,null,{timeout:10000});
   await host.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.ammo>0,null,{timeout:11000});
   const splitBefore=await host.evaluate(()=>window.__brawlDraftSplitCountQA());
   assert.equal(await host.evaluate(()=>window.__brawlDraftFireQA(0)),true);
