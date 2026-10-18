@@ -169,18 +169,18 @@ async function run(){
     return {audit:snap.val().draftCardStats,shotCount:Object.keys(snap.val().usedActions||{}).length};
   });
   assert.equal(result.audit.blasts,1,'one delayed blast per accepted fireActionId, not per pellet');
-  await blue1.waitForFunction(async()=>{
+  // IMPORTANT: read from RED1, a NON-HOST browser. The host's own Firebase
+  // transaction listener may see an uncommitted local speculative snapshot.
+  await red1.waitForFunction(async()=>{
     const q=window.__brawlV3QA();
     const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats/blastHits').once('value');
     return (snap.val()||0)>=1;
   },null,{timeout:14000,polling:350});
-  // This persisted host statistic is more reliable than a transient usedHits view
-  // during overlapping tick transactions and the end-of-round transition.
-  assert((await blue1.evaluate(async()=>{
+  assert((await red1.evaluate(async()=>{
     const q=window.__brawlV3QA();
     const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats/blastHits').once('value');
     return snap.val()||0;
-  }))>=1,'host-confirmed delayed explosion hits a real online opponent');
+  }))>=1,'non-host peer confirms delayed explosion impact after RTDB commit');
 
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
