@@ -12,7 +12,8 @@
     {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'},
     {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常射撃の最初の命中から0.7秒後に10ダメージの小爆発（3秒CD）'},
     {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'},
-    {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾が壁に当たると最大1回反射・反射後は威力70%'}
+    {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾が壁に当たると最大1回反射・反射後は威力70%'},
+    {id:'trap_mine',name:'トラップマイン',family:'gadget2',desc:'GAD2: 9秒間の接近感知地雷。1回だけ8ダメージ＋1.4秒鈍足'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
@@ -89,11 +90,17 @@ function squadBlastAuthorize(d,seat,fireActionId,t){
   if(keys.length>80)for(const key of keys.slice(0,keys.length-80))delete d.blastUsed[key];
   return true;
 }
+// GAD2 is a separate slot. When several are owned, the latest acquired is equipped.
+const SQUAD_GAD2_IDS=['trap_mine']; // others remain gated until implemented.
+function squadGad2Equipped(d,seat){
+ const owned=squadHand(d,seat);
+ return [...owned].reverse().find(id=>SQUAD_GAD2_IDS.includes(id))||null;
+}
 function squadNextRound(d){
   const last=d||squadNewMatch();
   return {...last,owned:Object.fromEntries(SQUAD_SEATS.map(s=>[s,[...squadHand(last,s)]])),
     complete:false,turn:0,order:[],offered:[],taken:[],
-    lastDamage:{},lastNormal:{},strideUntil:{},cooldown:{},blastCooldown:{},blastUsed:{}};
+    lastDamage:{},lastNormal:{},strideUntil:{},cooldown:{},blastCooldown:{},blastUsed:{},gadget2ReadyAt:{}};
 }
 function squadDamage(g,h,t){
   if(!g.draft)return h;

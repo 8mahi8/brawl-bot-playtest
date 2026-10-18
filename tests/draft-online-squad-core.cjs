@@ -6,9 +6,9 @@ const html=fs.readFileSync(path.join(root,'online/draft-squad-online-lab.html'),
 assert(html.includes(src),'Standalone squad HTML inlines pure draft reducer verbatim');
 for(const [i,m] of [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].entries())
  if(m[1].trim())new vm.Script(m[1],{filename:'draft-squad-lab#'+i});
-const names=['squadNewMatch','squadHand','squadOrder','squadOffer','squadBegin','squadPick','squadNextRound','squadDamage','squadMoveFactor','squadReloadFactor','squadBlastAuthorize'];
+const names=['squadNewMatch','squadHand','squadOrder','squadOffer','squadBegin','squadPick','squadNextRound','squadDamage','squadMoveFactor','squadReloadFactor','squadBlastAuthorize','squadGad2Equipped'];
 const api=vm.runInNewContext(src+'\n({'+names.join(',')+'})',{},{timeout:2000});
-const {squadNewMatch,squadHand,squadOrder,squadOffer,squadBegin,squadPick,squadNextRound,squadDamage,squadMoveFactor,squadReloadFactor,squadBlastAuthorize}=api;
+const {squadNewMatch,squadHand,squadOrder,squadOffer,squadBegin,squadPick,squadNextRound,squadDamage,squadMoveFactor,squadReloadFactor,squadBlastAuthorize,squadGad2Equipped}=api;
 const seats=['blue1','blue2','red1','red2'];
 assert.deepEqual(Array.from(squadOrder('blue',0)),['blue1','red1','red2','blue2']);
 assert.deepEqual(Array.from(squadOrder('blue',1)),['blue2','red2','red1','blue1']);
@@ -187,6 +187,33 @@ const f3=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
 assert.equal(f1.amount,10);
 assert.equal(f2.amount,10,'a second split child cannot trigger followthrough from the same original shot');
 assert.equal(f3.amount,13,'a separate new shot can trigger followthrough');
+// Separate GAD2 slot: the most recently acquired supported ability is equipped.
+const mineDraft=squadNewMatch();
+assert.equal(squadGad2Equipped(mineDraft,'blue1'),null);
+mineDraft.owned.blue1=['trap_mine','recoil_shot'];
+assert.equal(squadGad2Equipped(mineDraft,'blue1'),'trap_mine');
+mineDraft.gadget2ReadyAt={blue1:12345};
+const mineNext=squadNextRound(mineDraft);
+assert.equal(squadGad2Equipped(mineNext,'blue1'),'trap_mine');
+assert.equal(Object.keys(mineNext.gadget2ReadyAt).length,0,'new round resets cooldown');
+assert(src.includes("id:'trap_mine'")&&!src.includes("id:'smoke'"),'only implemented GAD2 is offered');
+assert(html.includes("a.type==='gadget2'"),'host authority handles the distinct action');
+assert(html.includes("g.draft.gadget2ReadyAt[seat]=t+12000"),'12 second host cooldown');
+assert(html.includes("until:t+9000"),'9 second lifetime');
+assert(html.includes("hit('gad2mine:'+mine.id+':'+victim,mine.owner,victim,8"),
+ 'exact host 8 damage, not a client effect');
+assert(html.includes("slowUntil:Math.max(previous.slowUntil||0,t+1400)"),
+ '1400ms slow cannot overwrite a longer slow');
+assert(html.includes("g.gad2Mines[seat]={kind:'trap_mine'"),'one active mine per seat');
+assert(html.includes("delete g.gad2Mines[seat]"),'mine consumed or expired');
+assert(html.includes("if(team(k)===mine.team)continue"),'no friendly fire');
+assert(html.includes("if(!canHit(victim)||"),'no hit on invulnerable or dead targets');
+assert(html.includes("break; // One enemy activation"),'one trigger only');
+assert(html.includes("if(wall(x,y,12))return reject('gadget2_wall')"),'no placement inside walls');
+assert(html.includes("['shot','gadget','gadget2','ultimate']"),'protocol whitelists GAD2');
+assert(html.includes("b.id='squadGad2Action'"),'separate mobile button exists');
+assert(html.includes("window.__brawlDraftGad2FireQA"),'live E2E uses normal action dispatch');
+
 assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
 assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
 assert.equal(squadReloadFactor({owned:{blue1:['moving_reload']}},'blue1',1,900,600),1);

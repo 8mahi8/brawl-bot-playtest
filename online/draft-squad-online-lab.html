@@ -599,11 +599,11 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
   }
   function initialize(matchId,seats,mode,startAt){const hp={},stats={},motions={},combatAt={},battleStats={};
    for(const k of seatKeys){const p=seats[k];hp[p.id]=chars[p.char].hp;combatAt[p.id]=0;battleStats[p.id]={damage:0,kos:0,deaths:0};stats[p.id]={char:p.char,ammo:3,refillAt:0,ult:0,gadgets:mode==='area'?1:2,gadgetReadyAt:0,boostUntil:0,overdriveUntil:0,lastShotAt:0,lastActionSeq:0,life:0,armed:false,guardUntil:0,guardTargetId:'',guardTargetLife:-1,guardSaved:0};motions[p.id]={rev:0,...spawns[k]};}
-   return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},combatAt,battleStats,events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
+   return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},gad2Mines:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},combatAt,battleStats,events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
   }
   function flying(g,id){return Object.values(g.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===id&&u.ownerLife===g.stats[id]?.life);}
   function receipt(a,now,status,reason){return {owner:a.owner,seq:a.seq,type:a.type,at:a.at,acceptedAt:now,status,reason:reason||''};}
-  function normalize(g){for(const key of ['projectiles','scheduled','usedActions','usedHits','debuffs','respawns','protection','reveals','events','motions'])g[key] ||= {};return g;}
+  function normalize(g){for(const key of ['projectiles','scheduled','gad2Mines','usedActions','usedHits','debuffs','respawns','protection','reveals','events','motions'])g[key] ||= {};return g;}
   function accept(state,a,input,now){if(!state||state.phase!=='playing'||now<state.startAt)return state;
    const g=normalize(structuredClone(state)),t=g.clock.t,st=g.stats[a.owner];if(g.usedActions[a.eventId])return state;
    function reject(reason){g.usedActions=bounded({...g.usedActions,[a.eventId]:receipt(a,now,'rejected',reason)});return g;}
@@ -652,6 +652,28 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       if(Math.hypot(delta.x-pos.x,delta.y-pos.y)>.01)motion(g,a.owner,{...delta,a:a.angle});
       s.draftRecoilUntil=t+1200;
     }
+   }else if(a.type==='gadget2'){
+    const seat=seatOf(g,a.owner),card=squadGad2Equipped(g.draft,seat);
+    if(card!=='trap_mine')return reject('gadget2_unavailable');
+    g.draft.gadget2ReadyAt ||= {};
+    if((g.draft.gadget2ReadyAt[seat]||0)>t)return reject('gadget2_cooldown');
+    // A separate consumable slot: this never spends the character's normal gadget.
+    const x=clamp(pos.x+Math.cos(a.angle)*44,18,W-18),
+      y=clamp(pos.y+Math.sin(a.angle)*44,18,H-18);
+    if(wall(x,y,12))return reject('gadget2_wall');
+    if(seatKeys.some(k=>{
+      const victim=g.seats[k].id;
+      if(!(g.hp[victim]>0))return false;
+      const p=point(g,victim,input);
+      return Math.hypot(p.x-x,p.y-y)<R+14;
+    }))return reject('gadget2_occupied');
+    g.gad2Mines ||= {};
+    // One living mine per owning seat; newest replaces prior one after cooldown.
+    g.gad2Mines[seat]={kind:'trap_mine',id:a.eventId,seat,owner:a.owner,
+      ownerLife:s.life,team:team(seat),x,y,start:t,until:t+9000};
+    g.draft.gadget2ReadyAt[seat]=t+12000;
+    g.draftCardStats ||= {};
+    g.draftCardStats.gad2MinesPlaced=(g.draftCardStats.gad2MinesPlaced||0)+1;
    }else if(a.type==='gadget'){
     if(s.gadgets<1||char==='bomber'&&s.armed)return reject('gadget');
     s.gadgets--;if(g.mode==='area')s.gadgetReadyAt=t+(chars[char].gadgetRechargeMs||BALANCE.areaGadgetRechargeMs);
@@ -712,6 +734,28 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       return false;
     },t);
     if(!alive)delete g.projectiles[id];
+   }
+   // All GAD2 mine contacts resolve on the host's canonical 100ms combat tick.
+   for(const [seat,mine] of Object.entries(g.gad2Mines||{})){
+     if(mine.kind!=='trap_mine'||mine.until<=t||
+        g.stats[mine.owner]?.life!==mine.ownerLife||!(g.hp[mine.owner]>0)){
+       delete g.gad2Mines[seat];continue;
+     }
+     for(const k of seatKeys){
+       if(team(k)===mine.team)continue;
+       const victim=g.seats[k].id,p=targets[victim];
+       if(!canHit(victim)||Math.hypot(p.x-mine.x,p.y-mine.y)>R+24)continue;
+       hit('gad2mine:'+mine.id+':'+victim,mine.owner,victim,8,{kind:'effect'});
+       const previous=g.debuffs[victim]||{};
+       g.debuffs[victim]={...previous,life:g.stats[victim].life,
+         slowUntil:Math.max(previous.slowUntil||0,t+1400),
+         dotUntil:previous.dotUntil||0,dotNextAt:previous.dotNextAt||0};
+       delete g.gad2Mines[seat];
+       g.draftCardStats ||= {};
+       g.draftCardStats.gad2MinesTriggered=(g.draftCardStats.gad2MinesTriggered||0)+1;
+       emit('gad2MineImpact',{owner:mine.owner,victim,x:mine.x,y:mine.y});
+       break; // One enemy activation, not one hit per each opponent.
+     }
    }
    const due=Object.entries(g.scheduled).filter(([,u])=>u.until<=t);
    // All landings are applied before the same-tick area/HP decision.
@@ -846,7 +890,8 @@ const BrawlProjectileV1=Object.freeze({
     {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'},
     {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常射撃の最初の命中から0.7秒後に10ダメージの小爆発（3秒CD）'},
     {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'},
-    {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾が壁に当たると最大1回反射・反射後は威力70%'}
+    {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾が壁に当たると最大1回反射・反射後は威力70%'},
+    {id:'trap_mine',name:'トラップマイン',family:'gadget2',desc:'GAD2: 9秒間の接近感知地雷。1回だけ8ダメージ＋1.4秒鈍足'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
@@ -923,11 +968,17 @@ function squadBlastAuthorize(d,seat,fireActionId,t){
   if(keys.length>80)for(const key of keys.slice(0,keys.length-80))delete d.blastUsed[key];
   return true;
 }
+// GAD2 is a separate slot. When several are owned, the latest acquired is equipped.
+const SQUAD_GAD2_IDS=['trap_mine']; // others remain gated until implemented.
+function squadGad2Equipped(d,seat){
+ const owned=squadHand(d,seat);
+ return [...owned].reverse().find(id=>SQUAD_GAD2_IDS.includes(id))||null;
+}
 function squadNextRound(d){
   const last=d||squadNewMatch();
   return {...last,owned:Object.fromEntries(SQUAD_SEATS.map(s=>[s,[...squadHand(last,s)]])),
     complete:false,turn:0,order:[],offered:[],taken:[],
-    lastDamage:{},lastNormal:{},strideUntil:{},cooldown:{},blastCooldown:{},blastUsed:{}};
+    lastDamage:{},lastNormal:{},strideUntil:{},cooldown:{},blastCooldown:{},blastUsed:{},gadget2ReadyAt:{}};
 }
 function squadDamage(g,h,t){
   if(!g.draft)return h;
@@ -2025,7 +2076,7 @@ function bulletSpecs(action,char){const s=CHARS[char];if(!s||char==='bomber')ret
  return specs.map((d,i)=>({id:action.eventId+':'+i,owner:action.owner,team:teamOfSeat(playerSeat(action.owner)),x:action.x+Math.cos(action.angle)*28,y:action.y+Math.sin(action.angle)*28,vx:Math.cos(action.angle+d)*660,vy:Math.sin(action.angle+d)*660,range:s.range,dist:0,radius:char==='sniper'?5:6,damage:s.damage,sniper:char==='sniper',life:0,spawnAt:performance.now()+(char==='gunner'?i*(game?.stats?.[action.owner]?.overdriveUntil>combatNow()?57:105):0)}));
 }
 function boundedRemember(set,id){set.add(id);if(set.size>ACTION_LIMIT)set.delete(set.values().next().value);}
-function validActionRequest(a){return !!a&&typeof a.eventId==='string'&&a.eventId.length<=128&&typeof a.owner==='string'&&typeof a.matchId==='string'&&Number.isSafeInteger(a.round)&&a.round>0&&Number.isSafeInteger(a.seq)&&a.seq>0&&['shot','gadget','ultimate'].includes(a.type)&&Number.isFinite(a.angle)&&Math.abs(a.angle)<=Math.PI*2&&Number.isFinite(a.x)&&a.x>=R&&a.x<=W-R&&Number.isFinite(a.y)&&a.y>=R&&a.y<=H-R&&Number.isFinite(a.at)&&Number.isSafeInteger(a.life)&&typeof a.connectionId==='string'&&Number.isFinite(a.reach)&&a.reach>=55&&a.reach<=330;}
+function validActionRequest(a){return !!a&&typeof a.eventId==='string'&&a.eventId.length<=128&&typeof a.owner==='string'&&typeof a.matchId==='string'&&Number.isSafeInteger(a.round)&&a.round>0&&Number.isSafeInteger(a.seq)&&a.seq>0&&['shot','gadget','gadget2','ultimate'].includes(a.type)&&Number.isFinite(a.angle)&&Math.abs(a.angle)<=Math.PI*2&&Number.isFinite(a.x)&&a.x>=R&&a.x<=W-R&&Number.isFinite(a.y)&&a.y>=R&&a.y<=H-R&&Number.isFinite(a.at)&&Number.isSafeInteger(a.life)&&typeof a.connectionId==='string'&&Number.isFinite(a.reach)&&a.reach>=55&&a.reach<=330;}
 function acceptAction(a,localPrediction=false){if(!validActionRequest(a)||failedLocalActions.has(a.eventId))return;
  const old=pendingActions.get(a.eventId);if(old&&!['owner','matchId','round','seq','type','x','y','angle','at','life','connectionId','reach'].every(k=>old.action[k]===a[k]))return;
  pendingActions.set(a.eventId,{action:a,networkSeen:!!old?.networkSeen||!localPrediction});
@@ -2196,7 +2247,7 @@ async function nextRoundIfDue(){if(roundBusy||!isAuthoritative()||game?.phase!==
 function sendAction(type,angle,reach=310){
  if(botPilot||!combatReady()||!alive(myId)||engine().flying(game,myId)||!room||!Number.isFinite(angle))return;
  const st=game?.stats?.[myId];if(!st)return;
- if(type==='gadget'&&!(st.gadgets>0)||type==='ultimate'&&!(st.ult>=100))return;
+ if(type==='gadget'&&!(st.gadgets>0)||type==='gadget2'&&(!mySeat()||!squadGad2Equipped(game.draft,mySeat()))||type==='ultimate'&&!(st.ult>=100))return;
  if(performance.now()-lastUseLocal<180)return;
  lastUseLocal=performance.now();
  const a={owner:myId,matchId:game.matchId,round:game.round,seq:actionSeq=Math.max(actionSeq,st.lastActionSeq||0)+1,type,life:st.life,connectionId:myConnection,reach:Math.round(clamp(reach,55,330)),x:Math.round(local.x),y:Math.round(local.y),angle:Math.round(angle*1000)/1000,at:Math.round(serverNow())};
@@ -2335,6 +2386,7 @@ $('gadAction').addEventListener('click',e=>{if(e.detail===0||performance.now()-l
  if(scene!=='game'||e.repeat)return;
  if(e.code==='Space'||key===' '){e.preventDefault();sendAction('ultimate',pcAngle(),pcReach());}
  if(key==='q'){e.preventDefault();sendAction('gadget',pcAngle());}
+ if(key==='r'){e.preventDefault();sendAction('gadget2',pcAngle());}
  if(key==='e'){e.preventDefault();sendAction('ultimate',pcAngle(),pcReach());}
 });
 window.addEventListener('keyup',e=>pcKeys.delete(e.key.toLowerCase()));
@@ -2381,6 +2433,16 @@ function drawArena(){
  const m=scene==='game'?gasMargin():0;
  if(m>0){ctx.fillStyle='rgba(255,50,95,.23)';ctx.fillRect(0,0,W,m);ctx.fillRect(0,H-m,W,m);ctx.fillRect(0,m,m,Math.max(0,H-2*m));ctx.fillRect(W-m,m,m,Math.max(0,H-2*m));ctx.strokeStyle='#ff527a';ctx.lineWidth=3;ctx.strokeRect(m,m,Math.max(0,W-2*m),Math.max(0,H-2*m));}
  if(game?.mode==='area'){ctx.fillStyle=game.area?.contested?'rgba(255,204,110,.14)':'rgba(105,217,255,.10)';ctx.strokeStyle=game.area?.contested?'#ffd17c':'#78eefe';ctx.lineWidth=3;ctx.beginPath();ctx.arc(W/2,H/2,BALANCE.areaRadius,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.textAlign='center';ctx.font='bold 14px system-ui';ctx.fillStyle='#d8eef4';ctx.fillText(game.area?.contested?'CONTESTED':'HOT ZONE',W/2,H/2+5);}
+  // Mines are public when nearby, otherwise only teammates see their own traps.
+  for(const mine of Object.values(game?.gad2Mines||{})){
+    if(mine.kind!=='trap_mine'||visualCombatNow()>=mine.until)continue;
+    const allied=mine.team===myTeam();
+    if(!allied&&Math.hypot(local.x-mine.x,local.y-mine.y)>110)continue;
+    ctx.save();ctx.strokeStyle=allied?'#64eacd':'#ffa66b';
+    ctx.fillStyle=allied?'rgba(80,244,202,.33)':'rgba(250,122,66,.52)';
+    ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(mine.x,mine.y,12,0,Math.PI*2);
+    ctx.fill();ctx.stroke();ctx.restore();
+  }
  for(const w of WALLS){
   ctx.fillStyle='rgba(3,12,22,.45)';ctx.fillRect(w.x+5,w.y+7,w.w,w.h);
   ctx.fillStyle='#304859';ctx.fillRect(w.x,w.y,w.w,w.h);
@@ -2813,7 +2875,27 @@ async function squadSubmit(id,replaceId=null){
  }catch(e){status('カード選択失敗：'+errorText(e))}
  finally{squadPicking=false;squadRender();}
 }
+function squadGad2ButtonPosition(){
+ const b=$('squadGad2Action'),a=$('gadAction'),app=$('app');
+ if(!b||!a||!app)return;
+ const ar=a.getBoundingClientRect(),pr=app.getBoundingClientRect(),size=68;
+ b.style.left=Math.round(clamp(ar.left-pr.left,size/2+8,pr.width-size-8))+'px';
+ b.style.top=Math.round(clamp(ar.top-pr.top-size-12,8,Math.max(8,pr.height-size-8)))+'px';
+}
+function squadGad2ButtonRefresh(){
+ const b=$('squadGad2Action');if(!b)return;
+ const seat=mySeat(),id=seat&&squadGad2Equipped(game?.draft,seat),
+   active=!!id&&scene==='game'&&game?.phase==='playing';
+ b.style.display=active?'block':'none';if(!active)return;
+ const ready=game.draft?.gadget2ReadyAt?.[seat]||0,
+   remaining=Math.max(0,ready-combatNow());
+ b.disabled=remaining>0||!combatReady()||!alive(myId);
+ b.textContent=remaining>0?'地雷\\n'+Math.ceil(remaining/1000)+'秒':'GAD2\\n地雷';
+ b.setAttribute('aria-label',remaining>0?'トラップマイン 再使用まで'+Math.ceil(remaining/1000)+'秒':'GAD2 トラップマイン');
+ squadGad2ButtonPosition();
+}
 function squadRender(){
+ squadGad2ButtonRefresh();
  const panel=$('squadDraftOverlay'),hud=$('squadDraftHud');
  if(!panel||!hud)return;
  const seat=mySeat(),d=game?.draft,active=!!(seat&&scene==='game'&&game?.phase==='draft');
@@ -2847,6 +2929,23 @@ function squadInit(){
  });
  $('app').append(p);
  const h=document.createElement('div');h.id='squadDraftHud';h.className='hidden';$('app').append(h);
+ const b=document.createElement('button');b.id='squadGad2Action';b.type='button';
+ b.style.cssText='display:none;position:absolute;z-index:76;width:68px;height:68px;'+
+  'border:2px solid #64eacd;border-radius:20px;color:#e9fffa;'+
+  'background:#124b54d9;font:bold 12px system-ui;white-space:pre-line;touch-action:manipulation;';
+ const activate=()=>{if(squadGad2Equipped(game?.draft,mySeat()))sendAction('gadget2',local.a);};
+ b.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='touch'||e.pointerType==='pen'){
+   e.preventDefault();b.dataset.lastPointer=String(performance.now());activate();
+  }
+ });
+ b.addEventListener('click',e=>{
+  if(e.detail===0||performance.now()-Number(b.dataset.lastPointer||-1e5)>700)activate();
+ });
+ $('app').append(b);
+ window.addEventListener('resize',squadGad2ButtonPosition);
+ window.addEventListener('orientationchange',squadGad2ButtonPosition);
+
  $('soloBtn').disabled=true;$('joinBotBtn').disabled=true;
  squadRender();
 }
@@ -2867,6 +2966,19 @@ window.__brawlDraftFireReadyQA=()=>({
   canShoot:combatReady()&&!botPilot&&alive(myId)&&!engine().flying(game,myId)
  });
 window.__brawlDraftFireQA=(angle)=>{if(!Number.isFinite(angle)||!window.__brawlDraftFireReadyQA().canShoot)return false;shootAngle(angle);return true;};
+window.__brawlDraftGad2QA=()=>({
+ equipped:squadGad2Equipped(game?.draft,mySeat()),mineCount:Object.keys(game?.gad2Mines||{}).length,
+ mines:structuredClone(game?.gad2Mines||{}),
+ placed:game?.draftCardStats?.gad2MinesPlaced||0,
+ triggered:game?.draftCardStats?.gad2MinesTriggered||0,
+ cooldownUntil:game?.draft?.gadget2ReadyAt?.[mySeat()]||0,
+ now:combatNow(),
+ canUse:combatReady()&&!!squadGad2Equipped(game?.draft,mySeat())
+});
+window.__brawlDraftGad2FireQA=(angle)=>{
+ if(!Number.isFinite(angle)||!window.__brawlDraftGad2QA().canUse)return false;
+ sendAction('gadget2',angle);return true;
+};
 window.__brawlV3QA=()=>({draft:structuredClone(game?.draft||null),ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},workTiming:{...workTiming},timerPhaseTiming:Object.fromEntries(TIMER_PHASES.map(key=>[key,{...timerPhaseTiming[key]}])),pauseBannerMetrics:{...pauseBannerMetrics},tickTxnTiming:{...tickTxnTiming},quietTickMetrics:{...quietTickMetrics},quietCanvasMetrics:{...quietCanvasMetrics},inputTiming:{...inputTiming,lastTouchShot:inputTiming.lastTouchShot?{...inputTiming.lastTouchShot}:null},drawTiming:{...drawTiming,averageDrawMs:drawTiming.frames?Math.round(drawTiming.totalDrawMs/drawTiming.frames*10)/10:0},arenaBackdropMetrics:{builds:arenaBackdropRebuilds,frames:arenaBackdropFrames,disabled:arenaBackdropDisabled,width:arenaBackdrop?.width||0,height:arenaBackdrop?.height||0},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
 })();
 </script>

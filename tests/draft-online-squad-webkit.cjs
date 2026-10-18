@@ -266,6 +266,67 @@ async function run(){
   assert(ricochetResult.ricochets<=5,'Tank five-pellet volley cannot spawn unlimited reflections');
   console.log('PASS 2vs2 LIVE host wall ricochet: one bounce per pellet, bounded Tank volley, 4 WebKit clients');
 
+  // 4 REAL WebKit clients: distinct GAD2 mine button -> host placement -> enemy trigger.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.draft.owned.blue1=['trap_mine','split_round','delayed_blast'];
+      g.stats[g.seats.blue1.id].draftCards=[...g.draft.owned.blue1];
+      return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(()=>window.__brawlDraftGad2QA?.()?.equipped==='trap_mine',
+    null,{timeout:12000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,420)),true);
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(720,420)),true);
+  await blue1.waitForFunction(id=>{
+    const p=window.__brawlV3QA()?.positionValues?.[id];
+    return p&&Math.abs(p.x-720)<5&&Math.abs(p.y-420)<5;
+  },redId,{timeout:13000});
+  const mineStart=await committedGame(code);
+  const startHp=mineStart.hp[redId],blueId=mineStart.seats.blue1.id;
+  const normalGadgets=mineStart.stats[blueId].gadgets;
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftGad2FireQA(0)),true,
+    'mine owner dispatches a real separate GAD2 action');
+  let minePlaced=null;
+  const placeDeadline=Date.now()+11000;
+  while(Date.now()<placeDeadline){
+    const g=await committedGame(code);
+    if(g?.gad2Mines?.blue1?.kind==='trap_mine'&&g?.draftCardStats?.gad2MinesPlaced>=1){
+      minePlaced=g;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,170));
+  }
+  assert(minePlaced,'RTDB must commit host-owned mine placement');
+  assert.equal(Object.keys(minePlaced.gad2Mines).length,1,'one active mine per seat');
+  assert.equal(minePlaced.stats[blueId].gadgets,normalGadgets,
+    'GAD2 cannot consume character gadget charges');
+  assert(minePlaced.draft.gadget2ReadyAt.blue1>minePlaced.clock.t,
+    'GAD2 cooldown is committed by the host');
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(640,420)),true,
+    'enemy moves into the trap after it has been placed');
+  let mineHit=null,lastMine=null;
+  const hitDeadline=Date.now()+14000;
+  while(Date.now()<hitDeadline){
+    const g=await committedGame(code);
+    lastMine={phase:g?.phase,round:g?.round,hp:g?.hp?.[redId],
+      slowUntil:g?.debuffs?.[redId]?.slowUntil||0,clock:g?.clock?.t,
+      triggered:g?.draftCardStats?.gad2MinesTriggered||0,
+      mines:Object.keys(g?.gad2Mines||{})};
+    if(lastMine.phase==='playing'&&lastMine.triggered===1&&
+       lastMine.hp<=startHp-8&&lastMine.mines.length===0){
+      mineHit=lastMine;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,220));
+  }
+  assert(mineHit,'mine host damage and consumption not committed: '+JSON.stringify(lastMine));
+  assert(mineHit.slowUntil>0,'mine applied the canonical slow debuff');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(({id,hp})=>{
+    return window.__brawlV3QA?.()?.hp?.[id]<=hp;
+  },{id:redId,hp:mineHit.hp},{timeout:14000})));
+  console.log('PASS LIVE GAD2 mine: 4 WebKit clients, separate button, host 8 damage, 1 hit, cooldown and HP sync');
+
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
    return window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
