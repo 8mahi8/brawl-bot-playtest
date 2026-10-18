@@ -140,7 +140,7 @@ async function run(){
 
   // Harmless hologram tracer must never be inserted into real combat bullets.
   const clone=await play(['hologram'],'tank');
-  assert.equal(await clone.page.evaluate(()=>window.__brawlPlaystyleQA().setBotPosition(470,300)),true);
+  assert.equal(await clone.page.evaluate(()=>window.__brawlPlaystyleQA().setBotPosition(400,300)),true);
   assert.equal(await clone.page.evaluate(()=>window.__brawlPlaystyleQA().useGadget()),true);
   await clone.page.waitForTimeout(350);
   const beforeClone=await clone.page.evaluate(()=>window.__brawlPlaystyleQA().state.holo[0]||null);
