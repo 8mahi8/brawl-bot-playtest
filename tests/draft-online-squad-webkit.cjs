@@ -570,6 +570,96 @@ async function run(){
   console.log('PASS LIVE warp counterplay: friendly fire ignored, enemy normal projectile breaks exactly 1 beacon, cooldown synced');
 
 
+  // Real GAD2 wall deployment, host projectile collision, four-client wall
+  // replication, local Safari movement rejection, and canonical expiration.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.draft.owned.blue1=['portable_wall','split_round','delayed_blast'];
+      g.draft.gadget2ReadyAt.blue1=0;
+      g.stats[g.seats.blue1.id].draftCards=[...g.draft.owned.blue1];
+      g.hp[g.seats.red1.id]=500; // fixture to avoid forced KO during collision test
+      return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(()=>window.__brawlDraftGad2QA?.()?.equipped==='portable_wall',
+    null,{timeout:11000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,500)),true);
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(720,500)),true);
+  await host.waitForFunction(ids=>{
+    const p=window.__brawlV3QA?.()?.positionValues||{};
+    return Math.abs((p[ids.a]?.x||0)-575)<5&&Math.abs((p[ids.a]?.y||0)-500)<5&&
+      Math.abs((p[ids.b]?.x||0)-720)<5&&Math.abs((p[ids.b]?.y||0)-500)<5;
+  },{a:blueId,b:redId},{timeout:14000});
+  const wallStart=await committedGame(code),originalGadgets=wallStart.stats[blueId].gadgets;
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftGad2FireQA(0)),true);
+  let wallSet=null;
+  const wallDeadline=Date.now()+9000;
+  while(Date.now()<wallDeadline){
+    const g=await committedGame(code);
+    if(g?.gad2Walls?.blue1&&g?.draftCardStats?.gad2WallsPlaced===1){wallSet=g;break;}
+    await new Promise(resolve=>setTimeout(resolve,140));
+  }
+  assert(wallSet,'host must commit a portable wall into RTDB');
+  const w=wallSet.gad2Walls.blue1;
+  assert.equal(w.w,42);assert.equal(w.h,112);
+  assert.equal(w.until-w.start,4000,'4s wall lifetime from host clock');
+  assert.equal(wallSet.draft.gadget2ReadyAt.blue1-w.start,12000,'independent 12s cooldown');
+  assert.equal(wallSet.stats[blueId].gadgets,originalGadgets,
+    'character gadget charges are not spent by temporary wall');
+  assert(Math.abs(w.x-649)<5&&Math.abs(w.y-444)<5,'portable wall is 95px ahead of the owner');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(()=>{
+    const q=window.__brawlDraftGad2QA?.();
+    return q?.walls?.blue1?.w===42&&q?.wallPlaced===1;
+  },null,{timeout:9000})));
+  // Isolate gameplay from CI slow movement/snapshot propagation after
+  // verifying the *native* 4s lifetime above. No runtime code is changed.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.gad2Walls?.blue1&&g.phase==='playing'){
+        g.gad2Walls.blue1.until=Math.max(g.gad2Walls.blue1.until,g.clock.t+14000);
+        return g;
+      }
+    },undefined,false);
+  });
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(670,500)),false,
+    'WebKit position diagnostic cannot teleport inside temporary wall');
+  await blue1.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,
+    null,{timeout:11000});
+  const beforeHit=(await committedGame(code)).hp[redId];
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftFireQA(0)),true,
+    'shoot a real five-pellet Tank volley toward the enemy through temporary cover');
+  await blue1.waitForTimeout(750);
+  const afterHit=await committedGame(code);
+  assert.equal(afterHit.hp[redId],beforeHit,'all Tank shots are absorbed by temporary cover');
+  assert(afterHit.gad2Walls?.blue1,'host keeps an active cover wall while blocking volley');
+  // Force imminent expiry only in the test fixture and allow host tick to prune.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.gad2Walls?.blue1&&g.phase==='playing'){
+        g.gad2Walls.blue1.until=g.clock.t+100;
+        return g;
+      }
+    },undefined,false);
+  });
+  let expired=false;
+  const expireDeadline=Date.now()+6500;
+  while(Date.now()<expireDeadline){
+    const g=await committedGame(code);
+    if(g?.phase==='playing'&&!g?.gad2Walls?.blue1){expired=true;break;}
+    await new Promise(resolve=>setTimeout(resolve,120));
+  }
+  assert(expired,'host combat clock must clear expired cover from RTDB');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(()=>{
+    return !window.__brawlDraftGad2QA?.()?.walls?.blue1;
+  },null,{timeout:9000})));
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(670,500)),true,
+    'expired wall releases client-side movement constraint');
+  console.log('PASS LIVE GAD2 portable wall: 4 WebKit clients, host 4s/12s timers, Tank volley blocked, client movement collision and expiry');
+
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
    return window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
