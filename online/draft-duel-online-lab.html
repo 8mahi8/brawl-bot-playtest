@@ -1646,7 +1646,7 @@ const BrawlAbilityV1=Object.freeze({
       for(const sign of [-1,1]){
         const key=p.id+':s'+sign,px=-Math.sin(p.angle)*30*sign,py=Math.cos(p.angle)*30*sign;
         after.bombs[key]={...original,id:key,fireId:p.id,x:original.x+px,y:original.y+py,
-          damage:original.damage*.5,radius:original.radius*.72,enhanced:false};
+          damage:original.damage*.5,radius:original.radius*.72,enhanced:original.enhanced&&sign===-1};
       }
     }
     return after;
@@ -2254,6 +2254,13 @@ const BrawlAbilityV1=Object.freeze({
     }
     if(game && ['playing','round_end'].includes(game.phase)){
       drawBombFlights();
+      for(const b of Object.values(game?.draftBlasts||{})){
+        if(b.round!==game.round||b.due<=time())continue;
+        ctx.save();ctx.setLineDash([6,5]);ctx.strokeStyle='#ffae6c';ctx.lineWidth=3;
+        ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,Math.PI*2);ctx.stroke();
+        ctx.setLineDash([]);ctx.fillStyle='rgba(255,147,63,.14)';
+        ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,Math.PI*2);ctx.fill();ctx.restore();
+      }
       for(const b of shots){
         ctx.fillStyle=b.ult?'#ffb548':b.owner===role?'#f8ff72':'#ff858f';
         ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,2*Math.PI);ctx.fill();
