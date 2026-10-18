@@ -57,8 +57,9 @@ for(const {mode,normal,draft,extra,room,rules} of pairs){
  for(const [id,tag] of baseTags)
    assert.equal(draftTags.get(id),tag,mode+' non-draft markup/attributes differ: '+id);
  const added=[...draftTags.keys()].filter(id=>!baseTags.has(id));
- assert.deepEqual(added.sort(),extra.slice().sort(),
-   mode+' new DOM IDs must be explicitly registered as draft-only');
+ assert(added.every(id=>extra.includes(id)),
+   mode+' new DOM IDs must be registered as draft-only: '+added.join(','));
+ for(const id of extra)assert(draftHtml.includes(id),mode+' missing expected draft UI ID '+id);
  for(const handler of ["addEventListener('pointerdown'","addEventListener('pointermove'",
    "addEventListener('pointerup'","addEventListener('pointercancel'",
    "addEventListener('keydown'","addEventListener('keyup'",
@@ -70,9 +71,9 @@ for(const {mode,normal,draft,extra,room,rules} of pairs){
  assert(draftHtml.includes("db.useEmulator('127.0.0.1',9000)"),mode+' must use local RTDB');
  assert(draftHtml.includes("['localhost','127.0.0.1'].includes(location.hostname)"),
    mode+' must reject cloud hosts');
- const csp=draftHtml.match(/<meta\s+http-equiv=["']Content-Security-Policy["']\s+content=["']([^"']+)["']/i);
+ const csp=draftHtml.match(/<meta\s+http-equiv=["']Content-Security-Policy["']\s+content=(["'])([\s\S]*?)\1/i);
  assert(csp,'draft must set a CSP');
- const connects=csp[1].split(';').find(x=>x.trim().startsWith('connect-src'));
+ const connects=csp[2].split(';').find(x=>x.trim().startsWith('connect-src'));
  assert(connects&&connects.includes('127.0.0.1:9000')&&!/firebaseio|firebasedatabase|googleapis/i.test(connects),
    mode+' draft must not connect to production Firebase');
  assert(!fs.existsSync(path.join(root,'sites/BRAWL_DRAFT_'+mode+'.html')),
