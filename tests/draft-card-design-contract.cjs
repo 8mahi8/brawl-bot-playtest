@@ -56,6 +56,15 @@ for(const item of registry.cards) {
     '2vs2 split must affect authoritative projectiles and normal Bomber bombs');
   assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damageScale:(b.damageScale||1)*.6"),
    '1vs1 central shot must generate two 60% children');
+ }else if(item.id==='portable_wall'){
+  assert(!online1.includes("id:'portable_wall'"),'1vs1 portable wall still gated');
+  assert(online2.includes("id:'portable_wall'"),'2vs2 wall cannot be offered before implemented');
+  assert(squadLab.includes("g.gad2Walls[seat]={kind:'portable_wall'")&&
+   squadLab.includes("function draftWallPlacement(g,owner,origin,angle,input,t)")&&
+   squadLab.includes("wallHit:(x,y,r)=>draftSolid(g,x,y,r)")&&
+   squadLab.includes("function touchingWall(x,y){return [...WALLS,...draftVisibleWalls()]")&&
+   squadLab.includes("g.draft.gadget2ReadyAt[seat]=t+12000"),
+   '2vs2 deployable wall must provide host validated placement, collision and cooldown');
  }else if(item.id==='warp_beacon'){
   assert(!online1.includes("id:'warp_beacon'"),'1v1 warp still gated');
   assert(online2.includes("id:'warp_beacon'"),'2v2 supports warp only after host reducer exists');
@@ -89,8 +98,8 @@ for(const item of registry.cards) {
     duelLab.includes('b.damageScale=(b.damageScale||1)*.7'),
     '1vs1 terrain reflection, single bounce and 70% damage must be implemented');
   assert(online2.includes("id:'ricochet'"),'2vs2 ricochet must be offered only with host collision support');
-  assert(squadLab.includes('function draftReflectAxis(px,py,nx,ny,r)')&&
-    squadLab.includes('function draftBombBounce(start,target)')&&
+  assert(squadLab.includes('function draftReflectAxis(px,py,nx,ny,r,g)')&&
+    squadLab.includes('function draftBombBounce(start,target,g)')&&
     squadLab.includes('ricochetUsed=1')&&squadLab.includes('damageScale=(b.damageScale||1)*.7'),
     '2vs2 must implement one-bounce, 70%-power authoritative terrain collision');
   assert(squadLab.includes('if(!axis)return false')&&
@@ -109,4 +118,4 @@ for(const item of registry.cards) {
   assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
  }
 }
-console.log('PASS four shot cards both modes; 2v2 mine/smoke/warp GAD2, hologram and wall gated');
+console.log('PASS four shot cards both modes; 2v2 mine/smoke/warp/wall GAD2, hologram gated');
