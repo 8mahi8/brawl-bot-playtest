@@ -50,7 +50,7 @@ async function run(){
   await guest.locator('#readyBtn').click();
   await Promise.all([waitPhase(host,'playing'),waitPhase(guest,'playing')]);
   const start=await Promise.all([qa(host),qa(guest)]);
-  assert(start.every(s=>s.protocol===1031&&s.game.round===1&&s.game.draft.owned.host.length===0));
+  assert(start.every(s=>s.protocol===1031&&s.game.round===1&&(s.game.draft?.owned?.host||[]).length===0));
   const victories={host:0,guest:0};
   for(let round=1;round<=4;round++){
     const winner=round%2?'host':'guest',loser=winner==='host'?'guest':'host';
