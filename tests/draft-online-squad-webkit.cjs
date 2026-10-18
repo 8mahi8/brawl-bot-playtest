@@ -169,6 +169,18 @@ async function run(){
     return {audit:snap.val().draftCardStats,shotCount:Object.keys(snap.val().usedActions||{}).length};
   });
   assert.equal(result.audit.blasts,1,'one delayed blast per accepted fireActionId, not per pellet');
+  await blue1.waitForFunction(async()=>{
+    const q=window.__brawlV3QA();
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/usedHits').once('value');
+    return Object.keys(snap.val()||{}).some(key=>key.startsWith('blast:'));
+  },null,{timeout:14000,polling:350});
+  // The host consumed the delayed blast and registered at least one authoritative impact.
+  const count=await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/usedHits').once('value');
+    return Object.keys(snap.val()||{}).filter(key=>key.startsWith('blast:')).length;
+  });
+  assert(count>=1,'canonical delayed explosion reaches a real online opponent');
 
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
