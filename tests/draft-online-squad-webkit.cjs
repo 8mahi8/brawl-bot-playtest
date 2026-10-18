@@ -171,10 +171,12 @@ async function run(){
     const g=snap.val();
     return {hp:g.hp[id],phase:g.phase,used:Object.keys(g.draft?.blastUsed||{}),
       applied:Object.keys(g.usedHits||{}).filter(k=>k.startsWith('draftBlast:')&&k.endsWith(':'+id)),
-      pending:Object.values(g.scheduled||{}).filter(u=>u.kind==='draftBlast').length};
+      pending:Object.values(g.scheduled||{}).filter(u=>u.kind==='draftBlast').length,
+      draftKeys:Object.keys(g.draft||{}),blastCooldown:g.draft?.blastCooldown||{},
+      hitKeys:Object.keys(g.usedHits||{}).filter(k=>k.startsWith('draftBlast:'))};
   },redId);
   assert.equal(blastResult.phase,'playing','test target must remain alive until blast');
-  assert.equal(blastResult.used.length,1,'one blast authorization per firing action, not per pellet');
+  assert.equal(blastResult.used.length,1,'one blast authorization per firing action, not per pellet: '+JSON.stringify(blastResult));
   assert.equal(blastResult.applied.length,1,'delayed blast damages the red enemy exactly once');
   assert.equal(blastResult.pending,0,'scheduled blast is consumed by host reducer');
   assert(blastResult.hp<=490,'real enemy lost at least 10 HP from the delayed blast: '+JSON.stringify(blastResult));
