@@ -196,7 +196,7 @@ mineDraft.gadget2ReadyAt={blue1:12345};
 const mineNext=squadNextRound(mineDraft);
 assert.equal(squadGad2Equipped(mineNext,'blue1'),'trap_mine');
 assert.equal(Object.keys(mineNext.gadget2ReadyAt).length,0,'new round resets cooldown');
-assert(src.includes("id:'trap_mine'")&&!src.includes("id:'smoke'"),'only implemented GAD2 is offered');
+assert(src.includes("id:'trap_mine'")&&src.includes("id:'smoke'"),'two implemented 2vs2 GAD2 effects offered');
 assert(html.includes("a.type==='gadget2'"),'host authority handles the distinct action');
 assert(html.includes("g.draft.gadget2ReadyAt[seat]=t+12000"),'12 second host cooldown');
 assert(html.includes("until:t+9000"),'9 second lifetime');
@@ -213,6 +213,26 @@ assert(html.includes("if(wall(x,y,12))return reject('gadget2_wall')"),'no placem
 assert(html.includes("['shot','gadget','gadget2','ultimate']"),'protocol whitelists GAD2');
 assert(html.includes("b.id='squadGad2Action'"),'separate mobile button exists');
 assert(html.includes("window.__brawlDraftGad2FireQA"),'live E2E uses normal action dispatch');
+
+mineDraft.owned.blue2=['smoke'];
+assert.equal(squadGad2Equipped(mineDraft,'blue2'),'smoke','GAD2 chooses the new smoke card');
+mineDraft.owned.blue2=['smoke','trap_mine'];
+assert.equal(squadGad2Equipped(mineDraft,'blue2'),'trap_mine','last acquired GAD2 equips');
+assert(html.includes("g.gad2Smokes[seat]={kind:'smoke'"),'smoke exists only in host-authored state');
+assert(html.includes("x,y,radius:100,start:t,until:t+4000"),'exact smoke lifespan/radius');
+assert(html.includes("g.draftCardStats.gad2SmokesPlaced"),'host commits smoke usage audit');
+assert(html.includes("g.draft.gadget2ReadyAt[seat]=t+12000"),'independent cooldown also applies to smoke');
+assert(html.includes("draftConcealed(p),revealedUntil:game?.reveals?.[id]"),
+ 'enemy visibility reuses bush stealth, no new custom fog implementation');
+assert(html.includes("if(!draftConcealed(local))return 'visible'"),
+ 'owner UI respects smoke concealment');
+assert(html.includes("stealth==='hidden'?'煙幕：潜伏中':'煙幕：発見中'"),
+ 'owner clearly knows when smoke stealth is active or detected');
+assert(html.includes("a.type==='shot'&&Object.values(g.gad2Smokes||{}).some("),
+ 'host firing from smoke sets attack reveal clock');
+assert(html.includes(")?700:1500"),'attack in smoke reveals for exactly 700ms');
+assert(html.includes("window.__brawlDraftStealthQA"),'WebKit smoke visibility uses actual game function');
+assert(!html.includes("db.ref('rooms2v2/"),'normal online rooms remain isolated');
 
 assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
 assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
