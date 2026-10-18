@@ -25,19 +25,26 @@
       "id": "split_round",
       "name": "分裂弾",
       "type": "shot_modifier",
-      "status": "adopted_needs_character_tuning",
-      "preview": "通常射撃の中心弾が中距離で2発に分かれ、別の角度を狙える",
+      "status": "adopted_initial_damage_design_ready_for_playtest",
+      "preview": "射程の約半分で通常射撃の中心弾が左右2発に分裂。1発は元弾の60%威力で、2発命中なら最大120%",
       "initialNumbers": {
         "splitsPerFireAction": 1,
         "children": 2,
-        "childDamageRatio": 0.55,
-        "splitsAtRangeRatio": 0.5
+        "childDamageRatio": 0.6,
+        "maxSameTargetDamageRatioFromSplit": 1.2,
+        "splitsAtRangeRatio": 0.5,
+        "splitAngleDegrees": 12,
+        "bomberMiniBlastDamageRatio": 0.5,
+        "bomberMiniBlastRadiusRatio": 0.72
       },
       "safeguards": [
-        "Only central pellet of Tank/Gunner is eligible; do not split all pellets",
-        "Original center pellet is replaced rather than cloned",
-        "One target's damage per fire action must be capped after simultaneous child impacts",
-        "Bomber uses two smaller sub-bursts instead of pretending bomb is a straight bullet"
+        "Tank's 5-shot and Gunner's 3-shot volleys split only the center projectile; never all five or all three",
+        "Until branching, central projectile retains original damage and geometry; it is replaced, not cloned, at branch point",
+        "Post-split each daughter deals 60 percent of the original central projectile's normal damage; both may hit for at most 120 percent total versus one target",
+        "Shot spread/modifiers must preserve per-shot damage event attribution and cap; no multiplying proc triggers by two",
+        "Sniper 36-damage center shot becomes two 21.6-damage branches (display rounding 22 each); Gunner 10 becomes 6+6",
+        "Bomber is treated as two smaller-area detonations with 50 percent of original blast damage apiece, at most original 100 percent to any one target if both overlap; do not create two full-power bombs",
+        "Split branches trigger delayed blast at most once for the original fireActionId; interaction priority/FX needs separate test"
       ]
     },
     {
@@ -138,19 +145,23 @@
       "id": "hologram",
       "name": "ホログラム",
       "type": "gadget2",
-      "status": "adopted_needs_playtest",
-      "preview": "追加GAD2で敵の射撃や視線を惑わす分身を出す",
+      "status": "adopted_duration_buff_ready_for_playtest",
+      "preview": "追加GAD2で7秒間、本人と同じ外観の移動分身を出す。敵の射撃1アクションを受けると消える",
       "initialNumbers": {
-        "durationMs": 2500,
+        "durationMs": 7000,
         "maxActivePerPlayer": 1,
-        "cooldownMs": 12000,
-        "healthHits": 1
+        "cooldownMs": 14000,
+        "healthAttackActions": 1,
+        "healthHits": null
       },
       "safeguards": [
-        "Decoy cannot deal damage, charge ULT, capture Hot Zone or count as KO",
-        "Decoy movement has deterministic replicated state",
-        "Hits against decoy cannot leak into real HP",
-        "Readable visually once properly observed, without instant free enemy identification"
+        "Seven-second maximum lifetime is long enough to feint and lure shots; it disappears early if hit by one enemy firing action",
+        "One Tank five-pellet volley or Gunner three-round burst counts as a single firing action against the decoy; not five or three independent decoy losses",
+        "Decoy moves along a deterministic, server-authoritative path compatible with wall collisions; no teleport-through-walls",
+        "Decoy cannot fire damaging shots, use GAD/ULT, charge ULT, capture Hot Zone, provide combat victory or count as KO",
+        "Decoy should visually copy its owner and avoid a giveaway indicator for opponents; owner and ally UI must distinguish it",
+        "Hit on decoy never deducts real player HP and should create a readable dissolve FX",
+        "Duration and cooldown clocks freeze during draft selection / combat pause, particularly Hot Zone's 20-second draft windows"
       ]
     },
     {
