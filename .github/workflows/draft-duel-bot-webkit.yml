@@ -28,6 +28,8 @@ jobs:
         run: node --check tests/draft-duel-webkit.cjs
       - name: Verify BOT synergy, counterpick and replacement
         run: node tests/draft-bot-policy.cjs
+      - name: Verify moving reload activates only after real movement
+        run: node tests/draft-motion-activation.cjs
       - name: Install iPad/Safari-like WebKit
         run: |
           npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1

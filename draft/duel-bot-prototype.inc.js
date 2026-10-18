@@ -35,6 +35,16 @@
     if(draftHas(side,'hit_stride')&&b.hitStrideUntil>now)pct+=7;
     return 1+Math.min(12,pct)/100;
   }
+  // DRAFT MOTION GATE START
+  // Movement means actual displacement during active input / BOT navigation.
+  // Pressing a stationary joystick or pushing against a wall is not movement.
+  function draftDidMove(oldX,oldY,newX,newY,dt,expectedSpeed,inputActive=true){
+    if(!inputActive||!Number.isFinite(dt)||dt<=0||
+       !Number.isFinite(expectedSpeed)||expectedSpeed<=0)return false;
+    const displaced=Math.hypot(newX-oldX,newY-oldY);
+    return Number.isFinite(displaced)&&displaced>=Math.max(.08,expectedSpeed*dt*.12);
+  }
+  // DRAFT MOTION GATE END
   function draftTrackMotion(side,moving){
     if(!solo)return;
     if(!moving)draftMoveSince[side]=null;
