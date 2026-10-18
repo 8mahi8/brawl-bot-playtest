@@ -24,6 +24,22 @@ async function client(browser,index){
  await page.waitForFunction(()=>typeof window.__brawlV3QA==='function',null,{timeout:18000});
  return {ctx,page,index,errors};
 }
+// The emulator's REST endpoint returns server-committed state, unlike Firebase
+// JS client local events/once() which can briefly expose speculative transactions.
+async function committedGame(roomId){
+ return new Promise((resolve,reject)=>{
+  const url='http://127.0.0.1:9000/roomsDraft2v2/'+encodeURIComponent(roomId)+
+    '/game.json?ns=demo-brawl-draft-default-rtdb';
+  http.get(url,res=>{
+   let data='';res.setEncoding('utf8');
+   res.on('data',chunk=>data+=chunk);
+   res.on('end',()=>{try{
+     if(res.statusCode!==200)throw Error('Emulator REST status '+res.statusCode+': '+data.slice(0,160));
+     resolve(JSON.parse(data));
+   }catch(e){reject(e);}});
+  }).on('error',reject);
+ });
+}
 const get=page=>page.evaluate(()=>window.__brawlV3QA());
 async function wait(p,phase){
  await p.waitForFunction(s=>window.__brawlV3QA?.()?.game===s,phase,{timeout:22000});
@@ -156,25 +172,25 @@ async function run(){
   await blue1.waitForTimeout(1200);
   assert.equal(await blue1.evaluate(()=>window.__brawlDraftFireQA(0)),true,
     'real blue client sends a normal Tank shot toward the red client');
-  // Observe the committed effect hit from a NON-HOST browser, not speculative
-  // host transaction callbacks.
-  await red1.waitForFunction(async id=>{
-    const q=window.__brawlV3QA();
-    if(!q?.roomId)return false;
-    const s=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').once('value');
-    const g=s.val()||{},hits=Object.keys(g.usedHits||{});
-    return hits.some(k=>k.startsWith('draftBlast:')&&k.endsWith(':'+id));
-  },redId,{timeout:16000,polling:250});
-  const blastResult=await red1.evaluate(async id=>{
-    const q=window.__brawlV3QA();
-    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').once('value');
-    const g=snap.val();
-    return {hp:g.hp[id],phase:g.phase,used:Object.keys(g.draft?.blastUsed||{}),
-      applied:Object.keys(g.usedHits||{}).filter(k=>k.startsWith('draftBlast:')&&k.endsWith(':'+id)),
-      pending:Object.values(g.scheduled||{}).filter(u=>u.kind==='draftBlast').length,
-      draftKeys:Object.keys(g.draft||{}),blastCooldown:g.draft?.blastCooldown||{},
-      hitKeys:Object.keys(g.usedHits||{}).filter(k=>k.startsWith('draftBlast:'))};
-  },redId);
+  // Poll the ACTUAL emulator datastore; client once('value') can expose
+  // optimistic snapshots that later roll back under concurrent host ticks.
+  let blastResult=null,lastServerState=null;
+  const blastDeadline=Date.now()+18000;
+  while(Date.now()<blastDeadline){
+    const g=await committedGame(code);
+    const applied=Object.keys(g?.usedHits||{}).filter(
+      k=>k.startsWith('draftBlast:')&&k.endsWith(':'+redId));
+    lastServerState={hp:g?.hp?.[redId],phase:g?.phase,
+      used:Object.keys(g?.draft?.blastUsed||{}),
+      applied,pending:Object.values(g?.scheduled||{}).filter(u=>u.kind==='draftBlast').length,
+      draftKeys:Object.keys(g?.draft||{}),cooldown:g?.draft?.blastCooldown||{}};
+    if(lastServerState.phase==='playing'&&lastServerState.used.length===1&&
+       applied.length===1&&lastServerState.pending===0&&lastServerState.hp<=490){
+      blastResult=lastServerState;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,250));
+  }
+  assert(blastResult,'blast was not stably committed to server: '+JSON.stringify(lastServerState));
   assert.equal(blastResult.phase,'playing','test target must remain alive until blast');
   assert.equal(blastResult.used.length,1,'one blast authorization per firing action, not per pellet: '+JSON.stringify(blastResult));
   assert.equal(blastResult.applied.length,1,'delayed blast damages the red enemy exactly once');
