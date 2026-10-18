@@ -94,7 +94,8 @@ async function run(){
     },undefined,false);
   });
   await host.waitForFunction(()=>window.__brawlV29QA()?.game?.draft?.owned?.host?.includes('recoil_shot'),null,{timeout:10000});
-  await host.waitForFunction(()=>Date.now()>window.__brawlV29QA()?.game?.startAt+150,null,{timeout:9000});
+  await host.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.isPlaying,
+    null,{timeout:15000});
   const beforeRecoil=(await qa(host)).local.x;
   assert.equal(await host.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true,'online host fires normal shot');
   const afterRecoil=(await qa(host)).local.x;
