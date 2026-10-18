@@ -715,6 +715,9 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
      s.armed=false;
     }else{const shots=burst({...a,x:pos.x,y:pos.y},s,g);
        shots.forEach((b,i)=>{g.projectiles[b.id]={...b,fireId:a.eventId,
+          // Persist first muzzle coordinates; a delayed snapshot may already
+          // contain a projectile much farther along its authoritative path.
+          originX:b.x,originY:b.y,
          splitCenter:(s.draftCards||[]).includes('split_round')&&i===Math.floor(shots.length/2),
          ricochetEnabled:(s.draftCards||[]).includes('ricochet'),ricochetUsed:0,
          blastEligible:(s.draftCards||[]).includes('delayed_blast'),
@@ -2077,9 +2080,9 @@ async function tryStart(){if(hostBusy||!joined||!connected||!clockReady||!lobbyR
    return {...cur,lobby:{...l,status:'playing',matchId,rematch:null},game:makeGame(matchId,l.seats,'ko'),actions:null,effects:null,positions:null};
   },undefined,false);
  }catch(e){status('対戦開始に失敗：'+errorText(e));}finally{hostBusy=false;}}
-function initLocal(){hpPreviewHits=[];remotePositionReceivedAt.clear();view.cx=NaN;view.cy=NaN;view.overhead=false;updateCameraLabel();const seat=mySeat(),s=SPAWNS[seat]||SPAWNS.blue1,p=rawPositions[myId],restore=validPosition(p)&&p.motionRev===(game.motions?.[myId]?.rev||0)&&p.life===(game.stats?.[myId]?.life||0);const m=game.motions?.[myId]||s;local={x:restore?p.x:m.x,y:restore?p.y:m.y,a:restore?p.a:m.a,vx:0,vy:0};appliedMotionRev=m.rev||0;sendSeq=restore?p.seq:0;actionSeq=Math.max(actionSeq,game.stats?.[myId]?.lastActionSeq||0);lastSend=0;lastSentPose=null;pointer=null;aimPointer=null;ultPointer=null;dashUntil=0;pausedSince=0;clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();predictedActions.clear();seenActions.clear();seenEffects.clear();processedNetworkSeq={};revealed={};fx=[];for(const id of Object.keys(remotes))delete remotes[id];}
+function initLocal(){bulletVisuals.clear();remoteMuzzleVolleys.clear();hpPreviewHits=[];remotePositionReceivedAt.clear();view.cx=NaN;view.cy=NaN;view.overhead=false;updateCameraLabel();const seat=mySeat(),s=SPAWNS[seat]||SPAWNS.blue1,p=rawPositions[myId],restore=validPosition(p)&&p.motionRev===(game.motions?.[myId]?.rev||0)&&p.life===(game.stats?.[myId]?.life||0);const m=game.motions?.[myId]||s;local={x:restore?p.x:m.x,y:restore?p.y:m.y,a:restore?p.a:m.a,vx:0,vy:0};appliedMotionRev=m.rev||0;sendSeq=restore?p.seq:0;actionSeq=Math.max(actionSeq,game.stats?.[myId]?.lastActionSeq||0);lastSend=0;lastSentPose=null;pointer=null;aimPointer=null;ultPointer=null;dashUntil=0;pausedSince=0;clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();predictedActions.clear();seenActions.clear();seenEffects.clear();processedNetworkSeq={};revealed={};fx=[];for(const id of Object.keys(remotes))delete remotes[id];}
 function ensureRoundLocal(){if(!positionsReady||!game||!lobby||game.matchId!==lobby.matchId)return;ingestPositions();const key=game.matchId+':'+game.round;if(roundResetKey===key)return;initLocal();roundResetKey=key;}
-function resetTransientCombat(){hpPreviewHits=[];pointer=null;aimPointer=null;ultPointer=null;pcKeys.clear();pcAim=null;pcCursor=null;bulletVisuals.clear();clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();fx=[];lastUseLocal=0;lastShootLocal=0;}
+function resetTransientCombat(){remoteMuzzleVolleys.clear();hpPreviewHits=[];pointer=null;aimPointer=null;ultPointer=null;pcKeys.clear();pcAim=null;pcCursor=null;bulletVisuals.clear();clientBullets=[];hostBullets=[];hostUltPending=[];pendingHits=[];hostQueue=[];queuedActions.clear();fx=[];lastUseLocal=0;lastShootLocal=0;}
 function checkPaused(){if(scene!=='game'||!game||!lobby)return;
  const remoteMissing=!allPresent(),sharedPaused=game.phase==='paused';paused=sharedPaused||remoteMissing||game.phase==='aborted';
  const key=game.matchId+':'+game.round+':'+(sharedPaused?game.pausedAt:'missing');
@@ -2794,24 +2797,65 @@ const remotes={};
 
  // Combat snapshots advance in discrete steps, but visual bullets must animate each frame.
  // These visual positions never affect authoritative collision and damage.
- const bulletVisuals=new Map();
+ const bulletVisuals=new Map(),remoteMuzzleVolleys=new Set();
  function visualCombatNow(){if(!game?.clock)return 0;return game.clock.t+clamp(serverNow()-game.clock.wallAt,0,110);}
+ // Visual-only interpolation: never change the authoritative projectile.
+ // On delayed RTDB arrival, begin rendering at its real muzzle instead of
+ // the host-simulated halfway-forward x/y and catch up over a few frames.
+ function squadRemoteProjectileVisual(b,prev,targetX,targetY,nowMs,weight,selfId){
+  if(!prev){
+   const speed=Math.hypot(b.vx,b.vy);
+   const recentlyFired=Number.isFinite(b.dist)&&b.dist>=0&&b.dist<=Math.min(315,speed*.45);
+   if(b.owner!==selfId&&!b.splitChild&&!b.ricochetUsed&&recentlyFired&&
+      Number.isFinite(b.originX)&&Number.isFinite(b.originY)){
+    return {x:b.originX,y:b.originY,originX:b.originX,originY:b.originY,
+      bornAt:nowMs,flash:false};
+   }
+   return {x:targetX,y:targetY};
+  }
+  if(Number.isFinite(prev.bornAt)){
+   const progress=clamp((nowMs-prev.bornAt)/135,0,1);
+   const ease=progress*progress*(3-2*progress);
+   return {...prev,x:prev.originX+(targetX-prev.originX)*ease,
+     y:prev.originY+(targetY-prev.originY)*ease};
+  }
+  return {...prev,x:prev.x+(targetX-prev.x)*weight,
+    y:prev.y+(targetY-prev.y)*weight};
+ }
  function drawSmoothProjectiles(dt){
   const ahead=game?.clock?clamp((serverNow()-game.clock.wallAt)/1000,0,.11):0;
   const authoritative=Object.values(game?.projectiles||{}),ids=new Set(authoritative.map(b=>b.id));
-  const weight=1-Math.exp(-40*Math.max(0,dt));
+  const weight=1-Math.exp(-40*Math.max(0,dt)),nowMs=performance.now();
   for(const bullet of authoritative){
    if((bullet.spawnAt||0)>(game?.clock?.t||0)+ahead*1000)continue;
    const liveAhead=Math.max(0,ahead-Math.max(0,(bullet.spawnAt||0)-(game?.clock?.t||0))/1000);
    const targetX=bullet.x+bullet.vx*liveAhead,targetY=bullet.y+bullet.vy*liveAhead;
-   let p=bulletVisuals.get(bullet.id);
-   if(!p){p={x:targetX,y:targetY};bulletVisuals.set(bullet.id,p);}
-   else{p.x+=(targetX-p.x)*weight;p.y+=(targetY-p.y)*weight;}
-   // A host-accepted projectile may replace a local visual before it reaches an enemy.
-   // Track the same HUD-only provisional hit from authoritative projectile presentation too.
+   const previous=bulletVisuals.get(bullet.id);
+   const p=squadRemoteProjectileVisual(bullet,previous,targetX,targetY,nowMs,weight,myId);
+   if(!previous&&Number.isFinite(p.bornAt)){
+    const volley=bullet.fireId||bullet.id;
+    p.flash=!remoteMuzzleVolleys.has(volley);
+    boundedRemember(remoteMuzzleVolleys,volley);
+   }
+   bulletVisuals.set(bullet.id,p);
+   // Only the owner can preview hit feedback; the remote animation and muzzle
+   // flash never affect HP, collision, combat transactions or receipts.
    if(bullet.owner===myId)previewVisibleBulletCollision(bullet,p.x,p.y);
    ctx.strokeStyle=bullet.team==='blue'?'#9ce6ff':'#ffbdc8';
    ctx.lineWidth=bullet.char==='sniper'?4:3;
+   if(Number.isFinite(p.bornAt)){
+    const age=nowMs-p.bornAt,alpha=clamp(1-age/155,0,1);
+    if(alpha>0&&p.flash){
+     ctx.save();ctx.globalAlpha=alpha*.9;ctx.lineWidth=5*alpha+1;
+     ctx.beginPath();ctx.arc(p.originX,p.originY,10+12*(1-alpha),0,Math.PI*2);ctx.stroke();
+     ctx.restore();
+    }
+    if(age<135&&age>=0){
+     ctx.save();ctx.globalAlpha=.18*(1-age/135);ctx.lineWidth=3;
+     ctx.beginPath();ctx.moveTo(p.originX,p.originY);ctx.lineTo(p.x,p.y);
+     ctx.stroke();ctx.restore();
+    }
+   }
    ctx.beginPath();ctx.arc(p.x,p.y,bullet.char==='sniper'?6:4,0,Math.PI*2);ctx.stroke();
   }
   // Visual-only hologram projectiles deliberately never touch collision,
@@ -3344,7 +3388,7 @@ window.__brawlDraftGad2FireQA=(angle)=>{
  if(!Number.isFinite(angle)||!window.__brawlDraftGad2QA().canUse)return false;
  sendAction('gadget2',angle);return true;
 };
-window.__brawlV3QA=()=>({draft:structuredClone(game?.draft||null),ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,motions:structuredClone(game?.motions||{}),local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},workTiming:{...workTiming},timerPhaseTiming:Object.fromEntries(TIMER_PHASES.map(key=>[key,{...timerPhaseTiming[key]}])),pauseBannerMetrics:{...pauseBannerMetrics},tickTxnTiming:{...tickTxnTiming},quietTickMetrics:{...quietTickMetrics},quietCanvasMetrics:{...quietCanvasMetrics},inputTiming:{...inputTiming,lastTouchShot:inputTiming.lastTouchShot?{...inputTiming.lastTouchShot}:null},drawTiming:{...drawTiming,averageDrawMs:drawTiming.frames?Math.round(drawTiming.totalDrawMs/drawTiming.frames*10)/10:0},arenaBackdropMetrics:{builds:arenaBackdropRebuilds,frames:arenaBackdropFrames,disabled:arenaBackdropDisabled,width:arenaBackdrop?.width||0,height:arenaBackdrop?.height||0},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
+window.__brawlV3QA=()=>({draft:structuredClone(game?.draft||null),ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,motions:structuredClone(game?.motions||{}),local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},workTiming:{...workTiming},timerPhaseTiming:Object.fromEntries(TIMER_PHASES.map(key=>[key,{...timerPhaseTiming[key]}])),pauseBannerMetrics:{...pauseBannerMetrics},tickTxnTiming:{...tickTxnTiming},quietTickMetrics:{...quietTickMetrics},quietCanvasMetrics:{...quietCanvasMetrics},inputTiming:{...inputTiming,lastTouchShot:inputTiming.lastTouchShot?{...inputTiming.lastTouchShot}:null},drawTiming:{...drawTiming,averageDrawMs:drawTiming.frames?Math.round(drawTiming.totalDrawMs/drawTiming.frames*10)/10:0},arenaBackdropMetrics:{builds:arenaBackdropRebuilds,frames:arenaBackdropFrames,disabled:arenaBackdropDisabled,width:arenaBackdrop?.width||0,height:arenaBackdrop?.height||0},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),remoteProjectileVisuals:[...bulletVisuals.entries()].map(([id,p])=>({id,originX:p.originX,originY:p.originY,bornAt:p.bornAt,flash:p.flash,x:p.x,y:p.y})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
 })();
 </script>
 </body></html>

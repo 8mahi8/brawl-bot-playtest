@@ -38,6 +38,31 @@ for(const [mode,normal,lab,beta,room,protocol] of [
   assert(s.includes('function draftAdvance('),'2vs2 draft card geometry retained');
   assert(s.includes('function draftReflectAxis('),'2vs2 ricochet still enabled');
   assert(s.includes('squadGad2Action'),'2vs2 GAD2 button retained');
+  assert(s.includes('originX:b.x,originY:b.y'),'host reducer snapshots preserve projectile muzzle');
+  assert(s.includes('remoteProjectileVisuals:[...bulletVisuals.entries()]'),
+    'debug-only WebKit muzzle onset trace is present');
+  const visual=s.match(/ function squadRemoteProjectileVisual\(b,prev,targetX,targetY,nowMs,weight,selfId\)\{[\s\S]*?\n \}/);
+  assert(visual,'2vs2 remote-only muzzle interpolation is present');
+  const interp=vm.runInNewContext('(()=>{const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));'+
+    visual[0]+';return squadRemoteProjectileVisual;})()');
+  const bullet={owner:'opponent',originX:200,originY:300,x:310,y:300,
+    vx:660,vy:0,dist:110,splitChild:false,ricochetUsed:0};
+  const prior={...bullet};
+  const birth=interp(bullet,null,330,300,1000,.6,'self');
+  const mid=interp(bullet,birth,346,300,1067.5,.6,'self');
+  const done=interp(bullet,mid,360,300,1135,.6,'self');
+  assert(birth.x===200&&birth.y===300&&birth.bornAt===1000,
+    'first incoming 2v2 frame renders at muzzle');
+  assert(mid.x>200&&mid.x<346,'incoming projectile glides forward');
+  assert(done.x===360&&done.y===300,'visual catches up after 135ms');
+  assert.deepEqual(bullet,prior,'muzzle correction never changes authoritative ball state');
+  const own=interp({...bullet,owner:'self'},null,330,300,1000,.6,'self');
+  assert(own.x===330&&own.y===300&&!own.bornAt,'local own shot remains immediate');
+  const bounced=interp({...bullet,ricochetUsed:1},null,330,300,1000,.6,'self');
+  assert(bounced.x===330&&!bounced.bornAt,'do not rewind already-bounced shots');
+  const far=interp({...bullet,dist:900},null,330,300,1000,.6,'self');
+  assert(far.x===330&&!far.bornAt,'late reconnection does not flash old bullets');
+  console.log('PASS 2vs2 incoming shot: muzzle first-frame + 135ms visual-only catch-up');
  }else{
   assert(s.includes('netDraftAdvanceBullet'),'1vs1 projectile draft retained');
   assert(s.includes('ctx.arc(pos.x,pos.y,b.radius,0,2*Math.PI)'),
