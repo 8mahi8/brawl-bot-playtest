@@ -100,6 +100,7 @@
       extraUseGadget('host');
     });
     document.getElementById('controls').prepend(b);
+    applyButtonLayout();
     window.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='f'&&!e.repeat)extraUseGadget('host');});
     extraButton();
   }
