@@ -945,7 +945,7 @@ const BrawlAbilityV1=Object.freeze({
   let sendTimer=null;
   let local={x:150,y:300, angle:0,hp:180,ammo:3,reload:0,ult:0,gadgets:2,boost:0,dash:0,dashVx:0,dashVy:0,char:'tank'};
   let remote={x:850,y:300,targetX:850,targetY:300,angle:Math.PI,targetAngle:Math.PI,vx:0,vy:0,t:0,char:'tank',hp:180};
-  let shots=[], fx=[], seenShots=new Set(), seenHits=new Set(), seenGadgets=new Set(), seenImpulses=new Set(), seenUltimates=new Set();
+  let shots=[], fx=[], seenShots=new Set(), seenMuzzleFires=new Set(), seenHits=new Set(), seenGadgets=new Set(), seenImpulses=new Set(), seenUltimates=new Set();
   let ultAim=null, normalAimCancelled=false, normalAimEverDragged=false, jumping=null, liveUltEvents=[];
   let lastAutoTarget=null;
   let lastGasDamage=0, lastNow=null, accumulated=0, lastRender=0, fps=60;
@@ -1485,7 +1485,7 @@ const BrawlAbilityV1=Object.freeze({
     clearControls();shots=[];fx=[];
     const carry=sanitizeResources(game.resources);
     botBrain={fire:.35,strafe:1,strafeTime:0,ammo:3,reload:0,ult:carry.guest.ult,gadgets:carry.guest.gadgets,boost:0,overdrive:0,dash:0,think:0,lastSeen:null};
-    seenBombFX.clear();seenShots.clear();seenHits.clear();seenGadgets.clear();seenImpulses.clear();seenUltimates.clear();liveUltEvents=[];jumping=null;ultAim=null;normalAimCancelled=false;normalAimEverDragged=false;
+    seenBombFX.clear();seenShots.clear();seenMuzzleFires.clear();seenHits.clear();seenGadgets.clear();seenImpulses.clear();seenUltimates.clear();liveUltEvents=[];jumping=null;ultAim=null;normalAimCancelled=false;normalAimEverDragged=false;
     remoteSeq=-1;ownSeq=0;dying=false;lastGasDamage=0;
     const myChar=currentChar(role),theirChar=currentChar(other);
     selected=myChar;
@@ -1798,7 +1798,29 @@ const BrawlAbilityV1=Object.freeze({
       char:currentChar(p.owner),sniper:!p.ult&&currentChar(p.owner)==='sniper'};
     const age=clamp((time()-(p.firedAt||time()))/1000,0,.18);
     if(age && !moveBullet(b,age))return;
+    if(!solo&&p.owner!==role){
+      // Projectile catch-up stays authoritative; its visual starts at the
+      // remote shooter's muzzle and catches up in 125ms.
+      b.remoteBirthAt=performance.now();
+      b.remoteBirthX=p.x+Math.cos(p.angle)*28;
+      b.remoteBirthY=p.y+Math.sin(p.angle)*28;
+      const fire=p.fireId||p.id;
+      if(!seenMuzzleFires.has(fire)){
+        seenMuzzleFires.add(fire);
+        fx.push({type:'remote-muzzle',x:b.remoteBirthX,y:b.remoteBirthY,
+          angle:p.angle,ttl:.16,max:.16});
+      }
+    }
     shots.push(b);
+  }
+  // Render-only: hit registration, bullet travel, HP and network age continue
+  // using b.x and b.y rather than these eased presentation coordinates.
+  function remoteShotDrawPoint(b,nowMs){
+    if(!Number.isFinite(b.remoteBirthAt))return {x:b.x,y:b.y,blend:1};
+    const t=clamp((nowMs-b.remoteBirthAt)/125,0,1);
+    const blend=t*t*(3-2*t);
+    return {x:b.remoteBirthX+(b.x-b.remoteBirthX)*blend,
+      y:b.remoteBirthY+(b.y-b.remoteBirthY)*blend,blend};
   }
   function moveBullet(b,dt){
     return BrawlProjectileV1.advance(b,dt,{
@@ -2119,14 +2141,28 @@ const BrawlAbilityV1=Object.freeze({
     }
     if(game && ['playing','round_end'].includes(game.phase)){
       drawBombFlights();
+      const shotDrawNow=performance.now();
       for(const b of shots){
+        const pos=remoteShotDrawPoint(b,shotDrawNow);
         ctx.fillStyle=b.ult?'#ffb548':b.owner===role?'#f8ff72':'#ff858f';
-        ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,2*Math.PI);ctx.fill();
+        if(pos.blend<1){
+          ctx.save();ctx.globalAlpha=(1-pos.blend)*.26;
+          ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=Math.max(2,b.radius*1.1);
+          ctx.beginPath();ctx.moveTo(b.remoteBirthX,b.remoteBirthY);
+          ctx.lineTo(pos.x,pos.y);ctx.stroke();ctx.restore();
+        }
+        ctx.beginPath();ctx.arc(pos.x,pos.y,b.radius,0,2*Math.PI);ctx.fill();
       }
       for(const f of fx){
         const a=clamp(f.ttl/f.max,0,1);
         ctx.save();ctx.globalAlpha=a;
-        if(f.type==='hit'){
+        if(f.type==='remote-muzzle'){
+          ctx.fillStyle='#ffdc9e';
+          ctx.beginPath();ctx.arc(f.x,f.y,6+15*(1-a),0,2*Math.PI);ctx.fill();
+          ctx.strokeStyle='#ffb882';ctx.lineWidth=5*a;
+          ctx.beginPath();ctx.moveTo(f.x,f.y);
+          ctx.lineTo(f.x+Math.cos(f.angle)*25,f.y+Math.sin(f.angle)*25);ctx.stroke();
+        }else if(f.type==='hit'){
           ctx.strokeStyle='#ffe476';ctx.lineWidth=5;ctx.beginPath();ctx.arc(f.x,f.y,30*(1-a)+12,0,2*Math.PI);ctx.stroke();
         }else if(f.type==='shockwave'){
           ctx.strokeStyle='#bd75ff';ctx.lineWidth=6;ctx.beginPath();ctx.arc(f.x,f.y,140*(1-a)+10,0,2*Math.PI);ctx.stroke();
