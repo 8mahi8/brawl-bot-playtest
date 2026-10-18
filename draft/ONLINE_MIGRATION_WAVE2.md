@@ -12,6 +12,7 @@
 
 - 1vs1 uses the existing per-client shared bullet projection for visuals, with host-only damage transactions, a canonical draftBlasts RTDB map, atomic event consumption/HP and round settlement. Delayed bomb triggers are derived only from authoritative bomber impact events.
 - 2vs2 uses host BrawlCombatV8.accept/step: children, normal Bomber explosions, and timed delayed explosions exist only in canonical combat state. RTDB transaction retries reproduce stable projectile IDs and do not spawn extra children. A small battle audit counter helps confirm host-owned split/blast outcomes.
+- Followthrough and other effects are action-scoped: a second split daughter from the same original fireActionId cannot trigger an extra Followthrough damage bonus, but the next distinct volley can.
 - Neither normal published BRAWL page nor production Firebase rules/auth/Google Sites is edited. Extra positioning and fire QA functions exist only inside localhost-only emulator labs.
 - The third requested fire modifier **ricochet / 跳弾 remains blocked**: accurate one-bounce wall-face/corner collision plus Bomber-specific projectile treatment still need implementation and tests before the card can enter the online offer pool.
 
