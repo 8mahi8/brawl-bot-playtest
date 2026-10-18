@@ -56,6 +56,16 @@ for(const item of registry.cards) {
     '2vs2 split must affect authoritative projectiles and normal Bomber bombs');
   assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damageScale:(b.damageScale||1)*.6"),
    '1vs1 central shot must generate two 60% children');
+ }else if(item.id==='ricochet'){
+  assert(!online1.includes("id:'ricochet'"),'1vs1 ricochet remains gated until its own online implementation');
+  assert(online2.includes("id:'ricochet'"),'2vs2 ricochet must be offered only with host collision support');
+  assert(squadLab.includes('function draftReflectAxis(px,py,nx,ny,r)')&&
+    squadLab.includes('function draftBombBounce(start,target)')&&
+    squadLab.includes('ricochetUsed=1')&&squadLab.includes('damageScale=(b.damageScale||1)*.7'),
+    '2vs2 must implement one-bounce, 70%-power authoritative terrain collision');
+  assert(squadLab.includes('if(!axis)return false')&&
+    squadLab.includes('damage:BALANCE.bomberDamage*(half?.5:1)*(trajectory.bounced?.7:1)'),
+    'ambiguous corners are blocked and Bomber keeps its weapon-specific bounce');
  }else if(item.id==='delayed_blast'){
   assert(online1.includes("id:'delayed_blast'"),'1vs1 blast is offered after host-transaction implementation');
   assert(duelLab.includes("netDraftScheduleBlast(")&&duelLab.includes("processDraftBlasts()")&&
@@ -69,4 +79,4 @@ for(const item of registry.cards) {
   assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
  }
 }
-console.log('PASS both 1vs1/2vs2 recoil/split/delayed; ricochet and GAD2 gated');
+console.log('PASS 2vs2 ricochet host physics enabled; 1vs1 ricochet and GAD2 still gated');

@@ -233,6 +233,39 @@ async function run(){
   }
   console.log('PASS 2vs2 LIVE host blast: 1 original volley, 1 delayed effect, non-host RTDB HP and 4-client sync');
 
+  // Live 4-client test of a wall reflection: first replace recoil with ricochet,
+  // then make a real shot against the wall at x=650 (room's verified KO map).
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.draft.owned.blue1=['ricochet','split_round','delayed_blast'];
+      g.stats[g.seats.blue1.id].draftCards=[...g.draft.owned.blue1];
+      return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(()=>window.__brawlV3QA()?.stats?.[window.__brawlV3QA()?.myId]?.draftCards?.includes('ricochet'),
+    null,{timeout:12000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,300)),true,
+    'attacker moves to open lane beside the north wall');
+  await blue1.waitForTimeout(1350);
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftFireQA(0)),true,
+    'ricochet card owner fires a real normal volley into a wall');
+  let ricochetResult=null,lastRicochet=null;
+  const ricochetDeadline=Date.now()+13000;
+  while(Date.now()<ricochetDeadline){
+    const g=await committedGame(code);
+    lastRicochet={phase:g?.phase,round:g?.round,
+      ricochets:g?.draftCardStats?.ricochets||0,splits:g?.draftCardStats?.splits||0};
+    if(lastRicochet.phase==='playing'&&lastRicochet.ricochets>=1){
+      ricochetResult=lastRicochet;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,220));
+  }
+  assert(ricochetResult,'host must commit wall ricochet in RTDB: '+JSON.stringify(lastRicochet));
+  assert(ricochetResult.ricochets<=5,'Tank five-pellet volley cannot spawn unlimited reflections');
+  console.log('PASS 2vs2 LIVE host wall ricochet: one bounce per pellet, bounded Tank volley, 4 WebKit clients');
+
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
    return window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
