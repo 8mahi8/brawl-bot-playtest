@@ -57,7 +57,7 @@
     owned[side].push(id);
     const turn=d.turn+1,complete=turn===d.order.length;
     return {...g,phase:complete?'round_end':'draft',
-      draft:{...d,owned,taken:[...d.taken,id],turn,complete}};
+      draft:{...d,owned,taken:[...(d.taken||[]),id],turn,complete}};
   }
   function netDraftNextRound(d,startAt){
     const old=d||netDraftNewMatch();
