@@ -1773,7 +1773,7 @@ const BrawlAbilityV1=Object.freeze({
     }
     updateHUD();
   }
-  let netFireCounter=0;
+  let netFireCounter=0,netSplitProof=0;
   function fireVolley(owner,char,x,y,angle,ult){
     const round=game?.round;
     const fireId=owner+':'+round+':'+(++netFireCounter)+':'+Math.round(time());
@@ -1932,6 +1932,7 @@ const BrawlAbilityV1=Object.freeze({
       if(b.dist>=b.range*.5){
         // Splitting replaces the center projectile; all other pellets stay unchanged.
         const a=Math.atan2(b.vy,b.vx),damage=BrawlProjectileV1.damage(b,BrawlCombatV8.tankDamage)*.6;
+        netSplitProof++;
         for(const sign of [-1,1])shots.push({...b,id:b.id+':child:'+sign,splitCenter:false,
           splitChild:true,char:'split_child',sniper:false,damage,
           vx:Math.cos(a+sign*.21)*speed,vy:Math.sin(a+sign*.21)*speed});
@@ -3077,6 +3078,12 @@ const BrawlAbilityV1=Object.freeze({
     // Guest's return request is handled by the host's players listener.
     setScreenFit(fitPercent);showScreen('lobby');requestAnimationFrame(gameLoop);
   }
+  window.__brawlDraftMoveQA=(x,y)=>{
+    if(!isPlaying()||!Number.isFinite(x)||!Number.isFinite(y)||
+       x<RADIUS+4||x>W-RADIUS-4||y<RADIUS+4||y>H-RADIUS-4||circleWall(x,y,RADIUS+4))return false;
+    local.x=x;local.y=y;sendPosition();return true;
+  };
+  window.__brawlDraftSplitCountQA=()=>netSplitProof;
   window.__brawlDraftFireReadyQA=()=>({now:time(),startAt:game?.startAt,phase:game?.phase,
     isPlaying:isPlaying(),role,connected,ammo:local.ammo,
     hostOnline:!!players.host?.online,guestOnline:!!players.guest?.online});
