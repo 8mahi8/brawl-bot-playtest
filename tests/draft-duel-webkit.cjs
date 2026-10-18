@@ -26,7 +26,6 @@ const run=async()=>{
    },html);
    const f=page.frameLocator('iframe'),qa=()=>f.locator('body').evaluate(()=>window.__brawlDraftQA());
    await f.locator('#soloBtn').waitFor({timeout:15000});
-   console.log('DEBUG offline CSS:',await f.locator('#createBtn').evaluate(el=>({display:getComputedStyle(el).display,style:el.getAttribute('style'),css:document.querySelector('style')?.textContent.slice(-1100)})));
    assert(await f.locator('#createBtn').isHidden(),'offline lab must not expose an online room');
    assert(await f.locator('#openJoinPanel').isHidden(),'offline lab must not expose online join');
    await f.locator('#soloBtn').tap();
@@ -46,6 +45,7 @@ const run=async()=>{
     },{winner});
     await f.locator('#draftOverlay:not(.hidden)').waitFor({timeout:9000});
     const s=await qa();
+    console.log('TRACE winner/round',JSON.stringify({expectedRound,winner,actual:s.winner,round:s.round,pick:s.pick,scores:s.scores,phase:s.phase}));
     assert.equal(s.round,expectedRound);
     assert.equal(s.winner,winner);
     assert.equal(s.phase,'round_end');
@@ -58,7 +58,7 @@ const run=async()=>{
     assert.equal(current.pick,'host','BOT must select first if it won');
     const candidate=f.locator('#draftOverlay button[data-draft-id]:not([disabled])').first();
     await candidate.tap({timeout:8000});
-    await f.locator('#draftOverlay.hidden').waitFor({timeout:9000});
+    await f.locator('#draftOverlay').waitFor({state:'hidden',timeout:9000});
     await f.locator('#appStage[data-scene="game"]').waitFor({timeout:9000});
     const next=await qa();
     assert.equal(next.round,expectedRound+1);
@@ -81,7 +81,7 @@ const run=async()=>{
    await f.locator('#draftOverlay button[data-draft-id]:not([disabled])').first().waitFor({timeout:7000});
    assert(await f.locator('#draftReplace').count()===1,'player must choose replacement at 3-card limit');
    await f.locator('#draftOverlay button[data-draft-id]:not([disabled])').first().tap();
-   await f.locator('#draftOverlay.hidden').waitFor({timeout:8000});
+   await f.locator('#draftOverlay').waitFor({state:'hidden',timeout:8000});
    const beforeFinal=await qa();
    assert.equal(beforeFinal.round,5);
    assert.equal(beforeFinal.owned.host.length,3,'no fourth slot may be added');
