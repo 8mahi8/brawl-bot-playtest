@@ -100,7 +100,10 @@ const splitGame={projectiles:{}},original={id:'volley:2',fireId:'volley',x:120,y
 assert.equal(advance(original,.25,splitGame,()=>false,1000),false,'center bullet replaced at halfway');
 const kids=Object.values(splitGame.projectiles);
 assert.equal(kids.length,2,'only two daughter projectiles');
-assert.deepEqual(kids.map(b=>b.damage),[6,6],'60% damage per child');
+assert.deepEqual(kids.map(b=>b.damageScale),[.6,.6],'60% scale per child at final hit distance');
+assert(kids.every(b=>b.char==='gunner'&&b.damage===10),'split children retain original weapon damage rules');
+assert(html.includes('BrawlProjectileV1.damage(bullet,tankDamage)*(bullet.damageScale||1)'),
+  'Tank falloff and Sniper distance scaling must still be applied at impact');
 assert(kids.every(b=>b.fireId==='volley'&&!b.splitCenter&&b.splitChild&&b.range===240),
  'children inherit a common fireActionId and cannot split again');
 assert.equal(advance(kids[0],.05,splitGame,()=>false,1050),true,'daughter cannot divide again');
