@@ -43,7 +43,8 @@ for(const {mode,normal,draft,extra,room,rules} of pairs){
  const approved=mode==='1vs1'
    ?['#soloBtn','#joinBotBtn','#onlineDbInput']
    :['#soloBtn','#joinBotBtn','#modePick','.online-config'];
- const ruleHeads=[...extension.matchAll(/(?:^|})\s*([^{}]+)\{/g)].map(m=>m[1].trim());
+ const noComments=extension.replace(/\/\*[\s\S]*?\*\//g,'');
+ const ruleHeads=[...noComments.matchAll(/(?:^|})\s*([^{}]+)\{/g)].map(m=>m[1].trim());
  for(const head of ruleHeads){
   if(head.startsWith('@media'))continue;
   for(const selector of head.split(',').map(x=>x.trim())){
