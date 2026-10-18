@@ -139,7 +139,7 @@ async function run(){
   console.log('PASS FRIEND BETA 1vs1 delayed remote shot: muzzle birth, flash, combat age unchanged');
   await Promise.all([h,g].map(x=>x.ctx.close()));
 
-  const clients=await Promise.all(Array.from({length:4},()=>open(browser,'squad')));all.push(...clients);
+  const clients=await Promise.all(Array.from({length:4},()=>open(browser,'layout')));all.push(...clients);
   const host=clients[0].page;
   await host.locator('#createBtn').click();
   try{await host.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:17000});}
@@ -179,6 +179,73 @@ async function run(){
   assert.equal(shot.originX,shot.serverOriginX,'remote muzzle derives from real host projectile');
   assert.equal(shot.originY,shot.serverOriginY,'remote muzzle Y comes from real firing source');
   console.log('PASS FRIEND BETA 2vs2 live shot: receiving rival sees true host muzzle origin and one flash');
+
+  // Real 4-peer draft friend beta candidate: KO via host-authoritative
+  // bullets (never assign winner, phase or score), then four legal picks and
+  // automatic advance to second round. Operates ONLY on local emulator.
+  const bySeat=Object.fromEntries(first.map((q,i)=>[q.seat,clients[i].page]));
+  const bluePages=[bySeat.blue1,bySeat.blue2],redPages=[bySeat.red1,bySeat.red2];
+  await Promise.all([...bluePages,...redPages].map(p=>p.waitForFunction(
+    ()=>window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:15000})));
+  for(let i=0;i<2;i++){
+    const y=i===0?420:700;
+    assert.equal(await bluePages[i].evaluate(y=>window.__brawlDraftMoveQA(525,y),y),true,
+      'blue shooter has a clear lane');
+    assert.equal(await redPages[i].evaluate(y=>window.__brawlDraftMoveQA(640,y),y),true,
+      'red defender has a clear lane');
+  }
+  await host.waitForFunction(ids=>{
+    const p=window.__brawlV3QA?.()?.positionValues||{};
+    return ids.every(z=>Math.abs((p[z.id]?.x||0)-z.x)<5&&Math.abs((p[z.id]?.y||0)-z.y)<5);
+  },first.map(q=>({id:q.myId,x:q.seat.startsWith('blue')?525:640,
+     y:q.seat.endsWith('1')?420:700})),{timeout:15000});
+  const victimIds=first.filter(q=>q.seat.startsWith('red')).map(q=>q.myId);
+  const prepared=await host.evaluate(async ids=>{
+    const q=window.__brawlV3QA();
+    const root=window.firebase.database().ref('rooms2v2/'+q.roomId+'/game');
+    const result=await root.transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==1)return;
+      for(const id of ids){
+        g.hp[id]=1;
+        g.combatAt[id]=g.clock.t;
+        if(g.protection)delete g.protection[id];
+      }
+      return g;
+    },undefined,false);
+    return result.committed;
+  },victimIds);
+  assert(prepared,'seed low health only; do not force outcomes');
+  await Promise.all(bluePages.map(p=>p.waitForFunction(
+    ()=>window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:12000})));
+  for(const p of bluePages)assert.equal(await p.evaluate(()=>window.__brawlDraftFireQA(0)),true,
+    'live actual blue shot enters host action bus');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(()=>{
+    const q=window.__brawlV3QA?.();
+    return q?.game==='draft'&&q.round===1&&q.draft?.winner==='blue';
+  },null,{timeout:23000})));
+  const draft=(await host.evaluate(()=>window.__brawlV3QA())).draft;
+  assert.deepEqual(draft.order,['blue1','red1','red2','blue2'],
+    'winning team must pick first in 2vs2 snake order');
+  const picks=[];
+  for(let i=0;i<4;i++){
+    const page=bySeat[draft.order[i]];
+    const chosen=page.locator('#squadDraftOverlay button[data-squad-draft]:not([disabled])').first();
+    await chosen.waitFor({timeout:16000});
+    const id=await chosen.getAttribute('data-squad-draft');
+    await chosen.click();
+    picks.push(id);
+    await host.waitForFunction(n=>{
+      const q=window.__brawlV3QA?.();
+      return q?.draft?.turn>=n||q?.draft?.complete||q?.round===2;
+    },i+1,{timeout:15000});
+  }
+  assert.equal(new Set(picks).size,4,'four unique draft choices');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(()=>{
+    const q=window.__brawlV3QA?.();
+    return q?.game==='playing'&&q.round===2&&
+      ['blue1','red1','red2','blue2'].every(seat=>(q.draft?.owned?.[seat]||[]).length===1);
+  },null,{timeout:26000})));
+  console.log('PASS FRIEND BETA 2vs2 layout candidate: four real shots/KO -> winning-team snake picks -> round 2 on four WebKit devices');
   for(const c of all)assert.deepEqual(c.errors,[],'unexpected WebKit JS errors');
   console.log('PASS FRIEND BETA 2vs2: four WebKit clients joined, READY, real RTDB playing, draft protocol separate');
  }finally{
