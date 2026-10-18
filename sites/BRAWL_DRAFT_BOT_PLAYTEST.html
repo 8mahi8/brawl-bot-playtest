@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>BRAWL | Tactical Draft BOT Playstyle Test V0.3</title>
+  <title>BRAWL | Tactical Draft BOT Playstyle Test V0.4 · Stabilization</title>
   <style>
     :root {color-scheme:dark;--accent:#54e7f2;--pink:#ff547e;--bg:#0c1520}
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
@@ -290,6 +290,22 @@
 .extraCardItem small{color:#b6d1df}.extraCardItem input{flex-shrink:0}
 @media(max-width:540px){.extraCardGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+/* Clear timed ability feedback; small and non-interactive on horizontal iPad. */
+#extraStatusHud{position:absolute;top:65px;left:50%;transform:translateX(-50%);
+ z-index:16;max-width:min(460px,70%);padding:4px 10px;text-align:center;
+ background:rgba(9,28,43,.84);border:1px solid rgba(126,223,231,.55);
+ border-radius:8px;color:#d8fcff;font-size:clamp(10px,1.45vw,12px);font-weight:800;
+ pointer-events:none;line-height:1.4;overflow-wrap:anywhere}
+#extraStatusHud.hidden{display:none!important}
+#extraGadgetBtn:not(:disabled){box-shadow:0 0 0 3px rgba(182,127,240,.17)}
+.draftCard:not(:disabled):focus-visible,#extraPickDone:focus-visible{
+ outline:3px solid #a6effd;outline-offset:3px}
+.extraCardItem:has(input:checked){border-color:#99eaf7;background:#225570}
+.extraModal small{color:#cbebf6}
+@media(max-height:370px){#extraStatusHud{top:49px;padding:2px 6px;font-size:10px}
+ .extraModal{padding:6px}.extraCardItem{min-height:42px;padding:4px 6px}
+ .extraModal h2{font-size:16px;margin:0 0 3px}.extraModal p{margin:4px 0}
+ .draftPanel{max-height:94%;padding:7px}}
 /* Live position + size editor (GAD, ULT, GAD2). */
 #controls #extraGadgetBtn{width:var(--btn-size,56px);height:var(--btn-size,56px);white-space:pre-line;text-align:center;line-height:1.2}
 .layoutEditorHelp{width:min(590px,96%);padding:7px 11px}
@@ -1629,7 +1645,11 @@ const BrawlAbilityV1=Object.freeze({
   // Dragging the right joystick is ALWAYS manual aim (including aiming away from an opponent).
   // The collision wall is expanded by the projectile radius to avoid aiming through cover.
   function lineBlocked(x1,y1,x2,y2,radius=6) {
-    return walls.some(w=>{
+    // Dynamic portable walls must block auto-aim and BOT sight as well as projectiles.
+    const activeCover=solo&&extraState?.wall?
+      extraState.wall.filter(w=>w.until>time()).map(w=>({
+        x:w.x-w.width/2,y:w.y-w.height/2,w:w.width,h:w.height})):[];
+    return [...walls,...activeCover].some(w=>{
       const minX=w.x-radius,maxX=w.x+w.w+radius;
       const minY=w.y-radius,maxY=w.y+w.h+radius;
       let lo=0,hi=1;
@@ -2797,13 +2817,13 @@ const BrawlAbilityV1=Object.freeze({
   const EXTRA_CARDS=[
     {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中央弾が遠距離で2発に分裂（各60%）'},
     {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾が壁で1回だけ反射（威力70%）'},
-    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃+10%・発射時に後ろへ22移動'},
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃+10%・射撃で後方へ60移動'},
     {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'命中で0.7秒後に小爆発（射撃1回に1個）'},
-    {id:'portable_wall',name:'ポータブルウォール',family:'gadget2',desc:'GAD2：4秒続く小さな遮蔽物'},
+    {id:'portable_wall',name:'ポータブルウォール',family:'gadget2',desc:'GAD2：縦長の壁（42×112）を4秒設置'},
     {id:'trap_mine',name:'トラップマイン',family:'gadget2',desc:'GAD2：近付く敵に小ダメージ＋鈍足'},
-    {id:'hologram',name:'ホログラム',family:'gadget2',desc:'GAD2：最大7秒間の囮を出す'},
-    {id:'warp_beacon',name:'ワープビーコン',family:'gadget2',desc:'GAD2：設置したビーコンに戻る'},
-    {id:'smoke',name:'スモーク',family:'gadget2',desc:'GAD2：射線上の視認を妨げる煙幕'}
+    {id:'hologram',name:'ホログラム',family:'gadget2',desc:'GAD2：7秒間の移動する分身・見せ弾は無害'},
+    {id:'warp_beacon',name:'ワープビーコン',family:'gadget2',desc:'GAD2：7秒以内なら途中の壁を越えて帰還'},
+    {id:'smoke',name:'スモーク',family:'gadget2',desc:'GAD2：煙幕で潜伏・攻撃やULTで姿がばれる'}
   ];
   DRAFT_CARDS.push(...EXTRA_CARDS);
   for(const c of EXTRA_CARDS)draftById.set(c.id,c);
@@ -2893,6 +2913,8 @@ const BrawlAbilityV1=Object.freeze({
       extraUseGadget('host');
     });
     document.getElementById('controls').prepend(b);
+    const status=document.createElement('div');status.id='extraStatusHud';status.className='hidden';
+    status.setAttribute('aria-live','off');document.getElementById('appStage').appendChild(status);
     applyButtonLayout();
     window.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='f'&&!e.repeat)extraUseGadget('host');});
     extraButton();
@@ -2909,7 +2931,31 @@ const BrawlAbilityV1=Object.freeze({
       warp_beacon:'ビーコン',smoke:'煙幕'}[g]||'GAD2';
     const txt=beacon?'帰還':remaining>0?short+'\n'+Math.ceil(remaining/1000)+'秒':short;
     if(b.textContent!==txt)b.textContent=txt;
-    b.title=name;b.setAttribute('aria-label','GAD2：'+name);
+    if(b.title!==name)b.title=name;
+    const label='GAD2：'+name;
+    if(b.getAttribute('aria-label')!==label)b.setAttribute('aria-label',label);
+    extraStatusUI();
+  }
+  function extraStatusUI(){
+    const label=document.getElementById('extraStatusHud');if(!label||!extraState)return;
+    const stage=document.getElementById('appStage');
+    const active=solo&&stage?.dataset.scene==='game'&&game?.phase==='playing';
+    label.classList.toggle('hidden',!active);
+    if(!active)return;
+    const now=time(),values=[];
+    const s=extraSmokeStatus('host');
+    if(s!=='none')values.push(s==='hidden'?'◉ 煙幕：潜伏中':'◎ 煙幕：発見中');
+    const h=extraDecoy('host');
+    if(h)values.push('◇ 分身 '+Math.ceil((h.until-now)/1000)+'秒');
+    const w=extraState.beacons.host;
+    if(w?.until>now)values.push('↩ 帰還 '+Math.ceil((w.until-now)/1000)+'秒');
+    const mine=extraState.mines.find(m=>m.side==='host'&&m.until>now);
+    if(mine)values.push('◆ 地雷 '+Math.ceil((mine.until-now)/1000)+'秒');
+    const wall=extraState.wall.find(v=>v.side==='host'&&v.until>now);
+    if(wall)values.push('▯ 壁 '+Math.ceil((wall.until-now)/1000)+'秒');
+    const value=values.join('  ·  ');
+    if(label.textContent!==value)label.textContent=value;
+    label.classList.toggle('hidden',!value);
   }
   function extraWallCollision(x,y,r){
     if(!solo||!extraState)return false;
@@ -2920,10 +2966,12 @@ const BrawlAbilityV1=Object.freeze({
   function extraSmokeHidden(side,viewer){
     if(!solo||side===viewer)return false;
     const actor=extraSideActor(side),observer=extraSideActor(viewer);
-    return extraState.smoke.some(s=>s.until>time()&&
+    const now=time(),revealedUntil=Math.max(
+      extraState.used['reveal:'+side]||0,shotReveal[side]||0);
+    return extraState.smoke.some(s=>s.until>now&&
       Math.hypot(actor.x-s.x,actor.y-s.y)<s.radius &&
       Math.hypot(observer.x-s.x,observer.y-s.y)>s.radius &&
-      (extraState.used['reveal:'+side]||0)<=time());
+      revealedUntil<=now);
   }
   function extraSmokeStatus(side){
     if(!solo)return 'none';
@@ -3087,7 +3135,9 @@ const BrawlAbilityV1=Object.freeze({
       // If cover blocks pursuit, sidestep, rather than remaining a stationary hologram.
       if(Math.hypot(h.x-prevX,h.y-prevY)<.2)moveWithWall(h,-uy*h.strafe*90*dt,ux*h.strafe*90*dt);
       h.angle=aim;
-      if(now>=h.fireAt&&dist<CHARS[h.char].range+110&&!lineBlocked(h.x,h.y,enemy.x,enemy.y,4)){
+      const enemySide=extraOther(h.side);
+      const canSee=targetVisible(h,enemy,enemySide)&&!extraSmokeHidden(enemySide,h.side);
+      if(now>=h.fireAt&&canSee&&dist<CHARS[h.char].range+110&&!lineBlocked(h.x,h.y,enemy.x,enemy.y,4)){
         // Fake shots are ONLY visual objects: not inserted into shots[] and never hit HP/ULT.
         const sx=h.x+Math.cos(aim)*22,sy=h.y+Math.sin(aim)*22;
         extraState.fakeShots.push({side:h.side,x:sx,y:sy,vx:Math.cos(aim)*390,
@@ -3193,6 +3243,11 @@ const BrawlAbilityV1=Object.freeze({
     gadget:extraGadget('host'),smokeStatus:extraSmokeStatus('host'),state:structuredClone(extraState),
     choose:(cards)=>{if(!Array.isArray(cards)||cards.length>3||cards.some(id=>!draftById.has(id)))return false;extraManualDeck=[...cards];return true;},
     useGadget:()=>extraUseGadget('host'),
+    isLineBlocked:(x1,y1,x2,y2)=>[x1,y1,x2,y2].every(Number.isFinite)?lineBlocked(x1,y1,x2,y2):null,
+    revealForTest:(ms)=>{
+      if(!solo||game?.phase!=='playing'||!Number.isFinite(ms)||ms<0||ms>5000)return false;
+      shotReveal.host=time()+ms;return true;
+    },
     // QA-only: position edit is limited to this offline experimental BOT build.
     setLocalPosition:(x,y)=>{
       if(!solo||game?.phase!=='playing'||!Number.isFinite(x)||!Number.isFinite(y)||

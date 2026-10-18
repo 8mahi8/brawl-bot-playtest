@@ -57,9 +57,15 @@ async function run(){
       assert.equal(s.wall[0].width,42);
       assert.equal(s.wall[0].height,112);
       assert(s.wall[0].height>=s.wall[0].width*2.5,'wall must be tall portrait cover');
+      const w=s.wall[0];
+      assert.equal(await x.page.evaluate(({x,y,width})=>window.__brawlPlaystyleQA()
+        .isLineBlocked(x-width,y,x+width,y),w),true,'new wall also blocks actual BOT sight and auto-aim');
     }
     if(card==='smoke'){
       assert.equal((await x.page.evaluate(()=>window.__brawlPlaystyleQA().smokeStatus)),'hidden','smoke hides player from distant BOT');
+      assert((await x.page.locator('#extraStatusHud').textContent()).includes('潜伏中'),'player sees readable stealth status');
+      assert.equal(await x.page.evaluate(()=>window.__brawlPlaystyleQA().revealForTest(1500)),true);
+      assert.equal((await x.page.evaluate(()=>window.__brawlPlaystyleQA().smokeStatus)),'revealed','ordinary bush and ultimate reveal windows also expose smoke');
       assert.equal(await x.page.evaluate(()=>window.__brawlPlaystyleQA().fire(0)),true);
       assert.equal((await x.page.evaluate(()=>window.__brawlPlaystyleQA().smokeStatus)),'revealed','firing exposes smoky player');
     }
@@ -113,6 +119,8 @@ async function run(){
   await newer.page.locator('#draftOverlay button[data-draft-id="trap_mine"]').click();
   const upgraded=await newer.page.evaluate(()=>window.__brawlPlaystyleQA());
   assert.equal(upgraded.gadget,'trap_mine','latest acquired GAD2 must replace equipped GAD2');
+  assert((await newer.page.locator('#extraGadgetBtn').getAttribute('aria-label')).includes('トラップマイン'),
+    'GAD2 accessible label tracks the newly equipped card');
   assert(upgraded.owned.host.includes('portable_wall')&&upgraded.owned.host.includes('trap_mine'),'owned original GAD2 card retained');
   await newer.page.waitForFunction(()=>window.__brawlDraftQA().round===2&&window.__brawlDraftQA().phase==='playing',null,{timeout:10000});
   assert.equal((await newer.page.evaluate(()=>window.__brawlPlaystyleQA().gadget)),'trap_mine','new equipped GAD2 survives to next round');
@@ -169,7 +177,34 @@ async function run(){
   await gunner.page.close();
   assert(code.includes("fillText('分身'"),'owner must recognize own hologram');
   assert(code.includes("fillText(smokeMode==='hidden'?'煙幕：潜伏中':'煙幕：発見中'"),'player must see smoke hidden/revealed labels');
-  console.log('PASS WebKit: autonomous harmless decoy, owner marker, smoke stealth indicator, tall cover, reliable long-range cross-wall beacon return, GAD2 editor and original cards');
+  // Combat smoke test: all four heroes x mixed three-card builds.
+  // We care about actual script exceptions and stuck UI, not balancing outcomes.
+  for(const hero of ['tank','gunner','sniper','bomber']){
+    const c=await play(['split_round','ricochet','delayed_blast'],hero);
+    assert.equal(await c.page.evaluate(()=>window.__brawlPlaystyleQA().fire(0)),true,hero+' can fire with split + ricochet + delayed blast');
+    await c.page.waitForTimeout(260);
+    const snapshot=await c.page.evaluate(()=>window.__brawlPlaystyleQA());
+    assert.equal(snapshot.owned.host.length,3,hero+' keeps three cards');
+    assert.deepEqual(c.errors,[],'no JS errors for '+hero);
+    await c.page.close();
+  }
+  // Landscape school iPad viewport: card picker and settings must fit within the stage
+  // without losing access to save/close controls.
+  const landscape=await context.newPage();
+  await landscape.setViewportSize({width:1024,height:400});
+  await landscape.goto(pageFile);
+  await landscape.waitForFunction(()=>typeof window.__brawlPlaystyleQA==='function');
+  await landscape.locator('#soloBtn').click();
+  await landscape.locator('#extraPickBtn').click();
+  assert.equal(await landscape.locator('#extraPickDone').isVisible(),true,'landscape card-picker exit remains visible');
+  await landscape.locator('#extraPickDone').click();
+  await landscape.locator('#screenFitBtn').click();
+  await landscape.locator('#editButtonLayout').click();
+  for(const k of ['gadgetSize','ultSize','gadget2Size'])
+    assert.equal(await landscape.locator('#'+k).isVisible(),true,'all size controls visible in same compact editor');
+  assert.equal(await landscape.locator('#doneButtonLayout').isVisible(),true,'landscape save button reachable');
+  await landscape.close();
+  console.log('PASS WebKit: four heroes card combos, dynamic cover LOS, smoke reveal, accessible GAD2, iPad UI, decoy no damage, warp safety and stored layout');
  }finally{await context.close();await browser.close();}
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});
