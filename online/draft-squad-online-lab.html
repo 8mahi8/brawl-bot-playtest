@@ -2875,7 +2875,27 @@ async function squadSubmit(id,replaceId=null){
  }catch(e){status('カード選択失敗：'+errorText(e))}
  finally{squadPicking=false;squadRender();}
 }
+function squadGad2ButtonPosition(){
+ const b=$('squadGad2Action'),a=$('gadAction'),app=$('app');
+ if(!b||!a||!app)return;
+ const ar=a.getBoundingClientRect(),pr=app.getBoundingClientRect(),size=68;
+ b.style.left=Math.round(clamp(ar.left-pr.left,size/2+8,pr.width-size-8))+'px';
+ b.style.top=Math.round(clamp(ar.top-pr.top-size-12,8,Math.max(8,pr.height-size-8)))+'px';
+}
+function squadGad2ButtonRefresh(){
+ const b=$('squadGad2Action');if(!b)return;
+ const seat=mySeat(),id=seat&&squadGad2Equipped(game?.draft,seat),
+   active=!!id&&scene==='game'&&game?.phase==='playing';
+ b.style.display=active?'block':'none';if(!active)return;
+ const ready=game.draft?.gadget2ReadyAt?.[seat]||0,
+   remaining=Math.max(0,ready-combatNow());
+ b.disabled=remaining>0||!combatReady()||!alive(myId);
+ b.textContent=remaining>0?'地雷\\n'+Math.ceil(remaining/1000)+'秒':'GAD2\\n地雷';
+ b.setAttribute('aria-label',remaining>0?'トラップマイン 再使用まで'+Math.ceil(remaining/1000)+'秒':'GAD2 トラップマイン');
+ squadGad2ButtonPosition();
+}
 function squadRender(){
+ squadGad2ButtonRefresh();
  const panel=$('squadDraftOverlay'),hud=$('squadDraftHud');
  if(!panel||!hud)return;
  const seat=mySeat(),d=game?.draft,active=!!(seat&&scene==='game'&&game?.phase==='draft');
@@ -2909,6 +2929,23 @@ function squadInit(){
  });
  $('app').append(p);
  const h=document.createElement('div');h.id='squadDraftHud';h.className='hidden';$('app').append(h);
+ const b=document.createElement('button');b.id='squadGad2Action';b.type='button';
+ b.style.cssText='display:none;position:absolute;z-index:76;width:68px;height:68px;'+
+  'border:2px solid #64eacd;border-radius:20px;color:#e9fffa;'+
+  'background:#124b54d9;font:bold 12px system-ui;white-space:pre-line;touch-action:manipulation;';
+ const activate=()=>{if(squadGad2Equipped(game?.draft,mySeat()))sendAction('gadget2',local.a);};
+ b.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='touch'||e.pointerType==='pen'){
+   e.preventDefault();b.dataset.lastPointer=String(performance.now());activate();
+  }
+ });
+ b.addEventListener('click',e=>{
+  if(e.detail===0||performance.now()-Number(b.dataset.lastPointer||-1e5)>700)activate();
+ });
+ $('app').append(b);
+ window.addEventListener('resize',squadGad2ButtonPosition);
+ window.addEventListener('orientationchange',squadGad2ButtonPosition);
+
  $('soloBtn').disabled=true;$('joinBotBtn').disabled=true;
  squadRender();
 }
@@ -2929,6 +2966,19 @@ window.__brawlDraftFireReadyQA=()=>({
   canShoot:combatReady()&&!botPilot&&alive(myId)&&!engine().flying(game,myId)
  });
 window.__brawlDraftFireQA=(angle)=>{if(!Number.isFinite(angle)||!window.__brawlDraftFireReadyQA().canShoot)return false;shootAngle(angle);return true;};
+window.__brawlDraftGad2QA=()=>({
+ equipped:squadGad2Equipped(game?.draft,mySeat()),mineCount:Object.keys(game?.gad2Mines||{}).length,
+ mines:structuredClone(game?.gad2Mines||{}),
+ placed:game?.draftCardStats?.gad2MinesPlaced||0,
+ triggered:game?.draftCardStats?.gad2MinesTriggered||0,
+ cooldownUntil:game?.draft?.gadget2ReadyAt?.[mySeat()]||0,
+ now:combatNow(),
+ canUse:combatReady()&&!!squadGad2Equipped(game?.draft,mySeat())
+});
+window.__brawlDraftGad2FireQA=(angle)=>{
+ if(!Number.isFinite(angle)||!window.__brawlDraftGad2QA().canUse)return false;
+ sendAction('gadget2',angle);return true;
+};
 window.__brawlV3QA=()=>({draft:structuredClone(game?.draft||null),ipadReady:true,teamGuardLab:true,tankBalanceLab:true,openArenaLab:true,worldWidth:W,worldHeight:H,tacticalR3:true,guardianR4:true,quietR41:true,mapCompact:$('mapDock').classList.contains('compact'),solo,botPilot,botActors:structuredClone(botActors),lobby:structuredClone(lobby),scene,roomId,myId,seat:mySeat(),online:onlineCount(),status:lobby?.status,game:game?.phase,matchId:game?.matchId,round:game?.round,scores:game?.scores,hp:game?.hp,stats:game?.stats,local:{...local},positions:Object.keys(positions),positionValues:structuredClone(positions),protocol:PROTOCOL,connectionId:myConnection,positionsReady,effectsReady,pageSuspended,shots:clientBullets.length+Object.keys(game?.projectiles||{}).length,hostQueue:hostQueue.length,hostTimerActive:!!onlineTimer,hostTimerPulses,presentationMetrics:{...presentationMetrics},workTiming:{...workTiming},timerPhaseTiming:Object.fromEntries(TIMER_PHASES.map(key=>[key,{...timerPhaseTiming[key]}])),pauseBannerMetrics:{...pauseBannerMetrics},tickTxnTiming:{...tickTxnTiming},quietTickMetrics:{...quietTickMetrics},quietCanvasMetrics:{...quietCanvasMetrics},inputTiming:{...inputTiming,lastTouchShot:inputTiming.lastTouchShot?{...inputTiming.lastTouchShot}:null},drawTiming:{...drawTiming,averageDrawMs:drawTiming.frames?Math.round(drawTiming.totalDrawMs/drawTiming.frames*10)/10:0},arenaBackdropMetrics:{builds:arenaBackdropRebuilds,frames:arenaBackdropFrames,disabled:arenaBackdropDisabled,width:arenaBackdrop?.width||0,height:arenaBackdrop?.height||0},canvasMetrics:{backingWidth:canvas.width,backingHeight:canvas.height,cssWidth:canvas.clientWidth,cssHeight:canvas.clientHeight,renderScale:canvasRenderScale(canvas.clientWidth,canvas.clientHeight),maxGameplayPixels:ONLINE_CANVAS_PIXEL_BUDGET,dynamicCap:canvasQualityCap,qualityReductions:canvasQualityReductions,canvasResizes:canvasResizeCount},combatTickCalls,combatTickSkips:{...combatTickSkips},combatTickResults:{...combatTickResults},combatTickLastError,combatBusy,hostProcessing,hostActionDispatchQueued,hostAuthorized:isAuthoritative(),combatReadyNow:combatReady(),gameHostToken:game?.hostToken,hostClockLag:game?.clock?serverNow()-game.clock.wallAt:null,mode:game?.mode,combat:structuredClone(game),motionRev:appliedMotionRev,pendingUlt:Object.keys(game?.scheduled||{}).length,revealed:structuredClone(revealed),pendingActionCount:pendingActions.size,localPendingWriteCount:localPendingWrites.size,visualBullets:[...Object.values(game?.projectiles||{}),...clientBullets].map(({id,owner})=>({id,owner})),fx:fx.map(f=>f.type||'hit'),paused,gasMargin:gasMargin(),pausedAt:game?.pausedAt,scheduled:Object.keys(game?.scheduled||{}).length});
 })();
 </script>
