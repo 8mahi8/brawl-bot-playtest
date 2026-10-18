@@ -1638,7 +1638,10 @@ const BrawlAbilityV1=Object.freeze({
   function drawDebuff(p,who){const d=game?.debuffs?.[who];if(d?.slowUntil>time()){ctx.strokeStyle='#64ccff';ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(p.x,p.y+18,26,8,0,0,7);ctx.stroke();}if(d?.dotUntil>=time()){ctx.fillStyle='#ffab54';for(let i=0;i<6;i++){const a=i*Math.PI/3+performance.now()/160;ctx.beginPath();ctx.arc(p.x+Math.cos(a)*29,p.y+Math.sin(a)*29,3,0,7);ctx.fill();}}}
   function throwBomb(owner,actor,angle,reach,ultimate){if(!isPlaying())return;const now=time(),p={id:solo?'solo_bomb_'+(++soloShotNumber):ref.child('shots').push().key,round:game.round,owner,x:actor.x,y:actor.y,angle,reach:clamp(reach,55,BALANCE.bomberRange),ultimate,debug:soloDebug('ult')};
     if(solo){const before=syncSoloResources(),n=bomberCore.queue(before,p,now);if(n===before)return;game=n;local.ult=game.resources.host.ult;botBrain.ult=game.resources.guest.ult;markAttack(owner);updateHUD();return;}
-    const activeRef=ref,startAt=game.startAt;const stillHere=()=>ref===activeRef&&role===owner&&game?.round===p.round&&game?.startAt===startAt;activeRef.child('game').transaction(g=>{if(!g||g.round!==p.round||g.startAt!==startAt)return;const n=bomberCore.queue(g,p,now);return n===g?undefined:n;},undefined,false).then(r=>{if(!stillHere())return;if(!r.committed&&!ultimate)local.ammo=Math.min(3,local.ammo+1);if(r.committed)markAttack(owner);updateHUD();}).catch(e=>{if(!stillHere())return;if(!ultimate)local.ammo=Math.min(3,local.ammo+1);alertStatus('爆弾の送信に失敗',e);});
+    const activeRef=ref,startAt=game.startAt;const stillHere=()=>ref===activeRef&&role===owner&&game?.round===p.round&&game?.startAt===startAt;activeRef.child('game').transaction(g=>{if(!g||g.round!==p.round||g.startAt!==startAt)return;const n=bomberCore.queue(g,p,now);
+      if(n!==g&&!ultimate&&n.bombs?.[p.id+':0']&&g.draft?.owned?.[owner]?.includes('recoil_shot'))
+        n.bombs[p.id+':0'].damage*=1.10;
+      return n===g?undefined:n;},undefined,false).then(r=>{if(!stillHere())return;if(!r.committed&&!ultimate)local.ammo=Math.min(3,local.ammo+1);if(r.committed)markAttack(owner);updateHUD();}).catch(e=>{if(!stillHere())return;if(!ultimate)local.ammo=Math.min(3,local.ammo+1);alertStatus('爆弾の送信に失敗',e);});
   }
   async function useBomberGadget(){if(!isPlaying()||bomberGadgetBusy||game?.bomberArmed?.[role]||local.gadgets<1&&!soloDebug('gadgets'))return;bomberGadgetBusy=true;updateHUD();const round=game.round,startAt=game.startAt,activeRef=ref,owner=role;try{
     if(solo){const before=syncSoloResources(),n=bomberCore.arm(before,role,soloDebug('gadgets'));if(n===before)return;game=n;local.gadgets=game.resources[role].gadgets;}
@@ -1673,6 +1676,20 @@ const BrawlAbilityV1=Object.freeze({
     return resources;
   }
   function aimReach(d){return clamp(d/58*330,55,330);}
+  let netRecoilUntil=0,netRecoilRound=-1;
+  function netRecoilFire(angle){
+    if(!game?.draft?.owned?.[role]?.includes('recoil_shot'))return;
+    const now=time();
+    if(netRecoilRound!==game.round){netRecoilRound=game.round;netRecoilUntil=0;}
+    if(now<netRecoilUntil)return;
+    const oldX=local.x,oldY=local.y;
+    for(let i=0;i<10;i++)moveWithWall(local,-Math.cos(angle)*6,-Math.sin(angle)*6);
+    netRecoilUntil=now+1200;
+    if(Math.hypot(local.x-oldX,local.y-oldY)>1){
+      fx.push({type:'dash',x:local.x,y:local.y,angle,ttl:.36,max:.36});
+      sendPosition(); // Existing peer-position contract, once per actual firing action.
+    }
+  }
   function shoot(ult=false,manualAngle=null,manualReach=null){
     if(!isPlaying()||local.hp<=0||bomberGadgetBusy||jumping&&jumping.actor===local||(!ult&&local.ammo<=0&&!soloDebug('ammo'))||(ult&&local.ult<100&&!soloDebug('ult')))return;
     const manual=Number.isFinite(manualAngle)?manualAngle:null;
@@ -1688,6 +1705,7 @@ const BrawlAbilityV1=Object.freeze({
       activateUltimate(role,local.char,aim,local,reach);
     }else{
       if(!soloDebug('ammo'))local.ammo--;
+      netRecoilFire(aim);
       if(local.char==='bomber')throwBomb(role,local,aim,manualReach??(target.locked?target.distance:BALANCE.bomberRange),false);else fireVolley(role,local.char,local.x,local.y,aim,false);
     }
     updateHUD();
@@ -2709,7 +2727,8 @@ const BrawlAbilityV1=Object.freeze({
     {id:'hit_stride',name:'追撃歩法',family:'mobility',desc:'通常攻撃命中後1.8秒、移動+7%'},
     {id:'clutch_armor',name:'崖際装甲',family:'defense',desc:'HP35%以下で通常射撃-8%'},
     {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
-    {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'}
+    {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃の威力+10%／一射撃で後方60移動（反動CD1.2秒）'}
   ];
   const netDraftCardMap=new Map(NET_DRAFT_CARDS.map(c=>[c.id,c]));
   function netDraftNewMatch(){
@@ -2789,7 +2808,7 @@ const BrawlAbilityV1=Object.freeze({
       now>updated.lastNormal[attacker]&&now-updated.lastNormal[attacker]<=2500&&ready(attacker,'followthrough')){
       bonus+=3;updated.cooldown[attacker].followthrough=now+8000;
     }
-    const raw=amount+Math.min(7,bonus);
+    const raw=(amount+Math.min(7,bonus))*(has(attacker,'recoil_shot')?1.10:1);
     const pct=has(victim,'clutch_armor')&&pre/max<=.35?8:0;
     let flat=0;
     if(has(victim,'opening_guard')&&now-updated.lastDamage[victim]>=6000&&ready(victim,'opening_guard')){
