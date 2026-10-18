@@ -112,9 +112,11 @@
     b.classList.toggle('hidden',!layoutEditing&&(!g||!solo||document.getElementById('appStage').dataset.scene!=='game'));
     b.disabled=layoutEditing?false:!enabled;
     const beacon=g==='warp_beacon'&&extraState.beacons.host;
-    const txt=beacon?'RETURN':remaining>0?Math.ceil(remaining/1000)+'s':g?'GAD2':'GAD2';
+    const short={portable_wall:'壁',trap_mine:'地雷',hologram:'分身',
+      warp_beacon:'ビーコン',smoke:'煙幕'}[g]||'GAD2';
+    const txt=beacon?'帰還':remaining>0?short+'\\n'+Math.ceil(remaining/1000)+'秒':short;
     if(b.textContent!==txt)b.textContent=txt;
-    b.title=name;
+    b.title=name;b.setAttribute('aria-label','GAD2：'+name);
   }
   function extraWallCollision(x,y,r){
     if(!solo||!extraState)return false;
@@ -403,6 +405,11 @@
       if(!solo||game?.phase!=='playing'||!Number.isFinite(x)||!Number.isFinite(y)||
          x<RADIUS||x>W-RADIUS||y<RADIUS||y>H-RADIUS||circleWall(x,y,RADIUS+3))return false;
       local.x=x;local.y=y;return true;
+    },
+    setBotPosition:(x,y)=>{
+      if(!solo||game?.phase!=='playing'||!Number.isFinite(x)||!Number.isFinite(y)||
+         x<RADIUS||x>W-RADIUS||y<RADIUS||y>H-RADIUS||circleWall(x,y,RADIUS+3))return false;
+      remote.x=x;remote.y=y;remote.targetX=x;remote.targetY=y;return true;
     },
     setOffer:(ids)=>{
       if(!solo||game?.phase!=='round_end'||!Array.isArray(ids)||ids.length!==4||
