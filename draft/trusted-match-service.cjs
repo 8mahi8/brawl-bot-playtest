@@ -22,6 +22,10 @@ async function consumeIntent({db,roomId,uid,actionId,now=Date.now()}){
  if(member?.state!=='active'||!session||session.expiresAt<=now)
   return deny('membership_or_session');
  if(intent.connectionId!==session.connectionId)return deny('connection');
+ // The Firebase JS RTDB transaction updater can initially receive null while
+ // its local cache is cold. Prime the server-only snapshot before deciding.
+ const snapshot=await get(at('server'));
+ if(!snapshot.exists())return deny('server_not_found');
  // Transaction serializes accepted intents: concurrent attempts cannot both
  // use the same last sequence. All hit/motion results are computed server-side.
  let latest=null;
