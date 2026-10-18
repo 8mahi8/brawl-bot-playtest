@@ -69,6 +69,14 @@ assert.equal(second.amount,Math.round((10+7)*(1-.08)),'finisher/followthrough st
 assert.equal(second.draft.cooldown.host.finisher,17000);
 const denied=netDraftHit(second.draft,{host:'gunner',guest:'sniper'},{host:100,guest:15},'guest',10,'host','normal',9500);
 assert(denied.amount<=10,'cooldowns cannot re-trigger immediately');
+const recoil=netDraftNewMatch();
+recoil.owned.host=['recoil_shot'];
+const recoilHit=netDraftHit(recoil,{host:'gunner',guest:'gunner'},
+  {host:100,guest:100},'guest',10,'host','normal',9000);
+assert.equal(recoilHit.amount,11,'host verified +10% applies to normal Gunner damage');
+const recoilULT=netDraftHit(recoil,{host:'gunner',guest:'gunner'},
+  {host:100,guest:100},'guest',10,'host','effect',9000);
+assert.equal(recoilULT.amount,10,'recoil card cannot buff ULT or GAD damage');
 assert.equal(netDraftMotion(0,0,0,0,1/60,102,true),false);
 assert.equal(netDraftMotion(0,0,2,0,1/60,102,true),true);
 assert.equal(netDraftMotion(0,0,2,0,1/60,102,false),false);
