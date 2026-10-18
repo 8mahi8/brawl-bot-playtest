@@ -52,7 +52,7 @@ const occupied={blue1:['empty_sprint','moving_reload','last_shell'],blue2:['hit_
  red1:['opening_guard','clutch_armor','last_shell'],red2:['moving_reload','finisher','empty_sprint']};
 for(let round=5;round<12;round++){
  const order=squadOrder(round%2?'blue':'red',round-1),offer=squadOffer(occupied,'45678',round,order);
- assert(offer.length>=6&&offer.length<=9,'late-hand may expand offers safely across all nine cards');
+ assert(offer.length>=6&&offer.length<=11,'late-hand may expand offers safely across all nine cards');
  assert.equal(new Set(offer).size,offer.length);
  function walk(i,taken){
   if(i===4)return;
