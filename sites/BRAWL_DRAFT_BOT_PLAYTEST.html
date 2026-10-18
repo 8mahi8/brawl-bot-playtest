@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>BRAWL | Tactical Draft BOT Playstyle Test V0.2</title>
+  <title>BRAWL | Tactical Draft BOT Playstyle Test V0.3</title>
   <style>
     :root {color-scheme:dark;--accent:#54e7f2;--pink:#ff547e;--bg:#0c1520}
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
@@ -2244,7 +2244,7 @@ const BrawlAbilityV1=Object.freeze({
         }ctx.restore();
       }
       liveUltEvents=liveUltEvents.filter(u=>u.until>time());
-      if(targetVisible(local,remote,other))drawCharacter(remote, false);
+      if(targetVisible(local,remote,other)&&(!solo||!extraSmokeHidden('guest','host')))drawCharacter(remote, false);
       drawCharacter(local, true);
       drawUltimateGuide();
       if(right.id!==null && !normalAimCancelled && Math.hypot(right.x-right.ox,right.y-right.oy)>18){
@@ -2287,17 +2287,17 @@ const BrawlAbilityV1=Object.freeze({
     ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);
     ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
   }
-  function drawCharacter(p,mine) {
+  function drawCharacter(p,mine,isDecoy=false) {
     const hp=game&&game.hp?game.hp[mine?role:other]:p.hp;
     if(!Number.isFinite(hp)||hp<=0)return;
     const color=CHARS[p.char]?.color||'#48d9ef';
     const stealth=mine?ownStealthState():'visible';
-    if(mine)BrawlStealthV1.indicator(ctx,p,stealth);
+    if(mine&&!isDecoy)BrawlStealthV1.indicator(ctx,p,stealth);
     ctx.save();if(stealth==='hidden')ctx.globalAlpha=.45;ctx.translate(p.x,p.y);
     if(jumping&&jumping.actor===p){ctx.translate(0,-35*Math.sin(Math.PI*jumping.t/jumping.total));}
     // Clear faction ring and soft ground shadow, visible even in a crowded duel.
     ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(0,8,24,18,0,0,2*Math.PI);ctx.fill();
-    ctx.strokeStyle=mine?'#78eefe':'#ff6f8f';ctx.lineWidth=3;
+    ctx.strokeStyle=isDecoy&&mine?'#c0a0ff':mine?'#78eefe':'#ff6f8f';ctx.lineWidth=3;
     ctx.beginPath();ctx.arc(0,0,RADIUS+3,0,2*Math.PI);ctx.stroke();
     ctx.rotate(p.angle);
     ctx.strokeStyle='#122438';ctx.lineWidth=2.4;ctx.lineJoin='round';
@@ -2327,6 +2327,27 @@ const BrawlAbilityV1=Object.freeze({
       ctx.fillStyle='#edd3ff';ctx.fillRect(26,-2,16,4);
     }
     ctx.restore();
+    if(isDecoy){
+      // The owning player clearly recognizes the fake. Opponents get no giveaway label.
+      if(mine){
+        ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle='#d9beff';ctx.lineWidth=2.5;
+        ctx.beginPath();ctx.arc(p.x,p.y,RADIUS+10,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+        ctx.font='bold 14px system-ui';ctx.textAlign='center';ctx.fillStyle='#f3ddff';
+        ctx.fillText('分身',p.x,p.y-43);ctx.restore();
+      }
+      return; // Decoy has no real HP/ammo/ULT bar to mislead its owner.
+    }
+    if(solo){
+      const smokeMode=extraSmokeStatus(mine?'host':'guest');
+      if(smokeMode!=='none'){
+        ctx.save();ctx.textAlign='center';ctx.font='bold 12px system-ui';
+        ctx.fillStyle=smokeMode==='hidden'?'#adffe4':'#ffe2a3';
+        ctx.strokeStyle=smokeMode==='hidden'?'#6af8db':'#ffce86';ctx.lineWidth=2;
+        ctx.beginPath();ctx.arc(p.x,p.y,RADIUS+7,0,Math.PI*2);ctx.stroke();
+        ctx.fillText(smokeMode==='hidden'?'煙幕：潜伏中':'煙幕：発見中',p.x,p.y-57);
+        ctx.restore();
+      }
+    }
     drawDebuff(p,mine?role:other);
     // Status effects communicate gameplay, not decoration.
     const characterBoost=(mine?local.boost:(solo?botBrain.boost:p.boost))||0;
@@ -2791,7 +2812,7 @@ const BrawlAbilityV1=Object.freeze({
   let extraState;
   function extraReset(){
     extraState={seq:0,used:{},blastCD:{},recoilCD:{},gadgetCD:{},wall:[],mines:[],
-      smoke:[],holo:[],beacons:{},blast:[],bombs:[],slow:{},gadgetEquipped:{},gameRound:0};
+      smoke:[],holo:[],fakeShots:[],beacons:{},blast:[],bombs:[],slow:{},gadgetEquipped:{},gameRound:0};
     extraButton();
   }
   extraReset();
@@ -2816,7 +2837,7 @@ const BrawlAbilityV1=Object.freeze({
     if(!solo)return;
     extraState.used={};extraState.blastCD={};extraState.recoilCD={};
     extraState.gadgetCD={};extraState.wall=[];extraState.mines=[];
-    extraState.smoke=[];extraState.holo=[];extraState.beacons={};
+    extraState.smoke=[];extraState.holo=[];extraState.fakeShots=[];extraState.beacons={};
     extraState.blast=[];extraState.bombs=[];extraState.slow={};
     extraState.gameRound=game.round;
     extraGadget('host');extraGadget('guest');extraButton();
@@ -2902,18 +2923,48 @@ const BrawlAbilityV1=Object.freeze({
       Math.hypot(observer.x-s.x,observer.y-s.y)>s.radius &&
       (extraState.used['reveal:'+side]||0)<=time());
   }
+  function extraSmokeStatus(side){
+    if(!solo)return 'none';
+    const actor=extraSideActor(side),now=time();
+    const inSmoke=extraState.smoke.some(s=>s.until>now&&Math.hypot(actor.x-s.x,actor.y-s.y)<s.radius);
+    if(!inSmoke)return 'none';
+    return extraSmokeHidden(side,extraOther(side))?'hidden':'revealed';
+  }
   function extraDecoy(side){
     return extraState.holo.find(h=>h.side===side&&h.until>time())||null;
+  }
+  function extraSafeLanding(x,y,excludeSide=null){
+    // Beacon was placed at a valid player position; new temporary walls can alter that.
+    const enemy=excludeSide?extraSideActor(extraOther(excludeSide)):null;
+    const safe=(px,py)=>px>=RADIUS+3&&px<=W-RADIUS-3&&py>=RADIUS+3&&py<=H-RADIUS-3&&
+      !circleWall(px,py,RADIUS+3)&&(!enemy||Math.hypot(enemy.x-px,enemy.y-py)>=RADIUS*2+2);
+    if(safe(x,y))return {x,y};
+    for(const r of [24,40,58,76])for(let i=0;i<16;i++){
+      const theta=i*Math.PI/8,px=x+Math.cos(theta)*r,py=y+Math.sin(theta)*r;
+      if(safe(px,py))return {x:px,y:py};
+    }
+    return null;
+  }
+  function extraCanPlaceWall(x,y,width,height){
+    if(x-width/2<6||x+width/2>W-6||y-height/2<6||y+height/2>H-6)return false;
+    const collisions=[...walls,...extraState.wall.filter(w=>w.until>time()).map(w=>
+      ({x:w.x-w.width/2,y:w.y-w.height/2,w:w.width,h:w.height}))];
+    const overlap=(rect,r)=>rect.x<r.x+r.w&&rect.x+rect.w>r.x&&rect.y<r.y+r.h&&rect.y+rect.h>r.y;
+    const box={x:x-width/2,y:y-height/2,w:width,h:height};
+    if(collisions.some(w=>overlap(box,w)))return false;
+    const near=(p)=>Math.abs(p.x-x)<width/2+RADIUS+6&&Math.abs(p.y-y)<height/2+RADIUS+6;
+    return !near(local)&&!near(remote);
   }
   function extraUseGadget(side){
     if(!solo||!isPlaying()||!game||game.phase!=='playing'||game.hp[side]<=0)return false;
     const g=extraGadget(side),a=extraSideActor(side),now=time();
     if(!g||(extraState.gadgetCD[side]||0)>now)return false;
     if(g==='portable_wall'){
-      const x=a.x+Math.cos(a.angle)*78,y=a.y+Math.sin(a.angle)*78;
-      if(x<45||x>W-45||y<45||y>H-45||circleWall(x,y,45)||Math.hypot(x-local.x,y-local.y)<55||Math.hypot(x-remote.x,y-remote.y)<55)return false;
+      // Tall vertical cover, narrow enough not to trap either player.
+      const width=42,height=112,x=a.x+Math.cos(a.angle)*95,y=a.y+Math.sin(a.angle)*95;
+      if(!extraCanPlaceWall(x,y,width,height)){if(side==='host')actionFeedback('壁を設置できない場所','extraGadgetBtn');return false;}
       extraState.wall=extraState.wall.filter(w=>w.side!==side&&w.until>now);
-      extraState.wall.push({side,x,y,width:56,height:48,until:now+4000});
+      extraState.wall.push({side,x,y,width,height,until:now+4000});
       extraState.gadgetCD[side]=now+12000;
     }else if(g==='trap_mine'){
       const x=a.x+Math.cos(a.angle)*44,y=a.y+Math.sin(a.angle)*44;
@@ -2922,19 +2973,24 @@ const BrawlAbilityV1=Object.freeze({
       extraState.mines.push({side,x,y,until:now+9000});
       extraState.gadgetCD[side]=now+12000;
     }else if(g==='hologram'){
-      const d={side,x:a.x,y:a.y,angle:a.angle,char:a.char,until:now+7000};
+      // Spawn at the owner's location, then use its own strafe/approach/retreat AI.
+      const d={side,x:a.x,y:a.y,angle:a.angle,char:a.char,until:now+7000,
+        born:now,fireAt:now+800,strafe:side==='host'?1:-1,swapAt:now+1350,shotCount:0};
       extraState.holo=extraState.holo.filter(h=>h.side!==side&&h.until>now);
       extraState.holo.push(d);
       extraState.gadgetCD[side]=now+14000;
     }else if(g==='warp_beacon'){
       const old=extraState.beacons[side];
       if(old&&old.until>now){
-        if(Math.hypot(a.x-old.x,a.y-old.y)>260||circleWall(old.x,old.y,RADIUS+3))return false;
-        const dx=old.x-a.x,dy=old.y-a.y,n=Math.ceil(Math.hypot(dx,dy)/6);
-        // Segment check rejects teleporting through walls; never snap through cover.
-        for(let i=1;i<=n;i++)if(circleWall(a.x+dx*i/n,a.y+dy*i/n,RADIUS+3))return false;
-        a.x=old.x;a.y=old.y;delete extraState.beacons[side];extraState.gadgetCD[side]=now+15000;
+        // This is a WARP, not a dash: intervening walls and distance must not silently block return.
+        const landing=extraSafeLanding(old.x,old.y,side);
+        if(!landing){if(side==='host')actionFeedback('帰還地点がふさがっている','extraGadgetBtn');return false;}
+        fx.push({type:'impact',x:a.x,y:a.y,ttl:.32,max:.32});
+        a.x=landing.x;a.y=landing.y;
+        fx.push({type:'impact',x:a.x,y:a.y,ttl:.32,max:.32});
+        delete extraState.beacons[side];extraState.gadgetCD[side]=now+15000;
       }else{
+        if(circleWall(a.x,a.y,RADIUS+3))return false;
         extraState.beacons[side]={x:a.x,y:a.y,until:now+7000};
       }
     }else if(g==='smoke'){
@@ -3016,13 +3072,32 @@ const BrawlAbilityV1=Object.freeze({
     extraState.smoke=extraState.smoke.filter(s=>s.until>now);
     for(const h of extraState.holo){
       if(h.until<=now)continue;
-      const a=extraSideActor(h.side);
-      // A deterministic forward/lateral decoy glide, with wall collision checks.
-      const vx=Math.cos(h.angle)*42*dt,vy=Math.sin(h.angle)*42*dt;
-      moveWithWall(h,vx,vy);
-      h.angle=a.angle;
+      // Harmless bot-like decoy AI: independent aim, strafing, range control and blank fire.
+      const enemy=extraSideActor(extraOther(h.side));
+      const dx=enemy.x-h.x,dy=enemy.y-h.y,dist=Math.hypot(dx,dy)||1;
+      const aim=Math.atan2(dy,dx),ux=dx/dist,uy=dy/dist;
+      if(now>=h.swapAt){h.strafe*=-1;h.swapAt=now+1350;}
+      const ideal=h.char==='sniper'?225:h.char==='tank'?115:170;
+      const drive=dist>ideal+25?1:dist<ideal-25?-.8:0;
+      const vx=ux*drive-uy*h.strafe*.72,vy=uy*drive+ux*h.strafe*.72;
+      const mag=Math.hypot(vx,vy)||1,prevX=h.x,prevY=h.y;
+      moveWithWall(h,vx/mag*97*dt,vy/mag*97*dt);
+      // If cover blocks pursuit, sidestep, rather than remaining a stationary hologram.
+      if(Math.hypot(h.x-prevX,h.y-prevY)<.2)moveWithWall(h,-uy*h.strafe*90*dt,ux*h.strafe*90*dt);
+      h.angle=aim;
+      if(now>=h.fireAt&&dist<CHARS[h.char].range+110&&!lineBlocked(h.x,h.y,enemy.x,enemy.y,4)){
+        // Fake shots are ONLY visual objects: not inserted into shots[] and never hit HP/ULT.
+        const sx=h.x+Math.cos(aim)*22,sy=h.y+Math.sin(aim)*22;
+        extraState.fakeShots.push({side:h.side,x:sx,y:sy,vx:Math.cos(aim)*390,
+          vy:Math.sin(aim)*390,ttl:.38,damage:0});
+        h.fireAt=now+(h.char==='tank'?1050:850);h.shotCount++;
+      }
     }
     extraState.holo=extraState.holo.filter(h=>h.until>now);
+    for(const shot of extraState.fakeShots){
+      shot.x+=shot.vx*dt;shot.y+=shot.vy*dt;shot.ttl-=dt;
+    }
+    extraState.fakeShots=extraState.fakeShots.filter(s=>s.ttl>0&&!circleWall(s.x,s.y,4));
     for(const s of ['host','guest'])if(extraState.beacons[s]?.until<=now)delete extraState.beacons[s];
     for(const m of [...extraState.mines]){
       if(m.until<=now){extraState.mines.splice(extraState.mines.indexOf(m),1);continue;}
@@ -3055,9 +3130,11 @@ const BrawlAbilityV1=Object.freeze({
     const now=time();ctx.save();
     for(const w of extraState.wall){
       if(w.until<=now)continue;
-      ctx.fillStyle='#3e9fb6';ctx.strokeStyle='#b9faff';ctx.lineWidth=3;
-      ctx.fillRect(w.x-w.width/2,w.y-w.height/2,w.width,w.height);
-      ctx.strokeRect(w.x-w.width/2,w.y-w.height/2,w.width,w.height);
+      const x=w.x-w.width/2,y=w.y-w.height/2,alpha=Math.min(1,(w.until-now)/550);
+      ctx.fillStyle='rgba(35,119,157,'+(.65*alpha)+')';ctx.strokeStyle='#a1f5ff';ctx.lineWidth=3;
+      ctx.fillRect(x,y,w.width,w.height);ctx.strokeRect(x,y,w.width,w.height);
+      ctx.strokeStyle='rgba(180,247,255,.6)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(w.x,y+10);ctx.lineTo(w.x,y+w.height-10);ctx.stroke();
     }
     for(const m of extraState.mines){
       if(m.until<=now)continue;
@@ -3065,7 +3142,14 @@ const BrawlAbilityV1=Object.freeze({
     }
     for(const s of extraState.smoke){
       if(s.until<=now)continue;
-      ctx.fillStyle='rgba(177,194,206,.37)';ctx.beginPath();ctx.arc(s.x,s.y,s.radius,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(110,137,167,.52)';ctx.beginPath();ctx.arc(s.x,s.y,s.radius,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(190,221,249,.68)';ctx.lineWidth=2.5;ctx.setLineDash([9,10]);
+      ctx.beginPath();ctx.arc(s.x,s.y,s.radius-3,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+      for(let i=0;i<6;i++){
+        const q=now/1200+i*1.047,rad=32+12*Math.sin(now/1100+i);
+        ctx.fillStyle='rgba(222,241,253,.11)';ctx.beginPath();
+        ctx.arc(s.x+Math.cos(q)*rad,s.y+Math.sin(q)*rad,31,0,Math.PI*2);ctx.fill();
+      }
     }
     for(const b of extraState.blast){
       if(b.due<=now)continue;
@@ -3078,26 +3162,41 @@ const BrawlAbilityV1=Object.freeze({
       ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,Math.PI*2);ctx.stroke();
     }
     ctx.setLineDash([]);
+    for(const shot of extraState.fakeShots){
+      ctx.strokeStyle=shot.side==='host'?'rgba(158,247,255,.85)':'rgba(255,151,184,.82)';
+      ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(shot.x,shot.y);
+      ctx.lineTo(shot.x-shot.vx*.045,shot.y-shot.vy*.045);ctx.stroke();
+    }
     for(const s of ['host','guest']){
       const b=extraState.beacons[s];
       if(!b||b.until<=now)continue;
-      ctx.fillStyle=s==='host'?'#92f9ef':'#ff8ea5';
-      ctx.beginPath();ctx.arc(b.x,b.y,12,0,Math.PI*2);ctx.fill();
+      const left=Math.max(0,(b.until-now)/7000);
+      ctx.fillStyle=s==='host'?'rgba(108,237,241,.3)':'rgba(255,139,165,.3)';
+      ctx.beginPath();ctx.arc(b.x,b.y,18,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=s==='host'?'#a0ffff':'#ff9abb';ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(b.x,b.y,12,0,Math.PI*2);ctx.stroke();
+      ctx.beginPath();ctx.arc(b.x,b.y,12,-Math.PI/2,-Math.PI/2+2*Math.PI*left);ctx.stroke();
     }
     ctx.restore();
     for(const h of extraState.holo){
       if(h.until<=now)continue;
       const p={...h,boost:0,overdrive:0,ammo:3,reload:0};
       ctx.save();ctx.globalAlpha=.75;
-      drawCharacter(p,h.side==='host');
+      drawCharacter(p,h.side==='host',true);
       ctx.restore();
     }
   }
   window.__brawlPlaystyleQA=()=>({
     cards:EXTRA_CARDS.map(c=>c.id),manual:[...extraManualDeck],owned:structuredClone(draftOwned),
-    gadget:extraGadget('host'),state:structuredClone(extraState),
+    gadget:extraGadget('host'),smokeStatus:extraSmokeStatus('host'),state:structuredClone(extraState),
     choose:(cards)=>{if(!Array.isArray(cards)||cards.length>3||cards.some(id=>!draftById.has(id)))return false;extraManualDeck=[...cards];return true;},
     useGadget:()=>extraUseGadget('host'),
+    // QA-only: position edit is limited to this offline experimental BOT build.
+    setLocalPosition:(x,y)=>{
+      if(!solo||game?.phase!=='playing'||!Number.isFinite(x)||!Number.isFinite(y)||
+         x<RADIUS||x>W-RADIUS||y<RADIUS||y>H-RADIUS||circleWall(x,y,RADIUS+3))return false;
+      local.x=x;local.y=y;return true;
+    },
     setOffer:(ids)=>{
       if(!solo||game?.phase!=='round_end'||!Array.isArray(ids)||ids.length!==4||
          new Set(ids).size!==4||ids.some(id=>!draftById.has(id)))return false;
