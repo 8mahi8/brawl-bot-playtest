@@ -2989,7 +2989,10 @@ const BrawlAbilityV1=Object.freeze({
     // Guest's return request is handled by the host's players listener.
     setScreenFit(fitPercent);showScreen('lobby');requestAnimationFrame(gameLoop);
   }
-  window.__brawlDraftFireQA=(angle)=>{if(!Number.isFinite(angle)||!game||game.phase!=='playing'||time()<game.startAt)return false;shoot(false,angle);return true;};
+  window.__brawlDraftFireReadyQA=()=>({now:time(),startAt:game?.startAt,phase:game?.phase,
+    isPlaying:isPlaying(),role,connected,ammo:local.ammo,
+    hostOnline:!!players.host?.online,guestOnline:!!players.guest?.online});
+  window.__brawlDraftFireQA=(angle)=>{if(!Number.isFinite(angle)||!isPlaying()||local.ammo<1)return false;shoot(false,angle);return true;};
   window.__brawlV29QA=()=>({scene:$('appStage').dataset.scene,role,roomId,game:structuredClone(game),local:{...local},remote:{...remote},resources:game?.resources,shots:shots.map(b=>({...b})),fx:fx.map(e=>e.type),jumping:jumping?{total:jumping.total,t:jumping.t}:null,protocol:PROTOCOL,solo,connected,armed:!!game?.bomberArmed?.[role]});
   try { setUp(); window.__brawlEmbedDiag?.ready(); }
   catch(e){ window.__brawlEmbedDiag?.error(e?.message||e); throw e; }
