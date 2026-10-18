@@ -49,7 +49,7 @@ for(const item of registry.cards) {
   assert(duelLab.includes("damage*=1.10"),'1vs1 Bomber must receive normal shot buff');
  }else if(item.id==='split_round'){
   assert(online1.includes("id:'split_round'")&&online2.includes("id:'split_round'"));
-  assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damage=BrawlProjectileV1.damage")&&duelLab.includes("damage*.5"));
+  assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damageScale:(b.damageScale||1)*.6")&&duelLab.includes("damage*.5"));
   assert(squadLab.includes("draftAdvance(b,activeMs/1000")&&squadLab.includes("splitCenter:false")&&squadLab.includes("half?.5:1"));
  }else if(item.id==='delayed_blast'){
   assert(online1.includes("id:'delayed_blast'")&&online2.includes("id:'delayed_blast'"));
