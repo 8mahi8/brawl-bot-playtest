@@ -874,7 +874,8 @@ function squadDamage(g,h,t){
     plus+=5;setCd(ownerSeat,'finisher',t+8000);
   }
   const prev=d.lastNormal[ownerSeat];
-  if(has(ownerSeat,'followthrough')&&prev?.victim===h.victim&&t-prev.at<=2500&&t>prev.at&&cd(ownerSeat,'followthrough')<=t){
+  if(has(ownerSeat,'followthrough')&&prev?.victim===h.victim&&t-prev.at<=2500&&t>prev.at&&
+    (!h.fireId||prev.fireId!==h.fireId)&&cd(ownerSeat,'followthrough')<=t){
     plus+=3;setCd(ownerSeat,'followthrough',t+8000);
   }
   let amount=(h.amount+Math.min(7,plus))*(has(ownerSeat,'recoil_shot')?1.10:1);
@@ -884,7 +885,7 @@ function squadDamage(g,h,t){
   }
   amount=Math.max(0,Math.round(amount));
   if(amount>0){
-    d.lastNormal[ownerSeat]={at:t,victim:h.victim};
+    d.lastNormal[ownerSeat]={at:t,victim:h.victim,fireId:h.fireId||null};
     if(has(ownerSeat,'hit_stride')&&cd(ownerSeat,'hit_stride')<=t){
       d.strideUntil[ownerSeat]=t+1800;setCd(ownerSeat,'hit_stride',t+6000);
     }
