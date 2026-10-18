@@ -117,6 +117,26 @@ async function run(){
   assert(now.every(q=>q.protocol===13012&&q.round===1&&q.online===4));
   const squadDb=await host.evaluate(async code=>(await window.firebase.database().ref('rooms2v2/'+code+'/v').once('value')).val(),squad);
   assert.equal(squadDb,13012,'squad beta uses existing 2v2 root, no normal v3012 collision');
+  // A real player fires through the same RTDB action queue and HOST reducer
+  // as the beta game. The opposite-team WebKit client must SEE the muzzle
+  // before interpolating to the already-advanced host bullet.
+  const red=clients[first.findIndex(q=>q.seat==='red1')].page;
+  await host.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:17000});
+  assert.equal(await host.evaluate(()=>window.__brawlDraftFireQA(0)),true,'host can fire an actual game shot');
+  const onset=await red.waitForFunction(owner=>{
+    const q=window.__brawlV3QA?.();
+    const p=q?.remoteProjectileVisuals?.find(p=>p.flash&&Number.isFinite(p.bornAt)&&
+      q.combat?.projectiles?.[p.id]?.owner===owner);
+    if(!p)return false;
+    const b=q.combat.projectiles[p.id];
+    return {id:p.id,originX:p.originX,originY:p.originY,
+      serverOriginX:b.originX,serverOriginY:b.originY,bornAt:p.bornAt};
+  },first[0].myId,{timeout:16000,polling:'raf'});
+  const shot=await onset.jsonValue();
+  assert(Number.isFinite(shot.originX)&&Number.isFinite(shot.bornAt));
+  assert.equal(shot.originX,shot.serverOriginX,'remote muzzle derives from real host projectile');
+  assert.equal(shot.originY,shot.serverOriginY,'remote muzzle Y comes from real firing source');
+  console.log('PASS FRIEND BETA 2vs2 live shot: receiving rival sees true host muzzle origin and one flash');
   for(const c of all)assert.deepEqual(c.errors,[],'unexpected WebKit JS errors');
   console.log('PASS FRIEND BETA 2vs2: four WebKit clients joined, READY, real RTDB playing, draft protocol separate');
  }finally{
