@@ -546,7 +546,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       squadReloadFactor({owned:{[s.draftSeat]:s.draftCards||[]}},s.draftSeat,s.ammo,t,s.draftMotionSince||0);s.lastShotAt=a.at;
     if(char==='bomber'){
      const dst=landing(pos,a.angle,Math.min(a.reach||BALANCE.bomberRange,BALANCE.bomberRange)); // bombs may land beside/on walls, unlike jumps
-     g.scheduled[a.eventId]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key:a.eventId,x:dst.x,y:dst.y,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,damage:BALANCE.bomberDamage,radius:BALANCE.bomberRadius,enhanced:!!s.armed};s.armed=false;
+     g.scheduled[a.eventId]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key:a.eventId,x:dst.x,y:dst.y,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,damage:BALANCE.bomberDamage,radius:BALANCE.bomberRadius,enhanced:!!s.armed,normalAttack:true};s.armed=false;
     }else{const shots=burst({...a,x:pos.x,y:pos.y},s,g);
        shots.forEach((b,i)=>{g.projectiles[b.id]={...b,spawnAt:t+(char==='gunner'?i*BrawlWeaponV1.gapMs(s.overdriveUntil>t):0)};});
       }
@@ -619,7 +619,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
      if(u.kind==='laser'){const dx=Math.cos(u.angle)*900,dy=Math.sin(u.angle)*900,f=clamp(((p.x-u.x)*dx+(p.y-u.y)*dy)/(dx*dx+dy*dy),0,1);impact=Math.hypot(p.x-u.x-dx*f,p.y-u.y-dy*f)<=R+15;}
      else impact=Math.hypot(p.x-u.x,p.y-u.y)<(u.kind==='jump'?76:u.radius||65);
      if(impact)hit(key+':'+v,u.owner,v,u.kind==='jump'?42:u.kind==='laser'?60:u.damage,
-      {enhanced:!!u.enhanced,kind:u.kind==='bomb'?'normal':'effect'});
+      {enhanced:!!u.enhanced,kind:u.normalAttack===true?'normal':'effect'});
     }emit(u.kind==='bomb'?'bombImpact':u.kind,{owner:u.owner,x:u.x,y:u.y,angle:u.angle||0});
    }
    for(const [v,d]of Object.entries(g.debuffs)){
