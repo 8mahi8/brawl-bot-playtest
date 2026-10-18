@@ -1893,7 +1893,6 @@ const BrawlAbilityV1=Object.freeze({
   function simulate(dt) {
     if(!isPlaying()) {local.vx=0;local.vy=0;return;}
     processBombs();if(local.hp<=0)return;
-    if(solo)draftTrackMotion('host',left.id!==null);
     const oldX=local.x, oldY=local.y;
     local.boost=Math.max(0,local.boost-dt);local.overdrive=Math.max(0,(local.overdrive||0)-dt);
     if(jumping&&jumping.round===game.round){
@@ -1917,6 +1916,8 @@ const BrawlAbilityV1=Object.freeze({
     }
     // The online BOT drives the local player; calculate velocity AFTER BOT movement.
     if(botPilot)runBot(dt,local,remote,false);
+    if(solo)draftTrackMotion('host',draftDidMove(oldX,oldY,local.x,local.y,dt,
+      CHARS[local.char].speed,left.id!==null&&Math.hypot(left.x-left.ox,left.y-left.oy)>5));
     local.vx=(local.x-oldX)/dt;local.vy=(local.y-oldY)/dt;
     if(local.ammo<3){
       local.reload+=dt*draftReloadRate('host')*(local.overdrive>0?CHARS.gunner.reload*1000/BrawlWeaponV1.overdriveReloadMs:1);
@@ -2445,6 +2446,16 @@ const BrawlAbilityV1=Object.freeze({
     if(draftHas(side,'hit_stride')&&b.hitStrideUntil>now)pct+=7;
     return 1+Math.min(12,pct)/100;
   }
+  // DRAFT MOTION GATE START
+  // Movement means actual displacement during active input / BOT navigation.
+  // Pressing a stationary joystick or pushing against a wall is not movement.
+  function draftDidMove(oldX,oldY,newX,newY,dt,expectedSpeed,inputActive=true){
+    if(!inputActive||!Number.isFinite(dt)||dt<=0||
+       !Number.isFinite(expectedSpeed)||expectedSpeed<=0)return false;
+    const displaced=Math.hypot(newX-oldX,newY-oldY);
+    return Number.isFinite(displaced)&&displaced>=Math.max(.08,expectedSpeed*dt*.12);
+  }
+  // DRAFT MOTION GATE END
   function draftTrackMotion(side,moving){
     if(!solo)return;
     if(!moving)draftMoveSince[side]=null;
@@ -2877,8 +2888,6 @@ const BrawlAbilityV1=Object.freeze({
     brain.fire-=dt;brain.strafeTime-=dt;
     brain.boost=Math.max(0,brain.boost-dt);brain.overdrive=Math.max(0,(brain.overdrive||0)-dt);
     if(brain.strafeTime<=0){brain.strafeTime=level==='hard'? .8:1.5;brain.strafe=Math.random()<.5?-1:1;}
-    if(offline&&brain.ammo<3){brain.reload+=dt*draftReloadRate('guest')*(brain.overdrive>0?CHARS.gunner.reload*1000/BrawlWeaponV1.overdriveReloadMs:1);if(brain.reload>=spec.reload){brain.ammo++;brain.reload-=spec.reload;}}
-    if(offline&&brain.ammo>=3)brain.reload=0;
 
     // Never flee into poison just to maintain ideal sniper range.
     const gas=getGasMargin();
@@ -2927,7 +2936,6 @@ const BrawlAbilityV1=Object.freeze({
     const escape=avoidAirborneBombs(actor,offline,level);
     if(escape){vectorX=escape.x*2.8;vectorY=escape.y*2.8;danger=true;}
     const factor=Math.hypot(vectorX,vectorY)||1;
-    if(offline)draftTrackMotion('guest',true);
     const speed=spec.speed*speedFactor*draftMovementRate(offline?'guest':'host')*(brain.boost>0?1.35:1)*(game.debuffs?.[offline?'guest':role]?.slowUntil>time()?BALANCE.bomberSlowFactor:1);
     const oldX=actor.x,oldY=actor.y;
     moveWithWall(actor,vectorX/factor*speed*dt,vectorY/factor*speed*dt);
@@ -2943,6 +2951,14 @@ const BrawlAbilityV1=Object.freeze({
       const side=brain.strafe;
       moveWithWall(actor,-uy*side*speed*dt,ux*side*speed*dt);
       if(Math.hypot(actor.x-oldX,actor.y-oldY)<1)brain.strafe*=-1;
+    }
+    if(offline){
+      draftTrackMotion('guest',draftDidMove(oldX,oldY,actor.x,actor.y,dt,speed));
+      if(brain.ammo<3){
+        brain.reload+=dt*draftReloadRate('guest')*(brain.overdrive>0?
+          CHARS.gunner.reload*1000/BrawlWeaponV1.overdriveReloadMs:1);
+        if(brain.reload>=spec.reload){brain.ammo++;brain.reload-=spec.reload;}
+      }else brain.reload=0;
     }
     actor.angle=angle;
     botLastDecide=danger?'安置へ移動・回避':!visible?'索敵':wallBlocked?'壁を回り込む':distanceDrive<0?'距離を取る':distanceDrive>0?'接近':'射線維持';
