@@ -65,7 +65,7 @@ assert.equal(first.amount,3,'opening guard prevents 7 first-hit damage');
 assert.equal(first.draft.hitStrideUntil.host,9800,'on-hit speed buff credited to attacker');
 assert.equal(hitState.cooldown.guest.opening_guard,undefined,'input is immutable');
 const second=netDraftHit(first.draft,{host:'gunner',guest:'sniper'},{host:100,guest:22},'guest',10,'host','normal',9000);
-assert.equal(second.amount,Math.round((10+5+3)*(1-.08)),'finisher/followthrough stack at +7, armor 8%');
+assert.equal(second.amount,Math.round((10+7)*(1-.08)),'finisher/followthrough stack at +7, armor 8%');
 assert.equal(second.draft.cooldown.host.finisher,17000);
 const denied=netDraftHit(second.draft,{host:'gunner',guest:'sniper'},{host:100,guest:15},'guest',10,'host','normal',9500);
 assert(denied.amount<=10,'cooldowns cannot re-trigger immediately');
