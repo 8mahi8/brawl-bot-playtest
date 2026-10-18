@@ -17,7 +17,7 @@
   const netDraftCardMap=new Map(NET_DRAFT_CARDS.map(c=>[c.id,c]));
   function netDraftNewMatch(){
     return {owned:{host:[],guest:[]},cooldown:{host:{},guest:{}},
-      lastDamage:{host:0,guest:0},lastNormal:{host:-1,guest:-1},
+      lastDamage:{host:0,guest:0},lastNormal:{host:-1,guest:-1},lastFireId:{host:null,guest:null},
       hitStrideUntil:{host:0,guest:0},complete:false};
   }
   function netDraftOffer(owned,room,round){
@@ -65,15 +65,16 @@
   function netDraftNextRound(d,startAt){
     const old=d||netDraftNewMatch();
     return {...old,offered:[],taken:[],order:[],winner:null,turn:0,complete:false,
-      lastDamage:{host:startAt,guest:startAt},lastNormal:{host:-1,guest:-1},
+      lastDamage:{host:startAt,guest:startAt},lastNormal:{host:-1,guest:-1},lastFireId:{host:null,guest:null},
       hitStrideUntil:{host:0,guest:0}};
   }
-  function netDraftHit(d,chars,hp,victim,amount,owner,kind,now){
+  function netDraftHit(d,chars,hp,victim,amount,owner,kind,now,fireId=null){
     const updated=structuredClone(d||netDraftNewMatch());
     // RTDB omits empty arrays/objects: always normalize empty inventories and cooldown maps.
     updated.owned={host:[...(updated.owned?.host||[])],guest:[...(updated.owned?.guest||[])]};
     updated.cooldown={host:{...(updated.cooldown?.host||{})},guest:{...(updated.cooldown?.guest||{})}};
     updated.lastNormal={host:updated.lastNormal?.host??-1,guest:updated.lastNormal?.guest??-1};
+    updated.lastFireId={host:updated.lastFireId?.host??null,guest:updated.lastFireId?.guest??null};
     updated.lastDamage={host:updated.lastDamage?.host||0,guest:updated.lastDamage?.guest||0};
     updated.hitStrideUntil={host:updated.hitStrideUntil?.host||0,guest:updated.hitStrideUntil?.guest||0};
     const has=(side,id)=>updated.owned?.[side]?.includes(id);
@@ -89,7 +90,8 @@
       bonus+=5;updated.cooldown[attacker].finisher=now+8000;
     }
     if(has(attacker,'followthrough')&&updated.lastNormal[attacker]>=0&&
-      now>updated.lastNormal[attacker]&&now-updated.lastNormal[attacker]<=2500&&ready(attacker,'followthrough')){
+      now>updated.lastNormal[attacker]&&now-updated.lastNormal[attacker]<=2500&&
+      (!fireId||updated.lastFireId[attacker]!==fireId)&&ready(attacker,'followthrough')){
       bonus+=3;updated.cooldown[attacker].followthrough=now+8000;
     }
     const raw=(amount+Math.min(7,bonus))*(has(attacker,'recoil_shot')?1.10:1);
@@ -101,7 +103,7 @@
     const result=Math.max(0,Math.round(raw*(1-pct/100)-flat));
     updated.lastDamage[victim]=now;
     if(result>0){
-      updated.lastNormal[attacker]=now;
+      updated.lastNormal[attacker]=now;updated.lastFireId[attacker]=fireId;
       if(has(attacker,'hit_stride')&&ready(attacker,'hit_stride')){
         updated.hitStrideUntil[attacker]=now+1800;
         updated.cooldown[attacker].hit_stride=now+6000;
