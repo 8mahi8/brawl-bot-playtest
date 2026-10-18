@@ -515,7 +515,8 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
  /* BEGIN SHARED RUNTIME COMBAT_ACTIONS */
 // Single-source 1vs1/2vs2 authoritative ammunition refill and volley creation.
 // Inlined within BrawlCombatV8.create scope; uses BrawlWeaponV1 and chars/seatOf/team.
-  function ammo(s,t){const q={...s},rate=q.char==='gunner'&&q.overdriveUntil>t?BrawlWeaponV1.overdriveReloadMs:chars[q.char].reload;
+  function ammo(s,t){const q={...s},base=q.char==='gunner'&&q.overdriveUntil>t?BrawlWeaponV1.overdriveReloadMs:chars[q.char].reload;
+    const rate=base/squadReloadFactor({owned:{[q.draftSeat]:q.draftCards||[]}},q.draftSeat,q.ammo,t,q.draftMotionSince||0);
    if(q.ammo>=3){q.ammo=3;q.refillAt=0;return q;}
    if(q.refillAt>0&&t>=q.refillAt){const n=Math.floor((t-q.refillAt)/rate)+1;q.ammo=Math.min(3,q.ammo+n);q.refillAt=q.ammo===3?0:q.refillAt+n*rate;}return q;
   }
@@ -541,7 +542,8 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
    if(a.type==='shot'){
     const interval=char==='gunner'&&s.overdriveUntil>t?105:160;
     if(s.ammo<1||a.at-s.lastShotAt<interval)return reject('ammo_or_cooldown');
-    s.ammo--;if(!s.refillAt)s.refillAt=t+chars[char].reload;s.lastShotAt=a.at;
+    s.ammo--;if(!s.refillAt)s.refillAt=t+chars[char].reload/
+      squadReloadFactor({owned:{[s.draftSeat]:s.draftCards||[]}},s.draftSeat,s.ammo,t,s.draftMotionSince||0);s.lastShotAt=a.at;
     if(char==='bomber'){
      const dst=landing(pos,a.angle,Math.min(a.reach||BALANCE.bomberRange,BALANCE.bomberRange)); // bombs may land beside/on walls, unlike jumps
      g.scheduled[a.eventId]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key:a.eventId,x:dst.x,y:dst.y,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,damage:BALANCE.bomberDamage,radius:BALANCE.bomberRadius,enhanced:!!s.armed};s.armed=false;
@@ -571,7 +573,12 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
    const oldT=state.clock.t;
    const dt=Math.min(100,elapsed,state.mode==='area'?Math.max(0,BALANCE.areaLimitMs-oldT):Infinity),g=normalize(structuredClone(state)),t=oldT+dt;
    g.clock={t,wallAt:wallNow};g.combatRev++;g.events={};
-   const hits=[],targets={};for(const k of seatKeys){const id=g.seats[k].id;targets[id]=point(g,id,input);g.stats[id]=ammo(g.stats[id],t);
+   const hits=[],targets={};for(const k of seatKeys){const id=g.seats[k].id;targets[id]=point(g,id,input);
+     const movement=input[id],s=g.stats[id];
+     const isMoving=movement&&movement.motionRev===(g.motions?.[id]?.rev||0)&&
+       movement.life===s.life&&Math.hypot(movement.vx||0,movement.vy||0)>8;
+     s.draftMotionSince=isMoving?(s.draftMotionSince||t):0;
+     g.stats[id]=ammo(s,t);
     if(g.mode==='area'&&g.stats[id].gadgets<1&&g.stats[id].gadgetReadyAt>0&&t>=g.stats[id].gadgetReadyAt){g.stats[id].gadgets=1;g.stats[id].gadgetReadyAt=0;}}
    const emit=(type,data)=>{const id=g.combatRev+':'+Object.keys(g.events).length;g.events[id]={type,at:t,...data};};
    const canHit=id=>g.hp[id]>0&&!(g.protection[id]>t)&&!flying(g,id);
@@ -1452,7 +1459,7 @@ function guardFor(id,now){if(!game||!lobby||!(game.hp?.[id]>0))return null;
  return null;}
 function derivedAmmo(player,now){if(!player)return {ammo:3,progress:0};let ammo=clamp(player.ammo??3,0,3);const reload=player.char==='gunner'&&(player.overdriveUntil||0)>now?BrawlWeaponV1.overdriveReloadMs:(CHARS[player.char]?.reload||1000);
  if(ammo>=3||!Number.isFinite(player.refillAt))return {ammo,progress:0};
- const gain=Math.max(0,Math.floor((now-player.refillAt)/reload)+1);
+ const gain=Math.max(0,Math.floor((now-player.refillAt)/(reload/squadReloadFactor({owned:{[player.draftSeat]:player.draftCards||[]}},player.draftSeat,player.ammo,now,player.draftMotionSince||0)))+1);
  if(now>=player.refillAt&&gain>0){ammo=Math.min(3,ammo+gain);}
  const next=player.refillAt+gain*reload;
  return {ammo,progress:ammo>=3?0:clamp(1-(next-now)/reload,0,1)};
@@ -2114,7 +2121,7 @@ function update(dt,movementDt=dt){if(botPilot)return;if(!combatReady()||!alive(m
  else{dx=Number(pcKeys.has('d')||pcKeys.has('arrowright'))-Number(pcKeys.has('a')||pcKeys.has('arrowleft'));dy=Number(pcKeys.has('s')||pcKeys.has('arrowdown'))-Number(pcKeys.has('w')||pcKeys.has('arrowup'));const d=Math.hypot(dx,dy);if(d>0){dx/=d;dy/=d;}}
  const oldX=local.x,oldY=local.y;const boost=game.stats?.[myId]?.boostUntil>combatNow()?1.5:1;
  if(performance.now()<dashUntil){dx=Math.cos(dashA)*6;dy=Math.sin(dashA)*6;}
- const slow=game.debuffs?.[myId]?.slowUntil>combatNow()?BALANCE.bomberSlowFactor:1;const speed=CHARS[game.stats[myId].char].speed;moveWithWallSubsteps(dx*speed*boost*slow*movementDt,dy*speed*boost*slow*movementDt);local.vx=(local.x-oldX)/(movementDt||1);local.vy=(local.y-oldY)/(movementDt||1);
+ const slow=game.debuffs?.[myId]?.slowUntil>combatNow()?BALANCE.bomberSlowFactor:1;const speed=CHARS[game.stats[myId].char].speed*squadMoveFactor(game.draft,mySeat(),game.stats[myId].ammo,combatNow());moveWithWallSubsteps(dx*speed*boost*slow*movementDt,dy*speed*boost*slow*movementDt);local.vx=(local.x-oldX)/(movementDt||1);local.vy=(local.y-oldY)/(movementDt||1);
  if(pcAim)local.a=Math.atan2(pcAim.y-local.y,pcAim.x-local.x);else if(Math.hypot(dx,dy)>.1)local.a=Math.atan2(dy,dx);
  const now=performance.now();if(room&&myId){
   const payload={motionRev:appliedMotionRev,life:game.stats[myId].life,x:Math.round(local.x*10)/10,y:Math.round(local.y*10)/10,vx:Math.round(local.vx),vy:Math.round(local.vy),a:Math.round(local.a*100)/100,connectionId:myConnection,matchId:game.matchId,round:game.round};
@@ -2608,7 +2615,7 @@ function updateBots(dt){if(!combatReady()||solo&&$('botFreeze').checked)return;c
   const seat=lobby.seats[playerSeat(id)];if(t>=b.nextThink){const input=inputSnapshot();for(const [actorId,actor]of Object.entries(botActors)){const stats=game.stats[actorId],motion=game.motions[actorId],scope=game.matchId+':'+game.round+':'+stats?.life+':'+motion?.rev+':'+(actorId===myId?myConnection:'local');if(stats&&actor.scope===scope)input[actorId]={...actor,matchId:game.matchId,round:game.round,motionRev:motion.rev,life:stats.life};}
    b.plan=brainEngine.decide({game,positions:input,owner:id,actor:b,level:seat.botLevel||'normal',brain:b.brain,wallNow:serverNow()});b.brain=b.plan.brain;b.nextThink=t+160;if(b.plan.action)botAction(id,b,b.plan);
   }
-  const speed=CHARS[st.char].speed*(st.boostUntil>t?1.5:1)*(game.debuffs?.[id]?.slowUntil>t?BALANCE.bomberSlowFactor:1),old={x:b.x,y:b.y};const p=engine().move(b,b.plan.move.dx*speed*dt,b.plan.move.dy*speed*dt);b.x=p.x;b.y=p.y;b.vx=(b.x-old.x)/(dt||1);b.vy=(b.y-old.y)/(dt||1);b.a=b.plan.targetId?b.plan.angle:Math.hypot(b.plan.move.dx,b.plan.move.dy)>.1?Math.atan2(b.plan.move.dy,b.plan.move.dx):b.a;
+  const speed=CHARS[st.char].speed*squadMoveFactor(game.draft,playerSeat(id),st.ammo,t)*(st.boostUntil>t?1.5:1)*(game.debuffs?.[id]?.slowUntil>t?BALANCE.bomberSlowFactor:1),old={x:b.x,y:b.y};const p=engine().move(b,b.plan.move.dx*speed*dt,b.plan.move.dy*speed*dt);b.x=p.x;b.y=p.y;b.vx=(b.x-old.x)/(dt||1);b.vy=(b.y-old.y)/(dt||1);b.a=b.plan.targetId?b.plan.angle:Math.hypot(b.plan.move.dx,b.plan.move.dy)>.1?Math.atan2(b.plan.move.dy,b.plan.move.dx):b.a;
   if(id===myId){local={x:b.x,y:b.y,a:b.a,vx:b.vx,vy:b.vy};appliedMotionRev=m.rev;}
   if(now-b.lastSend>=80){b.lastSend=now;const payload={x:Math.round(b.x*10)/10,y:Math.round(b.y*10)/10,vx:Math.round(b.vx),vy:Math.round(b.vy),a:Math.round(b.a*100)/100,seq:id===myId?++sendSeq:++b.seq,connectionId:id===myId?myConnection:id+'_connection',matchId:game.matchId,round:game.round,motionRev:m.rev,life:st.life};room.child('positions/'+id).set(payload).catch(()=>{});}
  }
