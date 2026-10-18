@@ -1636,11 +1636,36 @@ const BrawlAbilityV1=Object.freeze({
   function renderBombEvents(){for(const [id,e]of Object.entries(game?.bombEvents||{})){if(seenBombFX.has(id))continue;seenBombFX.add(id);if(time()-e.at>500)continue;fx.push({type:e.type==='bombImpact'?'impact':'hit',x:e.x,y:e.y,ttl:.4,max:.4});if(e.victim)shotReveal[e.victim]=time()+REVEAL_MS;}if(seenBombFX.size>180)seenBombFX.delete(seenBombFX.values().next().value);}
   function drawBombFlights(){for(const p of Object.values(game?.bombs||{})){if(p.round!==game.round||time()<p.start)continue;const f=clamp((time()-p.start)/(p.until-p.start),0,1),x=p.fromX+(p.x-p.fromX)*f,y=p.fromY+(p.y-p.fromY)*f-Math.sin(f*Math.PI)*80;ctx.fillStyle='#ffb16a';ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff1ba';ctx.fillRect(x+4,y-13,3,6);}}
   function drawDebuff(p,who){const d=game?.debuffs?.[who];if(d?.slowUntil>time()){ctx.strokeStyle='#64ccff';ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(p.x,p.y+18,26,8,0,0,7);ctx.stroke();}if(d?.dotUntil>=time()){ctx.fillStyle='#ffab54';for(let i=0;i<6;i++){const a=i*Math.PI/3+performance.now()/160;ctx.beginPath();ctx.arc(p.x+Math.cos(a)*29,p.y+Math.sin(a)*29,3,0,7);ctx.fill();}}}
+  function netDraftPrepareBombs(before,after,p){
+    if(after===before||p.ultimate)return after;
+    const original=after.bombs?.[p.id+':0'];if(!original)return after;
+    const hand=before.draft?.owned?.[p.owner]||[];
+    original.fireId=p.id;
+    if(hand.includes('split_round')){
+      delete after.bombs[original.id];
+      for(const sign of [-1,1]){
+        const key=p.id+':s'+sign,px=-Math.sin(p.angle)*30*sign,py=Math.cos(p.angle)*30*sign;
+        after.bombs[key]={...original,id:key,fireId:p.id,x:original.x+px,y:original.y+py,
+          damage:original.damage*.5,radius:original.radius*.72,enhanced:false};
+      }
+    }
+    return after;
+  }
+  function netDraftScheduleBlast(state,owner,fireId,x,y,now){
+    const d=state.draft,held=d?.owned?.[owner]||[];
+    if(state.phase!=='playing'||!held.includes('delayed_blast')||!fireId)return;
+    d.blastReadyAt||={};d.blastUsed||={};
+    if(d.blastUsed[fireId]||(d.blastReadyAt[owner]||0)>now)return;
+    d.blastUsed[fireId]=true;d.blastReadyAt[owner]=now+3000;
+    state.draftBlasts||={};
+    state.draftBlasts[fireId]={owner,x,y,round:state.round,due:now+700,damage:10,radius:55};
+    if(Object.keys(d.blastUsed).length>40)d.blastUsed=Object.fromEntries(Object.entries(d.blastUsed).slice(-40));
+  }
   function throwBomb(owner,actor,angle,reach,ultimate){if(!isPlaying())return;const now=time(),p={id:solo?'solo_bomb_'+(++soloShotNumber):ref.child('shots').push().key,round:game.round,owner,x:actor.x,y:actor.y,angle,reach:clamp(reach,55,BALANCE.bomberRange),ultimate,debug:soloDebug('ult')};
-    if(solo){const before=syncSoloResources(),n=bomberCore.queue(before,p,now);if(n===before)return;game=n;local.ult=game.resources.host.ult;botBrain.ult=game.resources.guest.ult;markAttack(owner);updateHUD();return;}
-    const activeRef=ref,startAt=game.startAt;const stillHere=()=>ref===activeRef&&role===owner&&game?.round===p.round&&game?.startAt===startAt;activeRef.child('game').transaction(g=>{if(!g||g.round!==p.round||g.startAt!==startAt)return;const n=bomberCore.queue(g,p,now);
-      if(n!==g&&!ultimate&&n.bombs?.[p.id+':0']&&g.draft?.owned?.[owner]?.includes('recoil_shot'))
-        n.bombs[p.id+':0'].damage*=1.10;
+    if(solo){const before=syncSoloResources(),n=netDraftPrepareBombs(before,bomberCore.queue(before,p,now),p);if(n===before)return;game=n;local.ult=game.resources.host.ult;botBrain.ult=game.resources.guest.ult;markAttack(owner);updateHUD();return;}
+    const activeRef=ref,startAt=game.startAt;const stillHere=()=>ref===activeRef&&role===owner&&game?.round===p.round&&game?.startAt===startAt;activeRef.child('game').transaction(g=>{if(!g||g.round!==p.round||g.startAt!==startAt)return;const n=netDraftPrepareBombs(g,bomberCore.queue(g,p,now),p);
+      if(n!==g&&!ultimate&&g.draft?.owned?.[owner]?.includes('recoil_shot'))
+        for(const b of Object.values(n.bombs||{}))if(b.fireId===p.id)b.damage*=1.10;
       return n===g?undefined:n;},undefined,false).then(r=>{if(!stillHere())return;if(!r.committed&&!ultimate)local.ammo=Math.min(3,local.ammo+1);if(r.committed)markAttack(owner);updateHUD();}).catch(e=>{if(!stillHere())return;if(!ultimate)local.ammo=Math.min(3,local.ammo+1);alertStatus('爆弾の送信に失敗',e);});
   }
   async function useBomberGadget(){if(!isPlaying()||bomberGadgetBusy||game?.bomberArmed?.[role]||local.gadgets<1&&!soloDebug('gadgets'))return;bomberGadgetBusy=true;updateHUD();const round=game.round,startAt=game.startAt,activeRef=ref,owner=role;try{
@@ -1651,7 +1676,45 @@ const BrawlAbilityV1=Object.freeze({
   function afterSoloBombs(previous){local.ult=game.resources.host.ult;local.gadgets=game.resources.host.gadgets;botBrain.ult=game.resources.guest.ult;renderBombEvents();updateHUD();if(previous.phase==='playing'&&game.phase!=='playing'){clearControls();if(game.phase==='round_end'){setMessage(game.loser==='draw'?'DRAW':game.loser==='host'?'ROUND LOSE':'ROUND WIN',1400);soloRoundTimer=setTimeout(()=>{soloRoundTimer=null;if(solo&&game.phase==='round_end')publishSoloRound(false);},2600);}else{showScreen('end');$('finalResult').textContent=game.scores.host>=2?'VICTORY!':'DEFEAT…';$('finalScore').textContent=`${game.scores.host} - ${game.scores.guest}`;}}}
   function processBombs(){if(!isHost||bombBusy||performance.now()-lastBombTick<50||!Object.keys(game?.bombs||{}).length&&!Object.keys(game?.debuffs||{}).length)return;lastBombTick=performance.now();const round=game.round,startAt=game.startAt,now=time(),positions={};positions[role]={x:local.x,y:local.y};positions[other]=solo?{x:remote.x,y:remote.y}:getRemotePredicted();
     if(solo){const previous=syncSoloResources(),n=bomberCore.settle(previous,positions,now,soloDebug('invincible'));if(n!==previous){game=n;afterSoloBombs(previous);}return;}
-    bombBusy=true;ref.child('game').transaction(g=>{if(g?.round!==round||g.startAt!==startAt)return;const n=bomberCore.settle(g,positions,now);return n===g?undefined:n;},undefined,false).catch(e=>console.warn('Bomber tick',e)).finally(()=>{bombBusy=false;});
+    bombBusy=true;ref.child('game').transaction(g=>{if(g?.round!==round||g.startAt!==startAt)return;const n=bomberCore.settle(g,positions,now);
+      if(n!==g&&n.phase==='playing')for(const [key,event] of Object.entries(n.bombEvents||{})){
+        if(event.type!=='hit'||!key.endsWith(':hit'))continue;
+        const bomb=g.bombs?.[key.slice(0,-4)];if(bomb?.fireId)
+          netDraftScheduleBlast(n,bomb.owner,bomb.fireId,bomb.x,bomb.y,now);
+      }
+      return n===g?undefined:n;},undefined,false).catch(e=>console.warn('Bomber tick',e)).finally(()=>{bombBusy=false;});
+  }
+  let draftBlastBusy=false;
+  function processDraftBlasts(){
+    if(!isHost||!ref||draftBlastBusy||game?.phase!=='playing')return;
+    const now=time(),pending=Object.values(game.draftBlasts||{}).some(b=>b.due<=now);
+    if(!pending)return;
+    const round=game.round,startAt=game.startAt,positions={};
+    positions[role]={x:local.x,y:local.y};positions[other]=getRemotePredicted();
+    draftBlastBusy=true;
+    ref.child('game').transaction(current=>{
+      if(!current||current.phase!=='playing'||current.round!==round||current.startAt!==startAt)return;
+      const expired=Object.entries(current.draftBlasts||{}).filter(([,b])=>b.due<=now);
+      if(!expired.length)return;
+      const next=structuredClone(current);
+      for(const [key,b] of expired){
+        delete next.draftBlasts[key];
+        if(b.round!==round)continue;
+        const victim=b.owner==='host'?'guest':'host',p=positions[victim];
+        if(!p||!(next.hp[victim]>0)||Math.hypot(p.x-b.x,p.y-b.y)>b.radius+RADIUS)continue;
+        const hit=netDraftHit(next.draft,next.chars,next.hp,victim,b.damage,b.owner,'effect',now);
+        const amount=hit.amount;
+        next.draft=hit.draft;next.resources=recordDamageResources(next,victim,b.owner,amount);
+        next.hp[victim]=Math.max(0,next.hp[victim]-amount);
+        next.combatAt[victim]=next.combatAt[b.owner]=now;
+        if(next.hp[victim]===0){
+          const scores={...next.scores};scores[b.owner]=(scores[b.owner]||0)+1;
+          next.scores=scores;next.loser=victim;
+          next.phase=scores[b.owner]>=3?'match_end':'round_end';next.endedAt=now;
+        }
+      }
+      return next;
+    },undefined,false).catch(e=>console.warn('Draft blast',e)).finally(()=>{draftBlastBusy=false;});
   }
   function spendResource(kind){
     // Solo takes its values from local state on the next round. Online uses a
@@ -1877,7 +1940,7 @@ const BrawlAbilityV1=Object.freeze({
     }
     return true;
   }
-  function applyDamage(victim,amount,owner,x,y,kind='effect') {
+  function applyDamage(victim,amount,owner,x,y,kind='effect',fireId=null) {
     if(solo){applySoloDamage(victim,amount,owner,x,y);return;}
     if(!isHost||!ref||!game||game.phase!=='playing'||time()<game.startAt)return;
     if(victim!=='host'&&victim!=='guest')return;
@@ -1893,6 +1956,7 @@ const BrawlAbilityV1=Object.freeze({
       if(owner)combatAt[owner]=Math.max(Number(combatAt[owner])||0,time());
       const resources=owner?recordDamageResources(current,victim,owner,dealt):sanitizeResources(current.resources);
       const next={...current,hp,combatAt,resources,draft:hit.draft};
+      if(kind==='normal'&&fireId&&owner)netDraftScheduleBlast(next,owner,fireId,x,y,time());
       if(hp[victim]<=0){
         const winner=victim==='host'?'guest':'host';
         const scores={...current.scores};
@@ -1944,7 +2008,7 @@ const BrawlAbilityV1=Object.freeze({
   }
   function simulate(dt) {
     if(!isPlaying()) {local.vx=0;local.vy=0;draftMoveSince=null;return;}
-    processBombs();if(local.hp<=0)return;
+    processBombs();processDraftBlasts();if(local.hp<=0)return;
     const oldX=local.x, oldY=local.y;
     local.boost=Math.max(0,local.boost-dt);local.overdrive=Math.max(0,(local.overdrive||0)-dt);
     if(jumping&&jumping.round===game.round){
