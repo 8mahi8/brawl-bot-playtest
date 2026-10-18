@@ -540,6 +540,8 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
         const a=Math.atan2(b.vy,b.vx),dmg=BrawlProjectileV1.damage(b,tankDamage)*.6;
         for(const sign of [-1,1]){
           const key=b.id+':child:'+sign,theta=a+sign*.21;
+          g.draftCardStats ||= {splits:0,blasts:0};
+          if(sign===-1)g.draftCardStats.splits++;
           g.projectiles[key]={...b,id:key,char:'split_child',splitCenter:false,splitChild:true,
             damage:dmg,vx:Math.cos(theta)*speed,vy:Math.sin(theta)*speed,spawnAt:now};
         }
@@ -631,6 +633,8 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
      if(!st||!st.draftCards?.includes('delayed_blast')||(st.draftBlastReadyAt||0)>t||
         !fireId||g.scheduled['blast:'+fireId])return;
      st.draftBlastReadyAt=t+3000;
+     g.draftCardStats ||= {splits:0,blasts:0};
+     g.draftCardStats.blasts++;
      g.scheduled['blast:'+fireId]={kind:'draft_blast',owner,ownerLife:st.life,
        until:t+700,x,y,radius:55,damage:10,fireId};
      emit('draftBlastWarning',{owner,x,y});
@@ -2764,7 +2768,13 @@ function squadInit(){
 
 squadInit();applyFit();showScene('home');requestAnimationFrame(frame);
 // Read-only diagnostics used by the local mock test harness; no live-server controls.
-window.__brawlDraftFireReadyQA=()=>({
+window.__brawlDraftMoveQA=(x,y)=>{
+    if(!combatReady()||!Number.isFinite(x)||!Number.isFinite(y)||
+       x<R+4||x>W-R-4||y<R+4||y>H-R-4||
+       WALLS.some(w=>x>=w.x-R-3&&x<=w.x+w.w+R+3&&y>=w.y-R-3&&y<=w.y+w.h+R+3))return false;
+    local.x=x;local.y=y;sendPositionNow();return true;
+  };
+  window.__brawlDraftFireReadyQA=()=>({
   phase:game?.phase,scene,now:serverNow(),startAt:game?.startAt,connected,paused,clockReady,
   lobbyReady,gameReady,presenceReady,positionsReady,effectsReady,pageSuspended,
   matchAligned:game?.matchId===lobby?.matchId,roundAligned:roundResetKey===game?.matchId+':'+game?.round,
