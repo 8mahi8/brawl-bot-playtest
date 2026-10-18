@@ -209,13 +209,14 @@ assert.equal(wallsVM.draftWallPlacement({...wallMatch,gad2Walls:{}},'a',{x:40,y:
  'reject out-of-bounds deployment');
 // Cross-card geometry: a live portable wall can occupy a warp beacon's
 // previous location. Execute BOTH exact host helpers together in a pure VM.
-const warpOnlyEnd=html.indexOf('  // Deterministic host-owned decoy physics.',warpStart);
-assert(warpOnlyEnd>warpStart,'host warp helper boundary before decoy AI');
+const comboWarpStart=html.indexOf('  function draftWarpLanding(g,owner,x,y,input){');
+const warpOnlyEnd=html.indexOf('  // Deterministic host-owned decoy physics.',comboWarpStart);
+assert(warpOnlyEnd>comboWarpStart,'host warp helper boundary before decoy AI');
 const liveWarp=vm.runInNewContext(
  "const W=1000,H=600,R=18,BALANCE={areaRadius:118};"+
  "const walls=[];const seatKeys=['blue1','blue2','red1','red2'];"+
  "const point=(g,id,input)=>input[id];"+
- realWallGeometry+html.slice(warpStart,warpOnlyEnd)+"\n draftWarpLanding",
+ realWallGeometry+html.slice(comboWarpStart,warpOnlyEnd)+"\n draftWarpLanding",
  {},{timeout:1000});
 const coverAndWarp={...wallMatch,clock:{t:200}};
 const safeReturn=liveWarp(coverAndWarp,'a',290,300,positions);
