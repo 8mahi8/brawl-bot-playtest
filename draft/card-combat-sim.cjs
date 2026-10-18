@@ -4,10 +4,10 @@
 'use strict';
 const assert=require('node:assert/strict');
 const catalog=require('./card-catalog.v0.1.json');
-const contract=require('../shared/brawl-core-contract.json');
+const onlineProfile=require('./online-stat-profile.json');
 const {rosterFor}=require('./strategy-core.cjs');
 const cards=new Map(catalog.cards.map(card=>[card.id,card]));
-const hpSpec=Object.fromEntries(Object.entries(contract.common.characters).map(([k,v])=>[k,v.hp]));
+const profileFor=mode=>onlineProfile.characters[mode.slice(0,4)];
 const caps=catalog.globalCaps;
 const plain=x=>JSON.parse(JSON.stringify(x));
 const capped=(v,max)=>Math.min(max,Math.max(0,v));
@@ -24,17 +24,17 @@ function fire(p,id,at){p.cooldowns[id]=at+cards.get(id).effect.cooldownMs;}
 function createCombat({mode,participants,owned={},at=0}){
  assert(['1vs1.ko','2vs2.ko','2vs2.area'].includes(mode),'unsupported draft combat mode');
  assert(Number.isFinite(at)&&at>=0,'invalid start time');
- const size=mode.slice(0,4),teams=rosterFor(size),seats=Object.keys(teams);
+ const size=mode.slice(0,4),teams=rosterFor(size),seats=Object.keys(teams),stats=profileFor(mode);
  assert(participants&&typeof participants==='object'&&Object.keys(participants).length===seats.length,'invalid player roster');
  assert(Object.keys(owned).every(seat=>seats.includes(seat)),'unknown owned-card seat');
  const players={};
  for(const seat of seats){
-  const input=participants[seat];assert(input&&input.team===teams[seat]&&hpSpec[input.char],'wrong seat/team/character');
+  const input=participants[seat];assert(input&&input.team===teams[seat]&&stats[input.char],'wrong seat/team/character');
   const inventory=owned[seat]||[];
   assert(Array.isArray(inventory)&&inventory.length<=3&&new Set(inventory).size===inventory.length,'card inventory invalid');
   assert(inventory.every(id=>cards.has(id)&&cards.get(id).modes.includes(mode)),'card not eligible for this mode');
-  players[seat]={team:input.team,char:input.char,maxHp:hpSpec[input.char],
-   hp:hpSpec[input.char],ammo:3,ult:0,reloadProgress:0,cards:[...inventory],
+  players[seat]={team:input.team,char:input.char,maxHp:stats[input.char].hp,
+   hp:stats[input.char].hp,ammo:3,ult:0,reloadProgress:0,cards:[...inventory],
    moveSince:null,lastReloadAt:at,lastDamageAt:at,lastNormalHits:{},chainStartAt:null,
    cooldowns:{},buffs:{},revealedUntil:0};
  }
@@ -79,7 +79,7 @@ function applyEvent(state,event){
   assert(Number.isFinite(event.dtMs)&&event.dtMs>=0&&event.dtMs<=250,'host-bounded reload dtMs required');
   assert(event.dtMs<=at-p.lastReloadAt,'cannot credit a repeated/overlapping reload interval');
   p.lastReloadAt=at;
-  const base=contract.common.characters[p.char].reloadMs;
+  const base=profileFor(next.mode)[p.char].reloadMs;
   if(p.ammo<3&&p.hp>0){
    const mod=modifiers(next,event.seat);
    // Advance exactly once. If the last bullet fills, do not create unlimited ammo.
