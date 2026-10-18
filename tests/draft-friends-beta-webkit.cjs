@@ -24,7 +24,8 @@ function fixture(file){
 }
 const html={
  '/duel':fixture('BRAWL_DRAFT_FRIENDS_BETA_1vs1.html'),
- '/squad':fixture('BRAWL_DRAFT_FRIENDS_BETA_2vs2.html')
+ '/squad':fixture('BRAWL_DRAFT_FRIENDS_BETA_2vs2.html'),
+ '/layout':fixture('BRAWL_DRAFT_FRIENDS_BETA_2vs2_LAYOUT_PREVIEW.html')
 };
 const port=8878,server=http.createServer((req,res)=>{
  if(!(req.url in html)){res.writeHead(404);res.end();return;}
@@ -50,6 +51,47 @@ async function run(){
  let browser;const all=[];
  try{
   browser=await webkit.launch({headless:true});
+  // Offline UI test of candidate under mobile WebKit: editor must not
+  // require Firebase, must not fire GAD2, and must restore GAD/ULT preferences.
+  const trial=await open(browser,'layout');all.push(trial);
+  const trialPage=trial.page;
+  await trialPage.locator('#layoutBtn').click();
+  assert.equal(await trialPage.evaluate(()=>window.__brawlV3QA().scene),'layout');
+  const preview=trialPage.locator('#mockGad2');
+  await preview.waitFor({state:'visible'});
+  const before=await preview.boundingBox();
+  assert(before?.width>=60&&before?.height>=60,'GAD2 draggable preview visible');
+  await trialPage.locator('#gad2Size').evaluate(el=>{
+    el.value='88';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  assert.equal(await trialPage.locator('#mockGad2').evaluate(el=>el.style.width),'88px');
+  const current=await preview.boundingBox();
+  await trialPage.mouse.move(current.x+current.width/2,current.y+current.height/2);
+  await trialPage.mouse.down();
+  await trialPage.mouse.move(current.x+current.width/2-140,current.y+current.height/2-60,{steps:8});
+  await trialPage.mouse.up();
+  const after=await preview.boundingBox();
+  assert(after.x<before.x-70&&after.y<before.y-25,'GAD2 preview moves when dragged');
+  await trialPage.locator('#layoutDone').click();
+  let saved=await trialPage.evaluate(()=>({
+    gadget2:JSON.parse(localStorage.getItem('brawl-draft-2v2-gad2-layout-v1')),
+    original:JSON.parse(localStorage.getItem('brawl-v3-2v2-r4-layout'))
+  }));
+  assert(saved.gadget2&&saved.gadget2.size===88&&saved.gadget2.x<.75,'GAD2 setting persisted');
+  assert(saved.original.gad&&saved.original.ult&&!saved.original.gad2,
+    'previous normal 2vs2 GAD/ULT preference namespace stays backwards compatible');
+  await trialPage.reload({waitUntil:'load'});
+  await trialPage.locator('#layoutBtn').click();
+  assert.equal(await trialPage.locator('#gad2Size').inputValue(),'88');
+  const reloaded=await trialPage.locator('#mockGad2').boundingBox();
+  assert(Math.abs(reloaded.x-after.x)<5&&Math.abs(reloaded.y-after.y)<5,'layout restores across reload');
+  assert.equal(await trialPage.locator('#squadGad2Action').evaluate(el=>el.style.width),'88px',
+    'actual battle GAD2 adopts saved size');
+  await trialPage.locator('#layoutReset').click();
+  assert.equal(await trialPage.locator('#gad2Size').inputValue(),'68');
+  assert.deepEqual(trial.errors,[],'no WebKit errors from GAD2 layout changes');
+  console.log('PASS 2vs2 GAD2 layout candidate: drag, resize, persistence, reset, battle position and no Firebase');
+  await trial.ctx.close();
   const [h,g]=await Promise.all([open(browser,'duel'),open(browser,'duel')]);all.push(h,g);
   await h.page.locator('#createBtn').click();
   await h.page.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV29QA?.()?.roomId||''),null,{timeout:14000});
