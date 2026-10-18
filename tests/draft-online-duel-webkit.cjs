@@ -111,10 +111,12 @@ async function run(){
   // Real 1vs1 center-bullet split from Tank/Gunner volley (other pellets unchanged).
   assert.equal(await host.evaluate(()=>window.__brawlDraftMoveQA(150,300)),true);
   await host.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.ammo>0,null,{timeout:11000});
+  const splitBefore=await host.evaluate(()=>window.__brawlDraftSplitCountQA());
   assert.equal(await host.evaluate(()=>window.__brawlDraftFireQA(0)),true);
-  await host.waitForFunction(()=>window.__brawlDraftSplitCountQA?.()>=1,null,{timeout:9000});
-  assert.equal(await host.evaluate(()=>window.__brawlDraftSplitCountQA()),1,
-    'only central bullet splits once in a true online volley');
+  await host.waitForFunction(before=>window.__brawlDraftSplitCountQA?.()>before,
+    splitBefore,{timeout:9000});
+  assert.equal(await host.evaluate(()=>window.__brawlDraftSplitCountQA()),splitBefore+1,
+    'this volley adds exactly one center split; earlier volley splits are already counted');
 
   // Reposition a real guest client into the same unobstructed firing lane.
   // The host alone schedules damage and the 700ms follow-up blast in the same RTDB state.
