@@ -256,6 +256,19 @@
 /* School iPad BOT: silent match; character descriptions rather than long control tutorials. */
 #pcHelp{display:none!important}
 #resultStats1v1{max-width:min(330px,90%);width:100%;padding:7px 10px;border:1px solid #486b80;border-radius:8px;background:#10293a;color:#daeaf4;font-size:11px;line-height:1.6;text-align:center}
+/* LOCAL EMULATOR ONLINE DRAFT — no public game styles touched */
+#soloBtn,#joinBotBtn,#onlineDbInput{display:none!important}
+#onlineDraftOverlay{position:absolute;inset:0;z-index:95;background:rgba(3,12,24,.95);display:flex;align-items:center;justify-content:center;padding:10px;touch-action:pan-y}
+#onlineDraftOverlay.hidden{display:none!important}
+#onlineDraftOverlay .draftPanel{width:min(720px,100%);max-height:100%;overflow:auto;background:#132c3d;border:2px solid #58cee0;border-radius:14px;padding:12px;text-align:center;touch-action:pan-y}
+#onlineDraftOverlay .draftCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+#onlineDraftOverlay button{border:1px solid #67a8c2;background:#1a465c;color:#fff;border-radius:9px;min-height:75px;padding:8px;touch-action:manipulation}
+#onlineDraftOverlay button:disabled{opacity:.42}
+#onlineDraftOverlay button b,#onlineDraftOverlay button small{display:block}
+#onlineDraftOverlay button small{font-size:11px;margin-top:4px}
+#onlineDraftOverlay .draftPanel p{font-size:12px;margin:7px 0}
+#onlineDraftOverlay select{font-size:14px;padding:6px;background:#143449;color:#fff}
+#onlineDraftHud{position:absolute;top:75px;left:50%;transform:translateX(-50%);max-width:75%;z-index:35;font-size:11px;padding:4px 10px;border-radius:9px;background:#102d42dd;color:#dbfaff;pointer-events:none;text-align:center}
 </style>
 </head>
 <body>
@@ -1889,7 +1902,7 @@ const BrawlAbilityV1=Object.freeze({
     updateHUD();
   }
   function simulate(dt) {
-    if(!isPlaying()) {local.vx=0;local.vy=0;return;}
+    if(!isPlaying()) {local.vx=0;local.vy=0;draftMoveSince=null;return;}
     processBombs();if(local.hp<=0)return;
     const oldX=local.x, oldY=local.y;
     local.boost=Math.max(0,local.boost-dt);local.overdrive=Math.max(0,(local.overdrive||0)-dt);
@@ -1907,16 +1920,18 @@ const BrawlAbilityV1=Object.freeze({
     } else if(left.id!==null){
       const dx=left.x-left.ox,dy=left.y-left.oy,mag=Math.hypot(dx,dy);
       if(mag>5){
-        const speed=CHARS[local.char].speed*(local.char==='gunner'&&local.boost>0?1.5:1)*(game.debuffs?.[role]?.slowUntil>time()?BALANCE.bomberSlowFactor:1);
+        const speed=CHARS[local.char].speed*netDraftMoveRate()*(local.char==='gunner'&&local.boost>0?1.5:1)*(game.debuffs?.[role]?.slowUntil>time()?BALANCE.bomberSlowFactor:1);
         const intensity=left.id===-99?1:clamp((mag-8)/42,0,1);moveWithWall(local,dx/mag*speed*dt*intensity,dy/mag*speed*dt*intensity);
         if(right.id===null)local.angle=Math.atan2(dy,dx);
       }
     }
     // The online BOT drives the local player; calculate velocity AFTER BOT movement.
     if(botPilot)runBot(dt,local,remote,false);
+    netDraftTrackMotion(netDraftMotion(oldX,oldY,local.x,local.y,dt,CHARS[local.char].speed,
+      left.id!==null&&Math.hypot(left.x-left.ox,left.y-left.oy)>5));
     local.vx=(local.x-oldX)/dt;local.vy=(local.y-oldY)/dt;
     if(local.ammo<3){
-      local.reload+=dt*(local.overdrive>0?CHARS.gunner.reload*1000/BrawlWeaponV1.overdriveReloadMs:1);
+      local.reload+=dt*netDraftReloadRate()*(local.overdrive>0?CHARS.gunner.reload*1000/BrawlWeaponV1.overdriveReloadMs:1);
       const t=CHARS[local.char].reload;
       if(local.reload>=t) {local.ammo++;local.reload-=t;updateHUD();}
     }else local.reload=0;
@@ -2682,7 +2697,189 @@ const BrawlAbilityV1=Object.freeze({
     }
     if(brain.gadgets>0&&(actor.char==='bomber'&&brain.ammo<3&&!game.bomberArmed?.guest||actor.char==='gunner'&&brain.ammo===0||actor.char==='sniper'&&actualDist<125||actor.char==='tank'&&actualDist>150&&actualDist<350))botGadgetSolo();
   }
+// BRAWL Tactical Draft 1vs1: state reducer for a LOCAL-emulator-only online lab.
+// Host begins draft; each player submits an atomic transaction for their own turn.
+// Caller/RTDB Rules must authenticate seats before actual public use.
+  const NET_DRAFT_CARDS=[
+    {id:'empty_sprint',name:'空弾疾走',family:'mobility',desc:'残弾0で移動速度+9%'},
+    {id:'opening_guard',name:'先制防壁',family:'defense',desc:'6秒無被弾なら次の通常射撃を7軽減'},
+    {id:'finisher',name:'仕留めの一押し',family:'pressure',desc:'HP35%以下の敵に通常射撃+5（8秒）'},
+    {id:'moving_reload',name:'走行装填',family:'reload',desc:'0.8秒連続移動中、装填+12%'},
+    {id:'hit_stride',name:'追撃歩法',family:'mobility',desc:'通常攻撃命中後1.8秒、移動+7%'},
+    {id:'clutch_armor',name:'崖際装甲',family:'defense',desc:'HP35%以下で通常射撃-8%'},
+    {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
+    {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'}
+  ];
+  const netDraftCardMap=new Map(NET_DRAFT_CARDS.map(c=>[c.id,c]));
+  function netDraftNewMatch(){
+    return {owned:{host:[],guest:[]},cooldown:{host:{},guest:{}},
+      lastDamage:{host:0,guest:0},lastNormal:{host:-1,guest:-1},
+      hitStrideUntil:{host:0,guest:0},complete:false};
+  }
+  function netDraftOffer(owned,room,round){
+    const valid=[];
+    const cards=NET_DRAFT_CARDS;
+    for(let a=0;a<cards.length;a++)for(let b=a+1;b<cards.length;b++)
+    for(let c=b+1;c<cards.length;c++)for(let d=c+1;d<cards.length;d++){
+      const offer=[cards[a],cards[b],cards[c],cards[d]];
+      if(new Set(offer.map(x=>x.family)).size<3)continue;
+      if(offer.filter(x=>!owned.host.includes(x.id)).length<2)continue;
+      if(offer.filter(x=>!owned.guest.includes(x.id)).length<2)continue;
+      valid.push(offer.map(x=>x.id));
+    }
+    if(!valid.length)throw Error('No legal two-seat online draft offers');
+    let hash=0;
+    for(const ch of String(room)+':'+String(round))hash=(Math.imul(hash,33)+ch.charCodeAt(0))>>>0;
+    return valid[hash%valid.length];
+  }
+  function netDraftBegin(g,room){
+    if(!g||g.phase!=='round_end'||g.loser==='draw'||
+       !['host','guest'].includes(g.loser)||g.scores?.host>=3||g.scores?.guest>=3)return null;
+    if(g.draft?.forRound===g.round)return null;
+    const winner=g.loser==='host'?'guest':'host',loser=g.loser;
+    const prior=g.draft||netDraftNewMatch();
+    const owned={host:[...(prior.owned?.host||[])],guest:[...(prior.owned?.guest||[])]};
+    const offered=netDraftOffer(owned,room,g.round);
+    return {...g,phase:'draft',draft:{...prior,owned,offered,taken:[],
+      order:[winner,loser],winner,turn:0,forRound:g.round,complete:false}};
+  }
+  function netDraftPick(g,side,id,replaceId=null){
+    const d=g?.draft;
+    if(g?.phase!=='draft'||!d||!['host','guest'].includes(side)||
+       d.order?.[d.turn]!==side||d.complete||!d.offered?.includes(id)||
+       d.taken?.includes(id)||d.owned?.[side]?.includes(id)||!netDraftCardMap.has(id))return null;
+    const owned={host:[...d.owned.host],guest:[...d.owned.guest]};
+    if(owned[side].length>=3){
+      if(!owned[side].includes(replaceId))return null;
+      owned[side]=owned[side].filter(x=>x!==replaceId);
+    }else if(replaceId!==null)return null;
+    owned[side].push(id);
+    const turn=d.turn+1,complete=turn===d.order.length;
+    return {...g,phase:complete?'round_end':'draft',
+      draft:{...d,owned,taken:[...d.taken,id],turn,complete}};
+  }
+  function netDraftNextRound(d,startAt){
+    const old=d||netDraftNewMatch();
+    return {...old,offered:[],taken:[],order:[],winner:null,turn:0,complete:false,
+      lastDamage:{host:startAt,guest:startAt},lastNormal:{host:-1,guest:-1},
+      hitStrideUntil:{host:0,guest:0}};
+  }
+  function netDraftHit(d,chars,hp,victim,amount,owner,kind,now){
+    const updated=structuredClone(d||netDraftNewMatch());
+    const has=(side,id)=>updated.owned?.[side]?.includes(id);
+    const ready=(side,id)=>(updated.cooldown?.[side]?.[id]||0)<=now;
+    if(kind!=='normal'||!['host','guest'].includes(owner)){
+      updated.lastDamage[victim]=now;
+      return {amount,draft:updated};
+    }
+    const attacker=owner,pre=hp[victim],max=chars[victim]==='tank'?160:
+      chars[victim]==='gunner'?100:chars[victim]==='sniper'?70:90;
+    let bonus=0;
+    if(has(attacker,'finisher')&&pre/max<=.35&&ready(attacker,'finisher')){
+      bonus+=5;updated.cooldown[attacker].finisher=now+8000;
+    }
+    if(has(attacker,'followthrough')&&updated.lastNormal[attacker]>=0&&
+      now>updated.lastNormal[attacker]&&now-updated.lastNormal[attacker]<=2500&&ready(attacker,'followthrough')){
+      bonus+=3;updated.cooldown[attacker].followthrough=now+8000;
+    }
+    const raw=amount+Math.min(7,bonus);
+    const pct=has(victim,'clutch_armor')&&pre/max<=.35?8:0;
+    let flat=0;
+    if(has(victim,'opening_guard')&&now-updated.lastDamage[victim]>=6000&&ready(victim,'opening_guard')){
+      flat=7;updated.cooldown[victim].opening_guard=now+14000;
+    }
+    const result=Math.max(0,Math.round(raw*(1-pct/100)-flat));
+    updated.lastDamage[victim]=now;
+    if(result>0){
+      updated.lastNormal[attacker]=now;
+      if(has(attacker,'hit_stride')&&ready(attacker,'hit_stride')){
+        updated.hitStrideUntil[attacker]=now+1800;
+        updated.cooldown[attacker].hit_stride=now+6000;
+      }
+    }
+    return {amount:result,draft:updated};
+  }
+  function netDraftMotion(oldX,oldY,newX,newY,dt,speed,active){
+    return !!active&&Number.isFinite(dt)&&dt>0&&Number.isFinite(speed)&&speed>0&&
+      Math.hypot(newX-oldX,newY-oldY)>=Math.max(.08,speed*dt*.12);
+  }
+
+  let draftMoveSince=null,netDraftStarting=false,netDraftPickPending=false;
+  function netDraftTrackMotion(moving){
+    if(!moving)draftMoveSince=null;
+    else if(draftMoveSince===null)draftMoveSince=time();
+  }
+  function netDraftMoveRate(){
+    const held=game?.draft?.owned?.[role]||[];
+    let gain=0;
+    if(held.includes('empty_sprint')&&local.ammo===0)gain+=9;
+    if(held.includes('hit_stride')&&game.draft.hitStrideUntil?.[role]>time())gain+=7;
+    return 1+Math.min(12,gain)/100;
+  }
+  function netDraftReloadRate(){
+    const held=game?.draft?.owned?.[role]||[];
+    let gain=0;
+    if(held.includes('moving_reload')&&draftMoveSince!==null&&time()-draftMoveSince>=800)gain+=12;
+    if(held.includes('last_shell')&&local.ammo===0)gain+=16;
+    return 1+Math.min(20,gain)/100;
+  }
+  async function netDraftBeginRemote(){
+    if(!isHost||!ref||netDraftStarting||game?.phase!=='round_end'||game.draft?.complete)return;
+    netDraftStarting=true;
+    const round=game.round,current=ref;
+    try{
+      await current.child('game').transaction(g=>g?.round===round?netDraftBegin(g,roomId)||undefined:undefined,undefined,false);
+    }catch(e){alertStatus('ドラフト開始に失敗',e);}
+    finally{netDraftStarting=false;}
+  }
+  async function netDraftSubmit(id,replaceId){
+    if(!ref||!game||game.phase!=='draft'||netDraftPickPending)return;
+    netDraftPickPending=true;
+    const current=ref,round=game.round,side=role;
+    try{
+      const result=await current.child('game').transaction(g=>g?.round===round?
+        netDraftPick(g,side,id,replaceId)||undefined:undefined,undefined,false);
+      if(!result.committed)alertStatus('そのカードは選択できません。最新状態を確認してね');
+    }catch(e){alertStatus('カード指名の通信に失敗',e);}
+    finally{netDraftPickPending=false;netDraftRender();}
+  }
+  function netDraftRender(){
+    const panel=$('onlineDraftOverlay'),hud=$('onlineDraftHud');
+    if(!panel||!hud)return;
+    const d=game?.draft,active=!!(ref&&game?.phase==='draft'&&d?.offered);
+    panel.classList.toggle('hidden',!active);
+    const display=side=>(d?.owned?.[side]||[]).map(id=>netDraftCardMap.get(id)?.name||id).join(' / ')||'なし';
+    hud.classList.toggle('hidden',!ref||!game||game.phase==='select'||game.phase==='match_end');
+    if(ref&&game)hud.textContent='YOU：'+display(role)+'　｜　相手：'+display(other);
+    if(!active)return;
+    const myTurn=d.order?.[d.turn]===role,myCards=d.owned?.[role]||[];
+    const choices=d.offered.map(id=>{
+      const c=netDraftCardMap.get(id),disabled=netDraftPickPending||!myTurn||d.taken.includes(id)||myCards.includes(id);
+      return '<button data-net-draft="'+id+'" '+(disabled?'disabled':'')+'><b>'+c.name+'</b><small>'+c.desc+'</small></button>';
+    }).join('');
+    const exchange=myTurn&&myCards.length>=3?
+      '<label>交換するカード <select id="onlineDraftReplace">'+myCards.map(id=>
+        '<option value="'+id+'">'+netDraftCardMap.get(id).name+'</option>').join('')+'</select></label>':'';
+    panel.innerHTML='<div class="draftPanel"><h2>TACTICAL DRAFT｜第'+game.round+'ラウンド終了</h2>'+
+      '<p>勝者 '+(d.winner===role?'YOU':'相手')+' が先に選択</p>'+
+      '<p>'+(myTurn?'カードを1枚選んでね':'相手のカード選択待ち…')+'</p>'+
+      '<div class="draftCards">'+choices+'</div>'+exchange+
+      '<p>所持カード：'+display(role)+'</p></div>';
+  }
+  function netDraftInit(){
+    const el=document.createElement('div');el.id='onlineDraftOverlay';el.className='hidden';
+    el.addEventListener('click',e=>{
+      const button=e.target.closest('button[data-net-draft]');if(!button)return;
+      netDraftSubmit(button.dataset.netDraft,$('onlineDraftReplace')?.value||null);
+    });
+    $('appStage').append(el);
+    const hud=document.createElement('div');hud.id='onlineDraftHud';hud.className='hidden';$('appStage').append(hud);
+    $('lobbyScreen').querySelector('h1 span').textContent='ONLINE TACTICAL DRAFT · 検証版';
+    $('soloBtn').disabled=true;$('joinBotBtn').disabled=true;
+    netDraftRender();
+  }
   function setUp() {
+    netDraftInit();
     document.querySelectorAll('[data-char]').forEach(el=>el.addEventListener('click',()=>chooseChar(el.dataset.char)));
     $('soloBtn').addEventListener('click',startSolo);
     $('createBtn').addEventListener('click',createRoom);
