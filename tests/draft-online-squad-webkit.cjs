@@ -429,6 +429,19 @@ async function run(){
   }
   assert(placed,'host must commit beacon before return');
   assert.equal(placed.gad2Beacons.blue1.until-placed.gad2Beacons.blue1.start,7000);
+  // E2E timing fixture: after proving the native 7s TTL, extend only the
+  // emulator beacon so slow CI WebKit/RTDB pose propagation cannot expire it
+  // while moving a test actor across the wall. Production duration stays 7s.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.gad2Beacons?.blue1&&g.phase==='playing'&&g.round===5){
+        g.gad2Beacons.blue1.until=Math.max(g.gad2Beacons.blue1.until,g.clock.t+25000);
+        return g;
+      }
+    },undefined,false);
+  });
+
   assert(Math.hypot(placed.gad2Beacons.blue1.x-575,placed.gad2Beacons.blue1.y-300)<5,
     'host saves the real original position, not the eventual destination');
   assert.equal(placed.stats[blueId].gadgets,warpGadgets,
@@ -502,6 +515,18 @@ async function run(){
     await new Promise(resolve=>setTimeout(resolve,140));
   }
   assert(beacon2,'rearmed warp beacon must be canonical');
+  // Extend ONLY local test beacon longevity after testing the real 7s
+  // definition above: verifying friendly/enemy shots requires repositioning.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.gad2Beacons?.blue1&&g.phase==='playing'&&g.round===5){
+        g.gad2Beacons.blue1.until=Math.max(g.gad2Beacons.blue1.until,g.clock.t+25000);
+        return g;
+      }
+    },undefined,false);
+  });
+
   const brokenBefore=beacon2.draftCardStats?.gad2BeaconsBroken||0;
   assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,550)),true);
   await blue2.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,
