@@ -2907,7 +2907,7 @@ const BrawlAbilityV1=Object.freeze({
     const beacon=g==='warp_beacon'&&extraState.beacons.host;
     const short={portable_wall:'壁',trap_mine:'地雷',hologram:'分身',
       warp_beacon:'ビーコン',smoke:'煙幕'}[g]||'GAD2';
-    const txt=beacon?'帰還':remaining>0?short+'\\n'+Math.ceil(remaining/1000)+'秒':short;
+    const txt=beacon?'帰還':remaining>0?short+'\n'+Math.ceil(remaining/1000)+'秒':short;
     if(b.textContent!==txt)b.textContent=txt;
     b.title=name;b.setAttribute('aria-label','GAD2：'+name);
   }
