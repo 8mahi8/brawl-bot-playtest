@@ -429,6 +429,19 @@ async function run(){
   }
   assert(placed,'host must commit beacon before return');
   assert.equal(placed.gad2Beacons.blue1.until-placed.gad2Beacons.blue1.start,7000);
+  // E2E timing fixture: after proving the native 7s TTL, extend only the
+  // emulator beacon so slow CI WebKit/RTDB pose propagation cannot expire it
+  // while moving a test actor across the wall. Production duration stays 7s.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.gad2Beacons?.blue1&&g.phase==='playing'&&g.round===5){
+        g.gad2Beacons.blue1.until=Math.max(g.gad2Beacons.blue1.until,g.clock.t+25000);
+        return g;
+      }
+    },undefined,false);
+  });
+
   assert(Math.hypot(placed.gad2Beacons.blue1.x-575,placed.gad2Beacons.blue1.y-300)<5,
     'host saves the real original position, not the eventual destination');
   assert.equal(placed.stats[blueId].gadgets,warpGadgets,
@@ -468,6 +481,93 @@ async function run(){
   await blue1.waitForFunction(()=>{const p=window.__brawlV3QA?.()?.local;
     return p&&Math.hypot(p.x-575,p.y-300)<9;},null,{timeout:10000});
   console.log('PASS LIVE GAD2 warp: 7s beacon, real 4-client position sync, wall bypass, 15s cooldown, no normal gadget use');
+
+
+  // Regression: a beacon is a tangible one-shot destructible object. Friendly
+  // shots ignore it; a genuine enemy projectile destroys it exactly once.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.draft.gadget2ReadyAt.blue1=0; // E2E fixture: independent second activation
+      return g;
+    },undefined,false);
+  });
+  const blue2=bySeat.blue2;
+  const blue2Id=(await get(blue2)).myId;
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,420)),true);
+  assert.equal(await blue2.evaluate(()=>window.__brawlDraftMoveQA(445,420)),true);
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(720,520)),true);
+  await host.waitForFunction(ids=>{
+    const ps=window.__brawlV3QA?.()?.positionValues||{};
+    return Math.abs((ps[ids.blue1]?.x||0)-575)<5&&
+      Math.abs((ps[ids.blue2]?.x||0)-445)<5&&
+      Math.abs((ps[ids.red1]?.y||0)-520)<5;
+  },{blue1:blueId,blue2:blue2Id,red1:redId},{timeout:13000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftGad2FireQA(0)),true);
+  let beacon2=null;
+  const pDeadline=Date.now()+9000;
+  while(Date.now()<pDeadline){
+    const g=await committedGame(code);
+    if(g?.gad2Beacons?.blue1&&g?.draftCardStats?.gad2BeaconsPlaced===2){
+      beacon2=g;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,140));
+  }
+  assert(beacon2,'rearmed warp beacon must be canonical');
+  // Extend ONLY local test beacon longevity after testing the real 7s
+  // definition above: verifying friendly/enemy shots requires repositioning.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.gad2Beacons?.blue1&&g.phase==='playing'&&g.round===5){
+        g.gad2Beacons.blue1.until=Math.max(g.gad2Beacons.blue1.until,g.clock.t+25000);
+        return g;
+      }
+    },undefined,false);
+  });
+
+  const brokenBefore=beacon2.draftCardStats?.gad2BeaconsBroken||0;
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,550)),true);
+  await blue2.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,
+    null,{timeout:12000});
+  assert.equal(await blue2.evaluate(()=>window.__brawlDraftFireQA(0)),true,
+    'allied bullet fires through friendly beacon');
+  await blue2.waitForTimeout(500);
+  let stillThere=await committedGame(code);
+  assert(stillThere.gad2Beacons?.blue1,'friendly projectile may NOT break allied beacon');
+  assert.equal(stillThere.draftCardStats?.gad2BeaconsBroken||0,brokenBefore,
+    'friendly projectile cannot increment break counter');
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(720,420)),true);
+  await host.waitForFunction(id=>{
+    const p=window.__brawlV3QA?.()?.positionValues?.[id];
+    return p&&Math.abs(p.x-720)<5&&Math.abs(p.y-420)<5;
+  },redId,{timeout:12000});
+  await red1.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,
+    null,{timeout:12000});
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true,
+    'enemy sends a REAL normal volley toward the beacon');
+  let broken=null,last=null;
+  const breakDeadline=Date.now()+10500;
+  while(Date.now()<breakDeadline){
+    const g=await committedGame(code);
+    last={phase:g?.phase,broken:g?.draftCardStats?.gad2BeaconsBroken||0,
+      beacons:Object.keys(g?.gad2Beacons||{}),cooldown:g?.draft?.gadget2ReadyAt?.blue1,
+      time:g?.clock?.t};
+    if(last.phase==='playing'&&last.broken===brokenBefore+1&&
+       last.beacons.length===0&&last.cooldown>last.time){
+      broken=g;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,180));
+  }
+  assert(broken,'enemy projectile did not break beacon exactly once: '+JSON.stringify(last));
+  assert(broken.draft.gadget2ReadyAt.blue1-broken.clock.t>13500,
+    'enemy destruction starts full 15-second GAD2 cooldown');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(()=>{
+    const q=window.__brawlDraftGad2QA?.();
+    return q&&!q.beacons.blue1&&q.beaconBroken>=1;
+  },null,{timeout:13000})));
+  console.log('PASS LIVE warp counterplay: friendly fire ignored, enemy normal projectile breaks exactly 1 beacon, cooldown synced');
 
 
   await host.evaluate(()=>{
