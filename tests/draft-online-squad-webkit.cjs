@@ -95,10 +95,15 @@ async function run(){
     const id=await p.locator('#squadDraftOverlay button[data-squad-draft]:not([disabled])').first().getAttribute('data-squad-draft');
     await p.locator('#squadDraftOverlay button[data-squad-draft="'+id+'"]').click();
     cardChosen.push(id);
-    await host.waitForFunction(n=>{
-      const d=window.__brawlV3QA?.()?.draft;
-      return d&&(d.turn>=n||d.complete===true);
-    },i+1,{timeout:20000});
+    await host.waitForFunction(({n,r})=>{
+      const q=window.__brawlV3QA?.(),d=q?.draft;
+      if(!q||!d)return false;
+      // The fourth pick may advance from a transient round_end directly into
+      // the next playing round before the host UI observes draft.complete.
+      if(n===4&&q.round===r+1&&q.game==='playing')return true;
+      return q.round===r&&d.forRound===r&&
+        (d.turn>=n||d.complete===true);
+    },{n:i+1,r:round},{timeout:32000});
    }
    assert.equal(new Set(cardChosen).size,4);
    // Round-end is a brief phase; a fast host may already start the next round.
