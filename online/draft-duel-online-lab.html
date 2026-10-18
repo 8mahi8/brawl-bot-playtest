@@ -1047,6 +1047,7 @@ const BrawlAbilityV1=Object.freeze({
     $('leaveLobbyBtn').classList.add('hidden');
     $('joinBtn').disabled=false; $('joinBotBtn').disabled=false;
     showScreen('lobby');
+    netDraftRender();
     alertStatus(msg);
   }
   async function copyCode() {
@@ -1268,7 +1269,7 @@ const BrawlAbilityV1=Object.freeze({
       requestBotReady();
       requestBotRematch();
       if(isHost&&game&&game.phase!=='select'&&!(players.guest&&players.guest.online))returnToSelect();
-      if(isHost&&game&&game.phase==='round_end'&&game.draft?.complete&&!roundAdvanceTimer &&
+      if(isHost&&game&&game.phase==='round_end'&&(game.draft?.complete||game.loser==='draw')&&!roundAdvanceTimer &&
           players.guest?.online && players.host?.online)scheduleNextRound();
       if(game && game.phase==='match_end' && isHost) {
         if(players.guest&&players.guest.back)watchBackToSelect();
@@ -1308,7 +1309,7 @@ const BrawlAbilityV1=Object.freeze({
         showScreen('game');
       } else if(game.phase==='round_end') {
         if(isHost){
-          if(game.draft?.complete){if(!roundAdvanceTimer)scheduleNextRound();}
+          if(game.draft?.complete||game.loser==='draw'){if(!roundAdvanceTimer)scheduleNextRound();}
           else netDraftBeginRemote();
         }
         clearControls();
@@ -1869,12 +1870,12 @@ const BrawlAbilityV1=Object.freeze({
     }).catch(e=>{console.error('damage',e);$('networkStatus').textContent='HP同期エラー';});
   }
   function scheduleNextRound(){
-    if(!game?.draft?.complete||game?.phase!=='round_end')return;
+    if(game?.phase!=='round_end'||!game.draft?.complete&&game.loser!=='draw')return;
     if(roundAdvanceTimer)clearTimeout(roundAdvanceTimer);
     const round=game.round;
     roundAdvanceTimer=setTimeout(()=>{
       roundAdvanceTimer=null;
-      if(ref&&connected&&game&&game.phase==='round_end'&&game.round===round&&game.draft?.complete&&
+      if(ref&&connected&&game&&game.phase==='round_end'&&game.round===round&&(game.draft?.complete||game.loser==='draw')&&
          players.host?.online&&players.guest?.online&&!startPending)publishRound(false);
     },2700);
   }
