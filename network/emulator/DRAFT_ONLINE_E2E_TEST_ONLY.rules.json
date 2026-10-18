@@ -1,0 +1,10 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "roomsDraft1v1": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
