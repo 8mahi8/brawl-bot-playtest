@@ -85,6 +85,13 @@ assert.equal(ult.amount,10,'recoil does not buff ultimate or gadget');
 assert(html.includes("motion(g,a.owner,{...delta,a:a.angle})"),'recoil motion belongs to authoritative host');
 assert(html.includes("s.draftRecoilUntil=t+1200"),'one movement per volley under 1.2 second cooldown');
 assert(html.includes("normalAttack:true"),'ordinary Bomber bombs distinguish from ultimate bomb fan');
+assert(src.includes("id:'delayed_blast'"),'delayed blast available to squad after host-side implementation');
+assert(html.includes("draft.blastUsed[actionId]"),'delayed blast one per original fireActionId');
+assert(html.includes("draft.blastCooldown[seat]=t+3000"),'ability has 3-second per-seat cooldown');
+assert(html.includes("until:t+700,damage:10,radius:55"),'blast delay/radius/damage numbers');
+assert(html.includes("hit(key+':'+victim,u.owner,victim,u.damage,{kind:'effect'})"),
+ 'secondary blast is effect damage and must NOT trigger another delayed explosion');
+assert(!src.includes("id:'split_round'")&&!src.includes("id:'ricochet'"),'other unimplemented shot modifiers are gated');
 assert(html.includes("kind:u.normalAttack===true?'normal':'effect'"),'ULT does not receive recoil damage bonus');
 assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
 assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
