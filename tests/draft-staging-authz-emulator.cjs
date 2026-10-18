@@ -132,8 +132,12 @@ async function run(){
   await privileged('members/alice/state','removed');
   await denied('removed member loses view access',get(p(alice,'views/alice')));
   await denied('removed member cannot fire',set(p(alice,'inputs/alice/action-0004'),{...action(connA2),seq:4}));
-  const finalSeed=await env.withSecurityRulesDisabled(ctx=>get(p(ctx.database(),'server/scores/blue')));
-  assert.equal(finalSeed.val(),0,'all attacker attempts must leave server-owned score intact');
+  let finalScore;
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const snapshot=await get(p(ctx.database(),'server/scores/blue'));
+    finalScore=snapshot.val();
+  });
+  assert.equal(finalScore,0,'all attacker attempts must leave server-owned score intact');
   console.log('PASS STAGING RTDB AUTHZ '+passes+' allow/deny checks; no production or public state touched');
  }finally{
   await env.cleanup();
