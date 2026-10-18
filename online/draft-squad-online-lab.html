@@ -643,6 +643,10 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
    function hit(key,owner,victim,amount,extra={}){
      if(!g.usedHits[key]&&canHit(victim)){
        g.usedHits[key]=1;hits.push({key,owner,victim,amount,...extra});
+       if(key.startsWith('blast:')){
+         g.draftCardStats ||= {splits:0,blasts:0,blastHits:0};
+         g.draftCardStats.blastHits=(g.draftCardStats.blastHits||0)+1;
+       }
        if(extra.blastEligible&&extra.kind==='normal')scheduleDraftBlast(owner,extra.fireId,extra.x,extra.y);
      }
    }
