@@ -2567,15 +2567,85 @@ const BrawlAbilityV1=Object.freeze({
     }
     return true;
   }
+  // BOT DRAFT POLICY START
+  // Heuristic only: evaluate an entire three-card build, not a static card tier list.
+  // Keep this pure so offline tests can check combos, counterpicks and replacement.
+  const draftBotWeights=Object.freeze({
+    empty_sprint:53,opening_guard:62,finisher:56,moving_reload:57,
+    hit_stride:57,clutch_armor:51,last_shell:56,followthrough:49
+  });
+  function draftBotLoadoutScore(cards,hero,enemyHero,enemyCards){
+    const has=id=>cards.includes(id),rival=id=>enemyCards.includes(id);
+    let score=cards.reduce((sum,id)=>sum+(draftBotWeights[id]||0),0);
+    // Different characters benefit differently from reload, defense and pressure.
+    if(hero==='sniper'){
+      if(has('last_shell'))score+=9;
+      if(has('moving_reload'))score+=5;
+      if(has('opening_guard'))score+=7;
+    }else if(hero==='tank'){
+      if(has('clutch_armor'))score+=9;
+      if(has('finisher'))score+=4;
+      if(has('empty_sprint'))score+=6;
+    }else if(hero==='gunner'){
+      if(has('hit_stride'))score+=5;
+      if(has('followthrough'))score+=7;
+    }else if(hero==='bomber'){
+      if(has('moving_reload'))score+=6;
+      if(has('last_shell'))score+=6;
+    }
+    if(enemyHero==='sniper'&&has('opening_guard'))score+=10;
+    if(enemyHero==='tank'&&has('finisher'))score+=4;
+    // Counter only cards the opponent is visibly holding.
+    if(rival('finisher')&&has('clutch_armor'))score+=12;
+    if(rival('finisher')&&has('opening_guard'))score+=7;
+    if(rival('followthrough')&&has('opening_guard'))score+=8;
+    if(rival('followthrough')&&has('empty_sprint'))score+=6;
+    if(rival('opening_guard')&&has('hit_stride'))score+=5;
+    if(rival('clutch_armor')&&has('finisher'))score+=6;
+    // Reward complementary triggers. Discount overlapping effect caps.
+    if(has('empty_sprint')&&has('last_shell'))score+=13;
+    if(has('empty_sprint')&&has('moving_reload'))score+=7;
+    if(has('hit_stride')&&has('followthrough'))score+=15;
+    if(has('opening_guard')&&has('clutch_armor'))score+=5;
+    if(has('finisher')&&has('followthrough'))score+=1;
+    if(has('moving_reload')&&has('last_shell'))score-=6;
+    if(has('hit_stride')&&has('empty_sprint'))score-=4;
+    return score;
+  }
+  function draftBotBestPick({offered,taken,owned,enemyOwned,hero,enemyHero}){
+    const before=draftBotLoadoutScore(owned,hero,enemyHero,enemyOwned);
+    const enemyBefore=draftBotLoadoutScore(enemyOwned,enemyHero,hero,owned);
+    let best=null;
+    for(const id of offered){
+      if(taken.includes(id)||owned.includes(id)||!(id in draftBotWeights))continue;
+      const replacements=owned.length>=3?owned:[null];
+      for(const replaceId of replacements){
+        const next=replaceId?owned.filter(x=>x!==replaceId).concat(id):owned.concat(id);
+        const ownGain=draftBotLoadoutScore(next,hero,enemyHero,enemyOwned)-before;
+        // A small denial bonus; never replace winning-first with catch-up gifts.
+        const enemyGain=enemyOwned.includes(id)?0:
+          draftBotLoadoutScore(enemyOwned.concat(id),enemyHero,hero,owned)-enemyBefore;
+        const value=ownGain+Math.max(0,enemyGain)*.14;
+        if(!best||value>best.value||
+           (value===best.value&&(id<best.id||(id===best.id&&String(replaceId)<String(best.replaceId))))){
+          best={id,replaceId,value};
+        }
+      }
+    }
+    return best;
+  }
+  // BOT DRAFT POLICY END
   function draftAutoBotPick(){
     if(draftTimer){clearTimeout(draftTimer);draftTimer=null;}
     draftTimer=setTimeout(()=>{
       draftTimer=null;
       if(!solo||game?.phase!=='round_end'||draftQueue[draftTurn]!=='guest')return;
-      const priority=['opening_guard','finisher','moving_reload','clutch_armor','hit_stride','last_shell','empty_sprint','followthrough'];
-      const candidates=draftOffer.filter(id=>!draftOfferTaken.has(id)&&!draftOwned.guest.includes(id));
-      candidates.sort((a,b)=>priority.indexOf(a)-priority.indexOf(b));
-      draftPick('guest',candidates[0],draftOwned.guest.length>=3?draftOwned.guest[0]:null);
+      const plan=draftBotBestPick({
+        offered:draftOffer,taken:[...draftOfferTaken],owned:draftOwned.guest,
+        enemyOwned:draftOwned.host,hero:game.chars.guest,enemyHero:game.chars.host
+      });
+      if(!plan)throw Error('No legal BOT draft pick');
+      draftPick('guest',plan.id,plan.replaceId);
     },500);
   }
   function draftBegin(winner){
