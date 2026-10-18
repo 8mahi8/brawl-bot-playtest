@@ -2099,7 +2099,7 @@ function quietKoTickSafe(g,age){
  if(!g||g.phase!=='playing'||g.mode!=='ko'||!g.clock||
   !Number.isFinite(age)||age<0||g.clock.t+Math.max(200,age)>=QUIET_KO_GAS_GUARD_MS)return false;
  if(Object.keys(g.projectiles||{}).length||Object.keys(g.scheduled||{}).length||
-    Object.keys(g.debuffs||{}).length||Object.keys(g.events||{}).length)return false;
+    Object.keys(g.gad2Walls||{}).length||Object.keys(g.debuffs||{}).length||Object.keys(g.events||{}).length)return false;
  const seats=Object.values(g.seats||{});
  // Clock-sensitive resources must already be full/inactive, or a fresh
  // action might observe stale refill/regen timers while the write is deferred.
@@ -2181,7 +2181,7 @@ function alive(id){return (game?.hp?.[id]??0)>0;}
 function combatReady(){return !(solo&&document.hidden)&&scene==='game'&&clockReady&&lobbyReady&&gameReady&&presenceReady&&game?.matchId===lobby?.matchId&&roundResetKey===game.matchId+':'+game.round&&positionsReady&&effectsReady&&!pageSuspended&&connected&&game?.phase==='playing'&&!paused&&serverNow()>=game.startAt;}
 function targetPoint(id){if(id===myId)return {...local};return engine().point(game,id,positions);}
 function shotLineBlocked(x1,y1,x2,y2,radius=6){
- return WALLS.some(w=>{
+ return [...WALLS,...draftVisibleWalls()].some(w=>{
   let lo=0,hi=1;
   for(const [p,d,min,max] of [[x1,x2-x1,w.x-radius,w.x+w.w+radius],[y1,y2-y1,w.y-radius,w.y+w.h+radius]]){
    if(Math.abs(d)<1e-8){if(p<min||p>max)return false;continue;}
@@ -2416,7 +2416,12 @@ async function considerRematch(){if(rematchBusy||!isAuthoritative()||game?.phase
   },undefined,false);
  }catch(e){console.error('Rematch failed',e);}finally{rematchBusy=false;}
 }
-function touchingWall(x,y){return WALLS.some(w=>x+R>w.x&&x-R<w.x+w.w&&y+R>w.y&&y-R<w.y+w.h);}
+function draftVisibleWalls(){
+ return Object.values(game?.gad2Walls||{}).filter(w=>
+  w.kind==='portable_wall'&&w.start<=combatNow()&&w.until>combatNow());
+}
+function touchingWall(x,y){return [...WALLS,...draftVisibleWalls()].some(w=>
+  x+R>w.x&&x-R<w.x+w.w&&y+R>w.y&&y-R<w.y+w.h);}
 function moveWithWall(dx,dy){const nx=clamp(local.x+dx,R,W-R),ny=clamp(local.y+dy,R,H-R);
  if(!touchingWall(nx,local.y))local.x=nx;if(!touchingWall(local.x,ny))local.y=ny;}
 // Recover foreground movement lost to rAF stalls without jumping through
@@ -2570,6 +2575,14 @@ function drawArena(){
  const m=scene==='game'?gasMargin():0;
  if(m>0){ctx.fillStyle='rgba(255,50,95,.23)';ctx.fillRect(0,0,W,m);ctx.fillRect(0,H-m,W,m);ctx.fillRect(0,m,m,Math.max(0,H-2*m));ctx.fillRect(W-m,m,m,Math.max(0,H-2*m));ctx.strokeStyle='#ff527a';ctx.lineWidth=3;ctx.strokeRect(m,m,Math.max(0,W-2*m),Math.max(0,H-2*m));}
  if(game?.mode==='area'){ctx.fillStyle=game.area?.contested?'rgba(255,204,110,.14)':'rgba(105,217,255,.10)';ctx.strokeStyle=game.area?.contested?'#ffd17c':'#78eefe';ctx.lineWidth=3;ctx.beginPath();ctx.arc(W/2,H/2,BALANCE.areaRadius,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.textAlign='center';ctx.font='bold 14px system-ui';ctx.fillStyle='#d8eef4';ctx.fillText(game.area?.contested?'CONTESTED':'HOT ZONE',W/2,H/2+5);}
+  for(const unit of draftVisibleWalls()){
+   ctx.save();ctx.fillStyle=unit.team===myTeam()?'rgba(87,207,198,.94)':'rgba(238,125,113,.9)';
+   ctx.fillRect(unit.x,unit.y,unit.w,unit.h);
+   ctx.strokeStyle='#e6fff6';ctx.lineWidth=3;
+   ctx.strokeRect(unit.x+.5,unit.y+.5,unit.w-1,unit.h-1);
+   ctx.fillStyle='#17333d';ctx.fillRect(unit.x+8,unit.y+9,unit.w-16,unit.h-18);
+   ctx.restore();
+  }
   for(const cloud of Object.values(game?.gad2Smokes||{})){
     if(cloud.kind!=='smoke'||visualCombatNow()>=cloud.until)continue;
     ctx.save();ctx.fillStyle='rgba(111,173,195,.25)';
@@ -2712,6 +2725,7 @@ function drawMinimap(now){
  c.clearRect(0,0,ww,hh);c.fillStyle='#142633';c.fillRect(0,0,ww,hh);
  c.save();c.scale(mapScaleX,mapScaleY);
  c.fillStyle='#516679';for(const w of WALLS)c.fillRect(w.x,w.y,w.w,w.h);
+ c.fillStyle='#72d5c2';for(const w of draftVisibleWalls())c.fillRect(w.x,w.y,w.w,w.h);
  c.fillStyle='rgba(46,151,146,.38)';for(const z of BUSHES)c.fillRect(z.x,z.y,z.w,z.h);
  if(game.mode==='area'){c.strokeStyle='#7de8ee';c.lineWidth=4;c.beginPath();c.arc(W/2,H/2,BALANCE.areaRadius,0,Math.PI*2);c.stroke();}
  const left=clamp(-view.ox/view.scale,0,W),top=clamp(-view.oy/view.scale,0,H);
@@ -3054,9 +3068,9 @@ function squadGad2ButtonRefresh(){
  const beacon=id==='warp_beacon'&&game?.gad2Beacons?.[seat];
  const activeBeacon=!!(beacon&&beacon.owner===myId&&beacon.until>combatNow());
  b.disabled=(remaining>0&&!activeBeacon)||!combatReady()||!alive(myId);
- const name=id==='smoke'?'煙幕':id==='warp_beacon'?(activeBeacon?'帰還':'ビーコン'):'地雷';
+ const name=id==='smoke'?'煙幕':id==='warp_beacon'?(activeBeacon?'帰還':'ビーコン'):id==='portable_wall'?'壁':'地雷';
  b.textContent=remaining>0?name+'\n'+Math.ceil(remaining/1000)+'秒':'GAD2\n'+name;
- b.setAttribute('aria-label','GAD2 '+(id==='warp_beacon'?(activeBeacon?'ビーコンに帰還':'ワープビーコン'):id==='smoke'?'スモーク':'トラップマイン')+(remaining>0?' 再使用まで'+Math.ceil(remaining/1000)+'秒':''));
+ b.setAttribute('aria-label','GAD2 '+(id==='warp_beacon'?(activeBeacon?'ビーコンに帰還':'ワープビーコン'):id==='smoke'?'スモーク':id==='portable_wall'?'ポータブルウォール':'トラップマイン')+(remaining>0?' 再使用まで'+Math.ceil(remaining/1000)+'秒':''));
  squadGad2ButtonPosition();
 }
 function squadRender(){
@@ -3135,6 +3149,9 @@ window.__brawlDraftGad2QA=()=>({
  equipped:squadGad2Equipped(game?.draft,mySeat()),mineCount:Object.keys(game?.gad2Mines||{}).length,
  smokes:structuredClone(game?.gad2Smokes||{}),
  beacons:structuredClone(game?.gad2Beacons||{}),
+ walls:structuredClone(game?.gad2Walls||{}),
+ wallPlaced:game?.draftCardStats?.gad2WallsPlaced||0,
+ wallCollisionQA:(x,y,r=6)=>[...WALLS,...draftVisibleWalls()].some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
  beaconPlaced:game?.draftCardStats?.gad2BeaconsPlaced||0,
  warpReturned:game?.draftCardStats?.gad2WarpReturns||0,
  beaconBroken:game?.draftCardStats?.gad2BeaconsBroken||0,
