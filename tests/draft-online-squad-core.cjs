@@ -102,7 +102,7 @@ assert.equal(Object.keys(cleared.blastCooldown).length,0,'round reset clears coo
 assert(html.includes("until:t+700,damage:10,radius:55"),'blast delay/radius/damage numbers');
 assert(html.includes("hit(key+':'+victim,u.owner,victim,u.damage,{kind:'effect'})"),
  'secondary blast is effect damage and must NOT trigger another delayed explosion');
-assert(src.includes("id:'split_round'")&&!src.includes("id:'ricochet'"),'split implemented, ricochet gated');
+assert(src.includes("id:'split_round'")&&src.includes("id:'ricochet'"),'2v2 split and ricochet implemented');
 assert(html.includes("kind:u.normalAttack===true?'normal':'effect'"),'ULT does not receive recoil damage bonus');
 // Execute exact online-host split step in a pure VM: one central shot -> two 60%-damage children.
 const advStart=html.indexOf('  function draftAdvance(b,dt,g,targetHit,now){');
@@ -123,6 +123,57 @@ assert(kids.every(b=>b.char==='gunner'&&b.damage===10),'split children retain or
 assert(html.includes('damage:BALANCE.bomberDamage*(half?.5:1)'),'Bomber mini-blasts must each do half damage');
 assert(html.includes('enhanced:!!s.armed&&(!half||i===0)'),'Bomber enhanced DOT may be applied only once');
 assert(html.includes('squadBlastAuthorize(draft,seat,actionId,t)'),'delayed blast must preserve one per original action');
+// Execute the EXACT host reflection and Bomber geometry, not a duplicated test implementation.
+const ricochetStart=html.indexOf('  function draftReflectAxis(px,py,nx,ny,r){');
+const ricochetEnd=html.indexOf('  function initialize(matchId,seats,mode,startAt){',ricochetStart);
+assert(ricochetStart>0&&ricochetEnd>ricochetStart,'reflector must belong to the host reducer');
+const ricochetFunctions=vm.runInNewContext(
+ "const W=1000,H=600;"+
+ "const wall=(x,y,r=0)=>x+r>150&&x-r<190&&y+r>80&&y-r<160;"+
+ "const BrawlProjectileV1={advance:()=>true};"+
+ html.slice(ricochetStart,ricochetEnd)+"\n({draftAdvance,draftBombBounce})",
+ {},{timeout:1000});
+const rebound={id:'r:0',fireId:'r',x:105,y:120,vx:120,vy:0,dist:0,
+ range:240,radius:4,damage:10,splitCenter:false,ricochetEnabled:true,ricochetUsed:0};
+const reboundGame={projectiles:{}};
+assert.equal(ricochetFunctions.draftAdvance(rebound,.55,reboundGame,()=>false,500),true);
+assert.equal(rebound.ricochetUsed,1,'exactly one wall reflection');
+assert.equal(rebound.vx,-120,'horizontal wall reverses horizontal velocity');
+assert.equal(rebound.damageScale,.7,'the first ricochet scales damage to 70%');
+assert.equal(reboundGame.draftCardStats.ricochets,1,'host counts confirmed reflections');
+rebound.x=145;rebound.y=120;rebound.vx=120; // approaching same wall again
+assert.equal(ricochetFunctions.draftAdvance(rebound,.1,reboundGame,()=>false,600),false,
+ 'a second terrain strike must absorb the bullet, not bounce again');
+assert.equal(reboundGame.draftCardStats.ricochets,1,'second collision does not increment bounces');
+const corner={id:'corner',x:125,y:55,vx:120,vy:120,dist:0,range:240,radius:3,
+ ricochetEnabled:true,ricochetUsed:0,splitCenter:false};
+const cornerGame={projectiles:{}};
+assert.equal(ricochetFunctions.draftAdvance(corner,.4,cornerGame,()=>false,700),false,
+ 'diagonal corner collision is absorbed instead of choosing a fake normal');
+assert.equal(corner.ricochetUsed,0,'ambiguous corners cannot bounce or pass walls');
+const splitWithBounce={id:'split:0',fireId:'original-fire',x:105,y:120,
+ vx:120,vy:0,dist:0,range:140,radius:4,damage:10,
+ splitCenter:true,ricochetEnabled:true,ricochetUsed:0};
+const combine={projectiles:{}};
+assert.equal(ricochetFunctions.draftAdvance(splitWithBounce,.8,combine,()=>false,800),false);
+const bouncedKids=Object.values(combine.projectiles);
+assert.equal(bouncedKids.length,2,'one center shot creates two daughters, even after bounce');
+assert(bouncedKids.every(k=>k.ricochetUsed===1&&k.fireId==='original-fire'),
+ 'children inherit the bounce budget and the original shot ID');
+assert(bouncedKids.every(k=>Math.abs(k.damageScale-.42)<1e-10),
+ 'split after bounce multiplies .7 ricochet by .6 split damage');
+const bombRebound=ricochetFunctions.draftBombBounce({x:100,y:120},{x:220,y:120});
+assert.equal(bombRebound.bounced,true,'Bomber throw reflects when terrain is encountered');
+assert(bombRebound.x<150,'reflected Bomber bomb cannot land through the wall');
+const bombCorner=ricochetFunctions.draftBombBounce({x:100,y:30},{x:200,y:130});
+assert(bombCorner.blocked===true,'Bomber corner collision terminates safely');
+assert(html.includes('damage:BALANCE.bomberDamage*(half?.5:1)*(trajectory.bounced?.7:1)'),
+ 'normal Bomber shot takes exactly one 70% bounce multiplier');
+assert(html.includes("ricochetEnabled:(s.draftCards||[]).includes('ricochet')"),
+ 'only card owners may bounce normal bullets');
+assert(html.includes("if(!b.splitCenter&&!b.ricochetEnabled)"),
+ 'non-card projectiles stay on original verified physics');
+
 const singleVolley=squadNewMatch();
 singleVolley.owned.blue1=['followthrough'];
 const sameG={draft:singleVolley,seats:Object.fromEntries(seats.map(s=>[s,{id:s+'_id'}])),
