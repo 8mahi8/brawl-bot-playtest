@@ -343,7 +343,7 @@ async function run(){
     null,{timeout:12000});
   assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,420)),true);
   assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(970,500)),true);
-  const blueId=(await get(blue1)).myId;
+  // Reuse the earlier blueId identifier for the same seat.
   await blue1.waitForFunction(id=>{
     const p=window.__brawlV3QA()?.positionValues?.[id];
     return p&&Math.abs(p.x-970)<5&&Math.abs(p.y-500)<5;
