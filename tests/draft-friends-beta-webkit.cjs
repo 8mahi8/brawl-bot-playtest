@@ -17,7 +17,9 @@ function fixture(file){
  s=s.replaceAll(remote,demoUrl).replace(csp,emulatorCsp);
  const needle=file.includes('1vs1')?'    db=firebase.database();':' db=firebase.database(); // Friends beta uses selected cloud RTDB.';
  if(!s.includes(needle))throw Error('database initialization changed: '+file);
- s=s.replace(needle,needle+' db.useEmulator(\'127.0.0.1\',9000);');
+ s=s.replace(needle,file.includes('1vs1')
+   ?needle+' db.useEmulator(\'127.0.0.1\',9000);'
+   :" db=firebase.database(); db.useEmulator('127.0.0.1',9000); // emulator-only test fixture");
  return s;
 }
 const html={
