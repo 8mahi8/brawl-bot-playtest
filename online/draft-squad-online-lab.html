@@ -594,9 +594,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
     // Once per NORMAL volley; only host reducer schedules actual damage.
     const seat=seatOf(g,owner),actionId=String(key).split(':')[0],draft=g.draft;
     if(extra.kind!=='normal'||!seat||!squadHand(draft,seat).includes('delayed_blast'))return;
-    draft.blastCooldown ||= {};draft.blastUsed ||= {};
-    if(draft.blastUsed[actionId]||(draft.blastCooldown[seat]||0)>t)return;
-    draft.blastUsed[actionId]=1;draft.blastCooldown[seat]=t+3000;
+    if(!squadBlastAuthorize(draft,seat,actionId,t))return;
     const p=targets[victim];
     g.scheduled['draftBlast:'+actionId]={
       kind:'draftBlast',owner,ownerLife:g.stats[owner].life,matchId:g.matchId,
@@ -818,6 +816,18 @@ function squadPick(g,actorSeat,id,replaceId=null){
   owned[actorSeat].push(id);
   const turn=d.turn+1,complete=turn===4;
   return {...g,phase:complete?'round_end':'draft',draft:{...d,owned,taken:[...(d.taken||[]),id],turn,complete}};
+}
+function squadBlastAuthorize(d,seat,fireActionId,t){
+  if(!d||!SQUAD_SEATS.includes(seat)||typeof fireActionId!=='string'||
+     fireActionId.length<1||fireActionId.length>128||!Number.isFinite(t)||
+     !squadHand(d,seat).includes('delayed_blast'))return false;
+  d.blastUsed ||= {};d.blastCooldown ||= {};
+  if(d.blastUsed[fireActionId]||(d.blastCooldown[seat]||0)>t)return false;
+  d.blastUsed[fireActionId]=1;d.blastCooldown[seat]=t+3000;
+  // Even unusually long matches must not grow this RTDB map without bound.
+  const keys=Object.keys(d.blastUsed);
+  if(keys.length>80)for(const key of keys.slice(0,keys.length-80))delete d.blastUsed[key];
+  return true;
 }
 function squadNextRound(d){
   const last=d||squadNewMatch();
