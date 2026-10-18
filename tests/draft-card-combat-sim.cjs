@@ -112,7 +112,7 @@ trigger(out,'gadget_momentum');s=out.state;
 out=step(s,{type:'hit',attacker:'red1',victim:'blue1',kind:'normal',baseDamage:5,at:120});
 trigger(out,'rebound_step');s=out.state;
 assert.equal(modifiers(s,'blue1').moveSpeedPct,12,'bush + rebound is capped');
-s=t(s,{type:'hit',attacker:'red1',victim:'blue1',kind:'normal',baseDamage:95,at:121});
+s=t(s,{type:'hit',attacker:'red1',victim:'blue1',kind:'normal',baseDamage:105,at:121});
 assert.equal(s.players.blue1.hp,0);
 const cooldown=JSON.stringify(s.players.blue1.cooldowns);
 s=t(s,{type:'respawn',seat:'blue1',at:4000});
