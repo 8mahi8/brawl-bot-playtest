@@ -47,6 +47,21 @@ async function run(){
     if(card==='hologram'){
       const h=s.holo[0];
       assert(h.until-Date.now()>5000&&h.until-Date.now()<=7100,'7 second hologram lifetime');
+      const initialX=h.x,initialY=h.y;
+      await x.page.waitForTimeout(300);
+      const changed=await x.page.evaluate(()=>window.__brawlPlaystyleQA().state.holo[0]||null);
+      // If the enemy destroys the decoy early, that is also a legal end state.
+      if(changed)assert(Math.hypot(changed.x-initialX,changed.y-initialY)>2,'hologram moves on its own like a bot');
+    }
+    if(card==='portable_wall'){
+      assert.equal(s.wall[0].width,42);
+      assert.equal(s.wall[0].height,112);
+      assert(s.wall[0].height>=s.wall[0].width*2.5,'wall must be tall portrait cover');
+    }
+    if(card==='smoke'){
+      assert.equal((await x.page.evaluate(()=>window.__brawlPlaystyleQA().smokeStatus)),'hidden','smoke hides player from distant BOT');
+      assert.equal(await x.page.evaluate(()=>window.__brawlPlaystyleQA().fire(0)),true);
+      assert.equal((await x.page.evaluate(()=>window.__brawlPlaystyleQA().smokeStatus)),'revealed','firing exposes smoky player');
     }
     assert.deepEqual(x.errors,[],'browser errors '+card);
     await x.page.close();
@@ -104,6 +119,44 @@ async function run(){
   assert.deepEqual(newer.errors,[]);
   await newer.page.close();
 
+  // The old bug rejected returns if there was a wall ANYWHERE between actor and beacon,
+  // or if distance was over 260. Both are invalid for an instant warp.
+  const warp=await play(['warp_beacon']);
+  assert.equal((await warp.page.evaluate(()=>window.__brawlPlaystyleQA().gadget)),'warp_beacon');
+  assert.equal(await warp.page.evaluate(()=>window.__brawlPlaystyleQA().useGadget()),true,'place warp beacon');
+  let wp=await warp.page.evaluate(()=>window.__brawlV29QA().local);
+  assert.equal(await warp.page.evaluate(()=>window.__brawlPlaystyleQA().setLocalPosition(750,300)),true,
+    'move player to far side of center wall in deterministic QA');
+  const dist=await warp.page.evaluate(()=>Math.hypot(window.__brawlV29QA().local.x-150,window.__brawlV29QA().local.y-300));
+  assert(dist>260,'setup must exceed the previously silent 260-distance rejection');
+  assert.equal(await warp.page.evaluate(()=>window.__brawlPlaystyleQA().useGadget()),true,
+    'warp should return across center wall and long distance');
+  wp=await warp.page.evaluate(()=>window.__brawlV29QA().local);
+  assert(Math.hypot(wp.x-150,wp.y-300)<6,'player returns to beacon safely');
+  assert.equal((await warp.page.evaluate(()=>window.__brawlPlaystyleQA().state.beacons.host)),undefined,
+    'beacon consumed on successful return');
+  assert.deepEqual(warp.errors,[]);
+  await warp.page.close();
+
+  // Harmless hologram tracer must never be inserted into real combat bullets.
+  const clone=await play(['hologram'],'tank');
+  assert.equal(await clone.page.evaluate(()=>window.__brawlPlaystyleQA().setBotFireCooldownForTest(4)),true);
+  assert.equal(await clone.page.evaluate(()=>window.__brawlPlaystyleQA().setBotPosition(400,300)),true);
+  const beforeHP=await clone.page.evaluate(()=>window.__brawlV29QA().game.hp.guest);
+  assert.equal(await clone.page.evaluate(()=>window.__brawlPlaystyleQA().useGadget()),true);
+  await clone.page.waitForFunction(()=>window.__brawlPlaystyleQA().state.holo[0]?.shotCount>=1,null,{timeout:3000});
+  const beforeClone=await clone.page.evaluate(()=>window.__brawlPlaystyleQA().state.holo[0]||null);
+  assert(beforeClone?.shotCount>=1,'independent hologram BOT visibly fires at enemy');
+  assert(beforeClone.strafe===1||beforeClone.strafe===-1,'decoy bot has independent strafe state');
+  const fake=await clone.page.evaluate(()=>window.__brawlPlaystyleQA().state.fakeShots);
+  assert(fake.length>=1,'hologram spawned at least one visible tracer');
+  assert(fake.every(s=>s.damage===0),'hologram must not deal damage');
+  assert.equal(await clone.page.evaluate(()=>window.__brawlV29QA().game.hp.guest),beforeHP,
+    'fake shots did not damage actual enemy when real BOT fire is paused');
+  assert(!code.includes('shots.push({side:h.side'), 'fake shots may not enter damaging projectile collection');
+  assert.deepEqual(clone.errors,[]);
+  await clone.page.close();
+
   const gunner=await play(['split_round','recoil_shot','delayed_blast'],'gunner');
   assert.equal((await gunner.page.evaluate(()=>window.__brawlPlaystyleQA().owned.host)).length,3);
   // Fire a real Gunner volley: check one recoil impulse and actual split children.
@@ -114,7 +167,9 @@ async function run(){
   await gunner.page.waitForFunction(()=>window.__brawlV29QA().shots.some(s=>s.splitChild),null,{timeout:3500});
   assert.deepEqual(gunner.errors,[]);
   await gunner.page.close();
-  console.log('PASS WebKit: stronger 60-world recoil, 3-button live layout editing + persisted GAD2 drag/size, latest GAD2 draft pick overwrites equipment, solo effects, normal releases frozen');
+  assert(code.includes("fillText('分身'"),'owner must recognize own hologram');
+  assert(code.includes("fillText(smokeMode==='hidden'?'煙幕：潜伏中':'煙幕：発見中'"),'player must see smoke hidden/revealed labels');
+  console.log('PASS WebKit: autonomous harmless decoy, owner marker, smoke stealth indicator, tall cover, reliable long-range cross-wall beacon return, GAD2 editor and original cards');
  }finally{await context.close();await browser.close();}
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});
