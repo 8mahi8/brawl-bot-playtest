@@ -948,6 +948,104 @@ async function run(){
   },null,{timeout:16000})));
   console.log('PASS LIVE disconnect/resume: RTDB onDisconnect, shared pause frozen clock, same seat and cards, four-WebKit match resume');
 
+  // A restored seat must be functional, not merely present in the roster:
+  // prove a new-position packet and a NEW, host-accepted normal shot arrive
+  // under the new connection token. Read only committed emulator REST data.
+  assert((resumed.hp?.[red2Before.myId]||0)>0,
+    'rejoining live player must still be alive to test post-reconnect combat');
+  await red2.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,
+    null,{timeout:16000});
+  const red2Move={id:red2Before.myId,token:red2After.connectionId,x:970,y:500};
+  assert.equal(await red2.evaluate(({x,y})=>window.__brawlDraftMoveQA(x,y),red2Move),true,
+    'restored seat can move through existing local combat input');
+  await host.waitForFunction(({id,token,x,y})=>{
+    const p=window.__brawlV3QA?.()?.positionValues?.[id];
+    return p?.connectionId===token&&Math.abs(p.x-x)<3&&Math.abs(p.y-y)<3;
+  },red2Move,{timeout:16000});
+  const beforeRejoinShot=await committedGame(code);
+  const oldSeq=beforeRejoinShot.stats[red2Before.myId].lastActionSeq||0;
+  assert.equal(await red2.evaluate(()=>window.__brawlDraftFireQA(Math.PI/2)),true,
+    'restored participant can submit a real attack');
+  let rejoinShot=null;
+  const rejoinDeadline=Date.now()+12000;
+  while(Date.now()<rejoinDeadline){
+    const g=await committedGame(code);
+    if((g?.stats?.[red2Before.myId]?.lastActionSeq||0)>oldSeq&&
+      Object.values(g?.usedActions||{}).some(a=>
+        a.owner===red2Before.myId&&a.type==='shot'&&a.seq>oldSeq&&a.status==='accepted')){
+      rejoinShot=g;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,150));
+  }
+  assert(rejoinShot,'new connection must receive an accepted, server-committed attack receipt');
+  console.log('PASS LIVE resumed seat: fresh-token movement observed by host and normal shot accepted');
+
+  // An extra Safari context presenting a stolen/stale session seat ID must
+  // NEVER attach as a fifth player or take over the currently active seat.
+  const intruder=await client(browser,4);
+  clients.push(intruder);
+  await intruder.page.evaluate(({room,id})=>
+    sessionStorage.setItem('brawl-v3-2v2-seat-'+room,id),
+    {room:code,id:red2Before.myId});
+  await intruder.page.locator('#roomInput').fill(code);
+  await intruder.page.locator('#joinBtn').click();
+  await intruder.page.waitForFunction(()=>
+    document.getElementById('homeStatus')?.textContent?.includes('参加失敗'),
+    null,{timeout:14000});
+  const intruderState=await get(intruder.page);
+  assert.equal(intruderState.roomId,'','fifth client must not join full match');
+  assert.equal(intruderState.seat,null,'active red2 identity cannot be stolen');
+  assert.equal((await get(host)).online,4,'duplicate attempt leaves four legitimate seats online');
+  assert.equal((await get(host)).lobby.seats.red2.id,red2Before.myId);
+  console.log('PASS LIVE duplicate join: active session identity rejected, four seats preserved');
+
+  // Host interruption: other clients pause (and do NOT become owner), then
+  // the original owner resumes the same seat and takes a fresh host token.
+  const hostBefore=await get(host),beforeHostDrop=await committedGame(code);
+  assert.equal(hostBefore.seat,'blue1');
+  assert.equal(beforeHostDrop.phase,'playing');
+  await host.evaluate(()=>window.firebase.database().goOffline());
+  await red2.waitForFunction(()=>window.__brawlV3QA?.()?.online===3,
+    null,{timeout:14000});
+  await red2.waitForFunction(()=>window.__brawlV3QA?.()?.game==='paused',
+    null,{timeout:14000});
+  const hostPaused=await committedGame(code);
+  assert.equal(hostPaused.phase,'paused');
+  assert.equal(hostPaused.pausedFrom,'playing');
+  for(const peer of [bySeat.blue2,bySeat.red1,bySeat.red2])
+    assert.equal((await get(peer)).hostAuthorized,false,
+      'non-owners cannot seize authority after host disconnect');
+  await new Promise(resolve=>setTimeout(resolve,260));
+  assert.equal((await committedGame(code)).clock.t,hostPaused.clock.t,
+    'host outage freezes the shared combat clock');
+  await host.reload({waitUntil:'domcontentloaded'});
+  await host.waitForFunction(()=>typeof window.__brawlV3QA==='function',
+    null,{timeout:12000});
+  await host.locator('#roomInput').fill(code);
+  await host.locator('#joinBtn').click();
+  await host.waitForFunction(({id,room})=>{
+    const q=window.__brawlV3QA?.();
+    return q?.myId===id&&q?.seat==='blue1'&&q?.roomId===room&&!!q.connectionId;
+  },{id:hostBefore.myId,room:code},{timeout:17000});
+  await host.waitForFunction(()=>{
+    const q=window.__brawlV3QA?.();
+    return q?.online===4&&q?.game==='playing'&&q?.round===5&&
+      q.hostAuthorized&&q.gameHostToken===q.connectionId;
+  },null,{timeout:22000});
+  const newHost=await get(host),hostRestored=await committedGame(code);
+  assert.notEqual(newHost.connectionId,hostBefore.connectionId,
+    'host must not reuse its disconnected authority token');
+  assert.equal(hostRestored.hostToken,newHost.connectionId);
+  assert.equal(hostRestored.phase,'playing');
+  assert.equal(hostRestored.round,beforeHostDrop.round);
+  assert.deepEqual(hostRestored.scores,beforeHostDrop.scores);
+  assert.equal(hostRestored.hp[hostBefore.myId],beforeHostDrop.hp[hostBefore.myId]);
+  assert.deepEqual(hostRestored.draft.owned.blue1,beforeHostDrop.draft.owned.blue1);
+  await Promise.all(bySeat.red2===host?[host]:[bySeat.blue2,bySeat.red1,bySeat.red2].map(p=>
+    p.waitForFunction(()=>window.__brawlV3QA?.()?.game==='playing'&&
+      window.__brawlV3QA?.()?.online===4,null,{timeout:16000})));
+  console.log('PASS LIVE host recovery: peers pause, no authority hijack, new host token, same combat and cards');
+
 
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
