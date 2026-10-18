@@ -665,6 +665,130 @@ async function run(){
     'expired wall releases client-side movement constraint');
   console.log('PASS LIVE GAD2 portable wall: 4 WebKit clients, host 4s/12s timers, Tank volley blocked, client movement collision and expiry');
 
+  // Real 4-client local Firebase hologram: host creates moving decoy, fake
+  // projectiles never hurt players, allies-only mark, enemy shot dissolves once.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.draft.owned.blue1=['hologram','split_round','delayed_blast'];
+      g.draft.gadget2ReadyAt.blue1=0;
+      g.stats[g.seats.blue1.id].draftCards=[...g.draft.owned.blue1];
+      g.hp[g.seats.red1.id]=500;
+      return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(()=>window.__brawlDraftGad2QA?.()?.equipped==='hologram',
+    null,{timeout:12000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,500)),true);
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(720,500)),true);
+  await host.waitForFunction(ids=>{
+    const p=window.__brawlV3QA?.()?.positionValues||{};
+    return Math.abs((p[ids.a]?.x||0)-575)<5&&Math.abs((p[ids.a]?.y||0)-500)<5&&
+      Math.abs((p[ids.b]?.x||0)-720)<5&&Math.abs((p[ids.b]?.y||0)-500)<5;
+  },{a:blueId,b:redId},{timeout:13000});
+  const beforeHolo=await committedGame(code);
+  const normalGadgetCount=beforeHolo.stats[blueId].gadgets;
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftGad2FireQA(0)),true);
+  let holoSet=null;
+  const holoDeadline=Date.now()+9500;
+  while(Date.now()<holoDeadline){
+    const g=await committedGame(code);
+    if(g?.gad2Holograms?.blue1?.kind==='hologram'&&
+       g?.draftCardStats?.gad2HologramsPlaced===1){holoSet=g;break;}
+    await new Promise(resolve=>setTimeout(resolve,140));
+  }
+  assert(holoSet,'host must commit moving hologram independently of actors');
+  const firstHolo=holoSet.gad2Holograms.blue1;
+  assert.equal(firstHolo.until-firstHolo.start,7000,'hologram native duration 7s');
+  assert.equal(holoSet.draft.gadget2ReadyAt.blue1-firstHolo.start,14000,
+    'hologram native cooldown 14s');
+  assert.equal(holoSet.stats[blueId].gadgets,normalGadgetCount,
+    'hologram does not spend regular gadget');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(()=>{
+    return window.__brawlDraftGad2QA?.()?.holograms?.blue1?.kind==='hologram';
+  },null,{timeout:9500})));
+  assert.equal((await blue1.evaluate(()=>window.__brawlDraftHoloViewQA('blue1'))).label,'分身',
+    'owner sees decoy label');
+  assert.equal((await blue2.evaluate(()=>window.__brawlDraftHoloViewQA('blue1'))).label,'分身',
+    'ally distinguishes teammate decoy');
+  assert.equal((await red1.evaluate(()=>window.__brawlDraftHoloViewQA('blue1'))).label,'ENEMY',
+    'opponent sees no giveaway label');
+  // After checking 7s native TTL, extend only the local E2E fixture to
+  // allow slow RTDB pose synchronization and a genuine subsequent shot.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.gad2Holograms?.blue1&&g.phase==='playing'){
+        g.gad2Holograms.blue1.until=Math.max(g.gad2Holograms.blue1.until,g.clock.t+26000);
+        return g;
+      }
+    },undefined,false);
+  });
+  let aiAndFake=null,lastHolo=null;
+  const aiDeadline=Date.now()+8500;
+  while(Date.now()<aiDeadline){
+    const g=await committedGame(code),h=g?.gad2Holograms?.blue1;
+    lastHolo={holo:h,shots:g?.draftCardStats?.gad2HoloShotsFired||0};
+    if(h&&Math.hypot(h.x-firstHolo.x,h.y-firstHolo.y)>7&&lastHolo.shots>=1){
+      aiAndFake=g;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,150));
+  }
+  assert(aiAndFake,'hologram must move as AI and shoot harmless fake shots: '+JSON.stringify(lastHolo));
+  assert.equal(aiAndFake.hp[redId],500,'fake bullets NEVER damage the red team');
+  assert.equal(aiAndFake.stats[blueId].ult,holoSet.stats[blueId].ult,
+    'fake bullets do not charge their owner ULT');
+  assert.equal(Object.values(aiAndFake.gad2FakeShots||{}).every(s=>s.damage===0),true,
+    'all host-authored fake projectiles have exactly zero damage');
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,640)),true,
+    'owner relocates away from decoy firing lane');
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(780,500)),true);
+  await host.waitForFunction(ids=>{
+    const ps=window.__brawlV3QA?.()?.positionValues||{};
+    return Math.abs((ps[ids.blue]?.y||0)-640)<5&&
+      Math.abs((ps[ids.red]?.x||0)-780)<5;
+  },{blue:blueId,red:redId},{timeout:13500});
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      const h=g?.gad2Holograms?.blue1;
+      if(!h||g.phase!=='playing')return;
+      h.x=650;h.y=500;h.a=0;
+      h.fireAt=g.clock.t+20000; // no new fake shots during the shot collision proof
+      h.until=Math.max(h.until,g.clock.t+25000);
+      return g;
+    },undefined,false);
+  });
+  const holoBeforeShot=await committedGame(code);
+  const realOwnerHp=holoBeforeShot.hp[blueId],realEnemyHp=holoBeforeShot.hp[redId];
+  await red1.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,
+    null,{timeout:12000});
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true,
+    'real opponent shoots once through a clear lane at the decoy');
+  let holoDissolve=null,lastHoloShot=null;
+  const dissolveDeadline=Date.now()+13000;
+  while(Date.now()<dissolveDeadline){
+    const g=await committedGame(code);
+    lastHoloShot={count:g?.draftCardStats?.gad2HologramsDissolved||0,
+      holograms:Object.keys(g?.gad2Holograms||{}),
+      hpOwner:g?.hp?.[blueId],hpEnemy:g?.hp?.[redId],phase:g?.phase};
+    if(lastHoloShot.count===1&&lastHoloShot.holograms.length===0&&
+       lastHoloShot.phase==='playing'){holoDissolve=g;break;}
+    await new Promise(resolve=>setTimeout(resolve,170));
+  }
+  assert(holoDissolve,'one real enemy firing action must dissolve exactly one decoy: '+
+    JSON.stringify(lastHoloShot));
+  assert.equal(holoDissolve.hp[blueId],realOwnerHp,
+    'destroying a decoy cannot damage the real owner');
+  assert.equal(holoDissolve.hp[redId],realEnemyHp,
+    'decoy shot and explosion must never damage the attacker');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(()=>{
+    const q=window.__brawlDraftGad2QA?.();
+    return q&&!q.holograms.blue1&&q.holoDissolves===1;
+  },null,{timeout:12000})));
+  console.log('PASS LIVE GAD2 hologram: 4 WebKit, autonomous movement, fake bullets zero HP/ULT, ally-only mark, enemy volley one-hit dissolve');
+
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
    return window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
