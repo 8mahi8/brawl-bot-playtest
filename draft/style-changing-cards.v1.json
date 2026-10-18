@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "status": "approved_for_prototype_not_implemented",
+  "target": "BRAWL Tactical Draft 1vs1/2vs2 and 20-second Hot Zone draft segments",
+  "newCardCount": 9,
+  "rejected": [
+    {
+      "id": "tracking_marker",
+      "name": "追跡マーカー",
+      "reason": "Low gameplay impact; user rejected 2026-10-18"
+    }
+  ],
+  "constraints": {
+    "noChangeToNormalMode": true,
+    "inventoryLimit": 3,
+    "showPrototypeCardsOnlyAfterEffectsImplemented": true,
+    "gadgetInput": "Single GAD2 touch target; keep original GAD/ULT/joystick/UI intact",
+    "multipleGadgetCards": "May retain multiple GAD2 cards in inventory, but equip exactly one between rounds; never silently discard owned cards",
+    "hostAuthority": "Combat and gadget effects resolved by existing authoritative game state, not client-only visuals",
+    "sameVolley": "Normal shot fireActionId groups Tank's five pellets and Gunner's three rounds; on-hit effects with oncePerAction cap must share this ID",
+    "execution": "No cloud publishing, production Firebase rules, or standard-mode edits in the design phase"
+  },
+  "cards": [
+    {
+      "id": "split_round",
+      "name": "分裂弾",
+      "type": "shot_modifier",
+      "status": "adopted_needs_character_tuning",
+      "preview": "通常射撃の中心弾が中距離で2発に分かれ、別の角度を狙える",
+      "initialNumbers": {
+        "splitsPerFireAction": 1,
+        "children": 2,
+        "childDamageRatio": 0.55,
+        "splitsAtRangeRatio": 0.5
+      },
+      "safeguards": [
+        "Only central pellet of Tank/Gunner is eligible; do not split all pellets",
+        "Original center pellet is replaced rather than cloned",
+        "One target's damage per fire action must be capped after simultaneous child impacts",
+        "Bomber uses two smaller sub-bursts instead of pretending bomb is a straight bullet"
+      ]
+    },
+    {
+      "id": "ricochet",
+      "name": "跳弾",
+      "type": "shot_modifier",
+      "status": "adopted_needs_character_tuning",
+      "preview": "壁に当たった通常弾が一度だけ反射する",
+      "initialNumbers": {
+        "maxBounces": 1,
+        "postBounceDamageRatio": 0.7
+      },
+      "safeguards": [
+        "Never ricochet through wall corners",
+        "Avoid projectile growth or extra bullets on Tank/Gunner",
+        "Bomber receives a character-specific bomb throw ricochet to preserve its existing weapon identity",
+        "Reflections are server-authoritative"
+      ]
+    },
+    {
+      "id": "recoil_shot",
+      "name": "反動射撃",
+      "type": "shot_modifier",
+      "status": "adopted_approved_tuning_trial",
+      "preview": "通常射撃+10%威力。撃つと反対方向に小さく動く",
+      "initialNumbers": {
+        "normalFireDamageMultiplier": 1.1,
+        "recoilDistanceWorld": 22,
+        "recoilCooldownMs": 1200
+      },
+      "safeguards": [
+        "Damage multiplier applies once per pellet/bomb, not on top of resulting delayed explosion or GAD/ULT",
+        "Recoil affects the actor only once per fireActionId; burst fire is not 3 or 5 recoil impulses",
+        "Movement must use existing wall collision/spawn bounds and host-authoritative motion",
+        "Recoil cooldown does not suppress normal weapon firing or the damage buff"
+      ]
+    },
+    {
+      "id": "delayed_blast",
+      "name": "遅延爆発",
+      "type": "shot_modifier",
+      "status": "adopted_approved_tuning_trial",
+      "preview": "通常射撃で最初に当てた地点に予告が現れ、0.7秒後に小爆発",
+      "initialNumbers": {
+        "blastPerFireAction": 1,
+        "delayMs": 700,
+        "damage": 10,
+        "radiusWorld": 55,
+        "triggerCooldownMs": 3000
+      },
+      "safeguards": [
+        "Use fireActionId from original shoot event: Tank5 pellets -> <=1 blast; Gunner3 rounds -> <=1 blast",
+        "If a volley hits multiple enemies, first authorized contact alone generates blast",
+        "No chain trigger from explosion, DoT, ultimate, gadget, or split-child",
+        "Same opponent hit by one blast receives blast damage no more than once",
+        "Bomber's own area explosion also creates no more than one follow-up blast per throw"
+      ]
+    },
+    {
+      "id": "portable_wall",
+      "name": "ポータブルウォール",
+      "type": "gadget2",
+      "status": "adopted_needs_playtest",
+      "preview": "追加GAD2で短時間の遮蔽物を設置",
+      "initialNumbers": {
+        "durationMs": 4000,
+        "maxActivePerPlayer": 1,
+        "cooldownMs": 12000
+      },
+      "safeguards": [
+        "Solid collision for characters and projectiles must be consistent across all clients",
+        "Reject placement overlapping character, objective or existing wall",
+        "Cannot trap players or spawn wall inside them",
+        "Never alter permanent KO/Hot Zone collision maps"
+      ]
+    },
+    {
+      "id": "trap_mine",
+      "name": "トラップマイン",
+      "type": "gadget2",
+      "status": "adopted_needs_playtest",
+      "preview": "追加GAD2で接近すると短時間鈍足になる地雷を置く",
+      "initialNumbers": {
+        "durationMs": 9000,
+        "maxActivePerPlayer": 1,
+        "cooldownMs": 12000,
+        "damage": 8,
+        "slowMs": 1400
+      },
+      "safeguards": [
+        "One activation per mine, one hit per enemy",
+        "Clearly show the mine to owner and teammates; reveal to enemies only inside intended detection distance",
+        "Do not store a second live mine without replacing or consuming the first",
+        "HOT ZONE must not become permanently impassable"
+      ]
+    },
+    {
+      "id": "hologram",
+      "name": "ホログラム",
+      "type": "gadget2",
+      "status": "adopted_needs_playtest",
+      "preview": "追加GAD2で敵の射撃や視線を惑わす分身を出す",
+      "initialNumbers": {
+        "durationMs": 2500,
+        "maxActivePerPlayer": 1,
+        "cooldownMs": 12000,
+        "healthHits": 1
+      },
+      "safeguards": [
+        "Decoy cannot deal damage, charge ULT, capture Hot Zone or count as KO",
+        "Decoy movement has deterministic replicated state",
+        "Hits against decoy cannot leak into real HP",
+        "Readable visually once properly observed, without instant free enemy identification"
+      ]
+    },
+    {
+      "id": "warp_beacon",
+      "name": "ワープビーコン",
+      "type": "gadget2",
+      "status": "adopted_needs_playtest",
+      "preview": "GAD2の初回使用でビーコンを置き、再使用でそこへ瞬間移動",
+      "initialNumbers": {
+        "beaconMs": 7000,
+        "maxTeleportDistanceWorld": 260,
+        "cooldownMs": 15000,
+        "healthHits": 1
+      },
+      "safeguards": [
+        "On teleport, validate end position, wall collision, occupied space and alive state on authority",
+        "Teleports outside radius or through invalid destinations must fail without clipping",
+        "Beacon is destructible and visible to opponents",
+        "Button must clearly indicate place/return state"
+      ]
+    },
+    {
+      "id": "smoke",
+      "name": "スモーク",
+      "type": "gadget2",
+      "status": "adopted_needs_playtest",
+      "preview": "GAD2で煙幕を展開し、視線を切って移動できる",
+      "initialNumbers": {
+        "durationMs": 4000,
+        "radiusWorld": 100,
+        "cooldownMs": 12000,
+        "attackRevealMs": 700
+      },
+      "safeguards": [
+        "Smoke does not block projectiles",
+        "Own allies can still read teammate location",
+        "Attacking from smoke briefly reveals position",
+        "Use the existing fog-of-war/stealth reveal contract; avoid HUD information leaks"
+      ]
+    }
+  ]
+}
