@@ -66,6 +66,35 @@ async function run(){
   const duelDb=await h.page.evaluate(async code=>(await window.firebase.database().ref('rooms/'+code+'/v').once('value')).val(),duel);
   assert.equal(duelDb,1031,'duel beta uses normal friend RTDB root with isolated draft protocol');
   console.log('PASS FRIEND BETA 1vs1: two WebKit clients joined, READY, real RTDB playing, draft protocol separate');
+  // Deliver a 160ms-old shot through the actual RTDB listener.
+  // Its simulation already advanced, but the remote draw must start at the muzzle.
+  const source=await h.page.evaluate(()=>{
+    const q=window.__brawlV29QA();
+    return {x:q.local.x,y:q.local.y,round:q.game.round};
+  });
+  const shotId=await h.page.evaluate(async source=>{
+    const rt=window.firebase.database().ref('rooms/'+window.__brawlV29QA().roomId+'/shots').push();
+    await rt.set({round:source.round,owner:'host',x:source.x,y:source.y,
+      angle:0,ult:false,fireId:'lag-repro-'+rt.key,splitCenter:false,
+      firedAt:Date.now()-160});
+    return rt.key;
+  },source);
+  const handle=await g.page.waitForFunction(id=>{
+    const q=window.__brawlV29QA?.(),bullet=q?.shots?.find(s=>s.id===id);
+    if(!bullet||!q.fx.includes('remote-muzzle'))return false;
+    return {id:bullet.id,owner:bullet.owner,x:bullet.x,y:bullet.y,
+      birthX:bullet.remoteBirthX,birthY:bullet.remoteBirthY,
+      birthAt:bullet.remoteBirthAt,seenFlash:true};
+  },shotId,{timeout:8000,polling:'raf'});
+  const remoteBullet=await handle.jsonValue();
+  assert.equal(remoteBullet.owner,'host');
+  assert(remoteBullet.seenFlash,'remote shot shows a muzzle flash');
+  assert(Math.abs(remoteBullet.birthX-(source.x+28))<.01,'remote shot starts at muzzle');
+  assert(Math.abs(remoteBullet.birthY-source.y)<.01);
+  assert(remoteBullet.x>remoteBullet.birthX+35,
+    'simulation keeps network-age advancement for combat');
+  assert(Number.isFinite(remoteBullet.birthAt));
+  console.log('PASS FRIEND BETA 1vs1 delayed remote shot: muzzle birth, flash, combat age unchanged');
   await Promise.all([h,g].map(x=>x.ctx.close()));
 
   const clients=await Promise.all(Array.from({length:4},()=>open(browser,'squad')));all.push(...clients);

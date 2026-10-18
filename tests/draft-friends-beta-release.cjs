@@ -40,6 +40,22 @@ for(const [mode,normal,lab,beta,room,protocol] of [
   assert(s.includes('squadGad2Action'),'2vs2 GAD2 button retained');
  }else{
   assert(s.includes('netDraftAdvanceBullet'),'1vs1 projectile draft retained');
+  assert(s.includes('ctx.arc(pos.x,pos.y,b.radius,0,2*Math.PI)'),
+    '1v1 remote projectile render uses muzzle-catch-up rather than raw fast-forward coordinates');
+  const visual=s.match(/  function remoteShotDrawPoint\(b,nowMs\)\{[\s\S]*?\n  \}/);
+  assert(visual,'remote shot visual interpolation is present');
+  const point=vm.runInNewContext('(()=>{const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));'+
+    visual[0]+';return remoteShotDrawPoint;})()');
+  const bullet={remoteBirthAt:1000,remoteBirthX:100,remoteBirthY:200,x:220,y:260};
+  const original={...bullet};
+  const start=point(bullet,1000),mid=point(bullet,1062.5),end=point(bullet,1125);
+  assert(start.x===100&&start.y===200&&start.blend===0,'first incoming bullet frame at muzzle');
+  assert(mid.x>100&&mid.x<220&&mid.y>200&&mid.y<260,'initial remote projectile glides toward simulation');
+  assert(end.x===220&&end.y===260&&end.blend===1,'presentation catches up by 125ms');
+  assert.deepEqual(bullet,original,'render-only interpolation never changes projectile or damage state');
+  const own=point({x:42,y:78},5000);
+  assert(own.x===42&&own.y===78&&own.blend===1,'owner shots retain original instantaneous local render');
+  console.log('PASS 1vs1 incoming shot visual: muzzle frame, 125ms catch-up, untouched collision physics');
  }
  console.log('PASS friends beta '+mode+': standalone + inline JS + existing UI + normal Firebase root + draft protocol');
 }
