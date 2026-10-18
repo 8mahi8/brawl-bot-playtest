@@ -292,7 +292,8 @@ const warpEvaluate=(obstacles,positions)=>{
  const mocked="const W=1000,H=600,R=18,seatKeys=['blue1','red1'];"+
    "const point=(g,id,input)=>input[id];"+
    "const wall=(x,y,r)=>["+JSON.stringify(obstacles)+"][0].some(w=>"+
-   "x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);";
+   "x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);"+
+   "const draftSolid=(g,x,y,r)=>wall(x,y,r);";
  return vm.runInNewContext(mocked+warpSource+"\n draftWarpLanding",
    {},{timeout:1000})(
    {seats:{blue1:{id:'blueId'},red1:{id:'redId'}},hp:{blueId:160,redId:100}},
@@ -313,7 +314,7 @@ assert(occupiedByEnemy&&Math.hypot(occupiedByEnemy.x-560,occupiedByEnemy.y-300)>
 assert.equal(warpEvaluate([{x:0,y:0,w:1000,h:600}],{x:560,y:300}),null,
  'fully blocked destination cancels warp rather than wall clipping');
 assert(src.includes("id:'warp_beacon'")&&src.includes("'trap_mine','smoke','warp_beacon'"),
- 'Warp offered and equipped without enabling gated hologram/wall');
+ 'Warp offered and equipped with hologram still gated');
 assert(html.includes("g.gad2Beacons[seat]={kind:'warp_beacon'"),'canonical one beacon per seat');
 assert(html.includes("ownerLife:s.life,team:team(seat),x:pos.x,y:pos.y,start:t,until:t+7000"),
  'beacon saves exact live owner position, life, and 7-second expiry');
