@@ -503,15 +503,35 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
   const {chars,walls,spawns,seatKeys}=cfg,W=1920,H=1120,R=18;
   const team=k=>k.startsWith('blue')?'blue':'red';
   const seatOf=(g,id)=>seatKeys.find(k=>g.seats[k]?.id===id);
-  const wall=(x,y,r=R)=>walls.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);
+  const boxTouch=(x,y,r,w)=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h;
+  const wall=(x,y,r=R)=>walls.some(w=>boxTouch(x,y,r,w));
+  // No changes to permanent maps; dynamic walls live only in host RTDB game state.
+  const draftWallBoxes=(g,t)=>Object.values(g?.gad2Walls||{}).filter(w=>
+    w.kind==='portable_wall'&&w.start<=t&&w.until>t);
+  const draftSolid=(g,x,y,r=R,t=g?.clock?.t||0)=>
+    wall(x,y,r)||draftWallBoxes(g,t).some(w=>boxTouch(x,y,r,w));
+  function draftWallPlacement(g,owner,origin,angle,input,t){
+    if(!Number.isFinite(angle)||!Number.isFinite(origin.x)||!Number.isFinite(origin.y))return null;
+    const rect={x:origin.x+Math.cos(angle)*95-21,
+      y:origin.y+Math.sin(angle)*95-56,w:42,h:112};
+    if(rect.x<6||rect.y<6||rect.x+rect.w>W-6||rect.y+rect.h>H-6)return null;
+    const overlap=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+    if([...walls,...draftWallBoxes(g,t)].some(w=>overlap(rect,w)))return null;
+    if(g?.mode==='area'&&Math.hypot(rect.x+21-W/2,rect.y+56-H/2)<BALANCE.areaRadius+75)return null;
+    for(const k of seatKeys){
+      const id=g.seats[k]?.id;if(!(g.hp[id]>0))continue;
+      const pt=point(g,id,input);if(boxTouch(pt.x,pt.y,R+7,rect))return null;
+    }
+    return rect;
+  }
   const bounded=o=>Object.fromEntries(Object.entries(o).slice(-80));
   function point(g,id,input){const m=g.motions?.[id],p=input[id],seat=seatOf(g,id),s=spawns[seat];
    if(p&&p.motionRev===(m?.rev||0)&&p.life===(g.stats[id]?.life||0)&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=R&&p.x<=W-R&&p.y>=R&&p.y<=H-R)return {x:p.x,y:p.y,a:p.a||0};
    return m?{x:m.x,y:m.y,a:m.a||0}:{...s};
   }
   function motion(g,id,p){const rev=(g.motions[id]?.rev||0)+1;g.motions[id]={rev,x:p.x,y:p.y,a:p.a||0};return rev;}
-  function move(p,dx,dy){const q={...p};for(let i=0;i<24;i++){const x=clamp(q.x+dx/24,R,W-R),y=clamp(q.y+dy/24,R,H-R);if(!wall(x,q.y))q.x=x;if(!wall(q.x,y))q.y=y;}return q;}
-  function landing(p,a,reach=310){const d=clamp(reach,55,330),x=clamp(p.x+Math.cos(a)*d,R+4,W-R-4),y=clamp(p.y+Math.sin(a)*d,R+4,H-R-4);return {x,y,a,valid:!wall(x,y,R+4)};}
+  function move(p,dx,dy,g=null){const q={...p};for(let i=0;i<24;i++){const x=clamp(q.x+dx/24,R,W-R),y=clamp(q.y+dy/24,R,H-R);if(!draftSolid(g,x,q.y,R))q.x=x;if(!draftSolid(g,q.x,y,R))q.y=y;}return q;}
+  function landing(p,a,reach=310,g=null){const d=clamp(reach,55,330),x=clamp(p.x+Math.cos(a)*d,R+4,W-R-4),y=clamp(p.y+Math.sin(a)*d,R+4,H-R-4);return {x,y,a,valid:!draftSolid(g,x,y,R+4)};}
  /* BEGIN SHARED RUNTIME COMBAT_ACTIONS */
 // Single-source 1vs1/2vs2 authoritative ammunition refill and volley creation.
 // Inlined within BrawlCombatV8.create scope; uses BrawlWeaponV1 and chars/seatOf/team.
@@ -528,15 +548,15 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
   // Original bullets use the proven shared physics; only the central split bullet is handled here.
   // Authoritative terrain bounce. Ambiguous corners or overlapping walls absorb the
   // shot rather than inventing a reflection normal or allowing wall penetration.
-  function draftReflectAxis(px,py,nx,ny,r){
-    const hitX=wall(nx,py,r),hitY=wall(px,ny,r);
+  function draftReflectAxis(px,py,nx,ny,r,g){
+    const hitX=draftSolid(g,nx,py,r),hitY=draftSolid(g,px,ny,r);
     if(hitX===hitY)return '';
     return hitX?'x':'y';
   }
   function draftAdvance(b,dt,g,targetHit,now){
     if(!b.splitCenter&&!b.ricochetEnabled)
       return BrawlProjectileV1.advance(b,dt,{width:W,height:H,rangeFirst:true,
-        wallHit:(x,y,r)=>wall(x,y,r),targetHit});
+        wallHit:(x,y,r)=>draftSolid(g,x,y,r),targetHit});
     const speed=Math.hypot(b.vx,b.vy),distance=speed*dt,steps=Math.max(1,Math.ceil(distance/6));
     if(!Number.isFinite(dt)||dt<0||!Number.isFinite(speed))throw Error('Invalid draft projectile');
     const timePerStep=dt/steps,dd=distance/steps;
@@ -544,9 +564,9 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       const nx=b.x+b.vx*timePerStep,ny=b.y+b.vy*timePerStep;
       b.dist+=dd;
       if(nx<0||nx>W||ny<0||ny>H)return false;
-      if(wall(nx,ny,b.radius)){
-        if(!b.ricochetEnabled||b.ricochetUsed||wall(b.x,b.y,b.radius))return false;
-        const axis=draftReflectAxis(b.x,b.y,nx,ny,b.radius);
+      if(draftSolid(g,nx,ny,b.radius)){
+        if(!b.ricochetEnabled||b.ricochetUsed||draftSolid(g,b.x,b.y,b.radius))return false;
+        const axis=draftReflectAxis(b.x,b.y,nx,ny,b.radius,g);
         if(!axis)return false;
         if(axis==='x')b.vx=-b.vx;else b.vy=-b.vy;
         b.ricochetUsed=1;
@@ -578,7 +598,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
   // Bomber keeps a single normal bomb attack; with ricochet the throw path
   // reflects from a wall once, not through it. Collision at a corner terminates
   // at the last safe point and never grants a second detonation.
-  function draftBombBounce(start,target){
+  function draftBombBounce(start,target,g){
     const length=Math.hypot(target.x-start.x,target.y-start.y);
     const steps=Math.max(1,Math.ceil(length/6));
     let x=start.x,y=start.y,dx=(target.x-start.x)/steps,dy=(target.y-start.y)/steps;
@@ -586,9 +606,9 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
     for(let i=0;i<steps;i++){
       const nx=x+dx,ny=y+dy;
       if(nx<0||nx>W||ny<0||ny>H)return {x,y,bounced,blocked:true};
-      if(wall(nx,ny,6)){
-        if(bounced||wall(x,y,6))return {x,y,bounced,blocked:true};
-        const axis=draftReflectAxis(x,y,nx,ny,6);
+      if(draftSolid(g,nx,ny,6)){
+        if(bounced||draftSolid(g,x,y,6))return {x,y,bounced,blocked:true};
+        const axis=draftReflectAxis(x,y,nx,ny,6,g);
         if(!axis)return {x,y,bounced,blocked:true};
         if(axis==='x')dx=-dx;else dy=-dy;
         bounced=true;continue;
@@ -601,7 +621,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
   // endpoints; only the destination needs a valid free circle.
   function draftWarpLanding(g,owner,x,y,input){
     const safe=(px,py)=>{
-      if(px<R+3||px>W-R-3||py<R+3||py>H-R-3||wall(px,py,R+3))return false;
+      if(px<R+3||px>W-R-3||py<R+3||py>H-R-3||draftSolid(g,px,py,R+3))return false;
       for(const k of seatKeys){
         const id=g.seats[k]?.id;
         if(id===owner||!(g.hp[id]>0))continue;
@@ -619,11 +639,11 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
   }
   function initialize(matchId,seats,mode,startAt){const hp={},stats={},motions={},combatAt={},battleStats={};
    for(const k of seatKeys){const p=seats[k];hp[p.id]=chars[p.char].hp;combatAt[p.id]=0;battleStats[p.id]={damage:0,kos:0,deaths:0};stats[p.id]={char:p.char,ammo:3,refillAt:0,ult:0,gadgets:mode==='area'?1:2,gadgetReadyAt:0,boostUntil:0,overdriveUntil:0,lastShotAt:0,lastActionSeq:0,life:0,armed:false,guardUntil:0,guardTargetId:'',guardTargetLife:-1,guardSaved:0};motions[p.id]={rev:0,...spawns[k]};}
-   return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},gad2Mines:{},gad2Smokes:{},gad2Beacons:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},combatAt,battleStats,events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
+   return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},gad2Mines:{},gad2Smokes:{},gad2Beacons:{},gad2Walls:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},combatAt,battleStats,events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
   }
   function flying(g,id){return Object.values(g.scheduled||{}).some(u=>u.kind==='jump'&&u.owner===id&&u.ownerLife===g.stats[id]?.life);}
   function receipt(a,now,status,reason){return {owner:a.owner,seq:a.seq,type:a.type,at:a.at,acceptedAt:now,status,reason:reason||''};}
-  function normalize(g){for(const key of ['projectiles','scheduled','gad2Mines','gad2Smokes','gad2Beacons','usedActions','usedHits','debuffs','respawns','protection','reveals','events','motions'])g[key] ||= {};return g;}
+  function normalize(g){for(const key of ['projectiles','scheduled','gad2Mines','gad2Smokes','gad2Beacons','gad2Walls','usedActions','usedHits','debuffs','respawns','protection','reveals','events','motions'])g[key] ||= {};return g;}
   function accept(state,a,input,now){if(!state||state.phase!=='playing'||now<state.startAt)return state;
    const g=normalize(structuredClone(state)),t=g.clock.t,st=g.stats[a.owner];if(g.usedActions[a.eventId])return state;
    function reject(reason){g.usedActions=bounded({...g.usedActions,[a.eventId]:receipt(a,now,'rejected',reason)});return g;}
@@ -638,14 +658,14 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
     s.ammo--;if(!s.refillAt)s.refillAt=t+chars[char].reload/
       squadReloadFactor({owned:{[s.draftSeat]:s.draftCards||[]}},s.draftSeat,s.ammo,t,s.draftMotionSince||0);s.lastShotAt=a.at;
     if(char==='bomber'){
-     const dst=landing(pos,a.angle,Math.min(a.reach||BALANCE.bomberRange,BALANCE.bomberRange)); // bombs may land beside/on walls, unlike jumps
+     const dst=landing(pos,a.angle,Math.min(a.reach||BALANCE.bomberRange,BALANCE.bomberRange),g); // bombs may land beside/on walls, unlike jumps
      const half=(s.draftCards||[]).includes('split_round');
      const split=[-1,1],count=half?2:1;
      for(let i=0;i<count;i++){
        const key=half?a.eventId+':split:'+i:a.eventId,sign=half?split[i]:0;
        const px=-Math.sin(a.angle)*30*sign,py=Math.cos(a.angle)*30*sign;
        const trajectory=(s.draftCards||[]).includes('ricochet')?
-         draftBombBounce(pos,{x:dst.x+px,y:dst.y+py}):
+         draftBombBounce(pos,{x:dst.x+px,y:dst.y+py},g):
          {x:dst.x+px,y:dst.y+py,bounced:false};
        g.scheduled[key]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key,
         fireId:a.eventId,blastEligible:(s.draftCards||[]).includes('delayed_blast'),
@@ -668,13 +688,13 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       }
     // Host-owned recoil motion; Tank 5 and Gunner 3 are ONE firing action.
     if((s.draftCards||[]).includes('recoil_shot')&&!(s.draftRecoilUntil>t)){
-      const delta=move(pos,-Math.cos(a.angle)*60,-Math.sin(a.angle)*60);
+      const delta=move(pos,-Math.cos(a.angle)*60,-Math.sin(a.angle)*60,g);
       if(Math.hypot(delta.x-pos.x,delta.y-pos.y)>.01)motion(g,a.owner,{...delta,a:a.angle});
       s.draftRecoilUntil=t+1200;
     }
    }else if(a.type==='gadget2'){
     const seat=seatOf(g,a.owner),card=squadGad2Equipped(g.draft,seat);
-    if(!['trap_mine','smoke','warp_beacon'].includes(card))return reject('gadget2_unavailable');
+    if(!['trap_mine','smoke','warp_beacon','portable_wall'].includes(card))return reject('gadget2_unavailable');
     g.draft.gadget2ReadyAt ||= {};
     if(card==='warp_beacon'){
       g.gad2Beacons ||= {};
@@ -694,7 +714,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
         g.draftCardStats.gad2WarpReturns=(g.draftCardStats.gad2WarpReturns||0)+1;
       }else{
         if((g.draft.gadget2ReadyAt[seat]||0)>t)return reject('gadget2_cooldown');
-        if(wall(pos.x,pos.y,R+3))return reject('gadget2_beacon_wall');
+        if(draftSolid(g,pos.x,pos.y,R+3))return reject('gadget2_beacon_wall');
         g.gad2Beacons[seat]={kind:'warp_beacon',id:a.eventId,seat,owner:a.owner,
           ownerLife:s.life,team:team(seat),x:pos.x,y:pos.y,start:t,until:t+7000};
         g.draftCardStats ||= {};
@@ -702,6 +722,16 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       }
     }else{
     if((g.draft.gadget2ReadyAt[seat]||0)>t)return reject('gadget2_cooldown');
+    if(card==='portable_wall'){
+      const rect=draftWallPlacement(g,a.owner,pos,a.angle,input,t);
+      if(!rect)return reject('gadget2_wall_placement');
+      g.gad2Walls ||= {};
+      g.gad2Walls[seat]={kind:'portable_wall',id:a.eventId,owner:a.owner,
+        ownerLife:s.life,seat,team:team(seat),...rect,start:t,until:t+4000};
+      g.draft.gadget2ReadyAt[seat]=t+12000;
+      g.draftCardStats ||= {};
+      g.draftCardStats.gad2WallsPlaced=(g.draftCardStats.gad2WallsPlaced||0)+1;
+    }else{
     // GAD2 has its own 12s cooldown and cannot consume character gadgets.
     if(card==='smoke'){
       const x=clamp(pos.x+Math.cos(a.angle)*48,100,W-100),
@@ -716,7 +746,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
     // A separate consumable slot: this never spends the character's normal gadget.
     const x=clamp(pos.x+Math.cos(a.angle)*44,18,W-18),
       y=clamp(pos.y+Math.sin(a.angle)*44,18,H-18);
-    if(wall(x,y,12))return reject('gadget2_wall');
+    if(draftSolid(g,x,y,12))return reject('gadget2_wall');
     if(seatKeys.some(k=>{
       const victim=g.seats[k].id;
       if(!(g.hp[victim]>0))return false;
@@ -732,6 +762,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
     g.draftCardStats.gad2MinesPlaced=(g.draftCardStats.gad2MinesPlaced||0)+1;
     }
     }
+    }
    }else if(a.type==='gadget'){
     if(s.gadgets<1||char==='bomber'&&s.armed)return reject('gadget');
     s.gadgets--;if(g.mode==='area')s.gadgetReadyAt=t+(chars[char].gadgetRechargeMs||BALANCE.areaGadgetRechargeMs);
@@ -739,11 +770,11 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
      const ally=seatKeys.filter(k=>team(k)===team(seatOf(g,a.owner))&&g.seats[k].id!==a.owner&&g.hp[g.seats[k].id]>0)
       .map(k=>({id:g.seats[k].id,d:Math.hypot(point(g,g.seats[k].id,input).x-pos.x,point(g,g.seats[k].id,input).y-pos.y)})).filter(v=>v.d<=260).sort((x,y)=>x.d-y.d)[0];
      s.guardUntil=ally?t+BrawlAbilityV1.guardianLinkMs:0;s.guardTargetId=ally?.id||'';s.guardTargetLife=ally?g.stats[ally.id].life:-1;s.guardSaved=0;
-     motion(g,a.owner,move(pos,Math.cos(a.angle)*BrawlAbilityV1.tankDashDistance,Math.sin(a.angle)*BrawlAbilityV1.tankDashDistance));
-    }else if(!BrawlAbilityV1.gadget(g,s,a,pos,t,input,{seatKeys,team,seatOf,point,motion,move}))return reject('gadget_type');
+     motion(g,a.owner,move(pos,Math.cos(a.angle)*BrawlAbilityV1.tankDashDistance,Math.sin(a.angle)*BrawlAbilityV1.tankDashDistance,g));
+    }else if(!BrawlAbilityV1.gadget(g,s,a,pos,t,input,{seatKeys,team,seatOf,point,motion,move:(p,dx,dy)=>move(p,dx,dy,g)}))return reject('gadget_type');
    }else if(a.type==='ultimate'){
     if(s.ult<100)return reject('ultimate');
-    const abilityResult=BrawlAbilityV1.ultimate(g,s,a,pos,t,{landing,jumpDuration,balance:BALANCE});
+    const abilityResult=BrawlAbilityV1.ultimate(g,s,a,pos,t,{landing:(p,a,d)=>landing(p,a,d,g),jumpDuration,balance:BALANCE});
     if(!abilityResult.ok)return reject(abilityResult.reason);
     s.ult=0;
    }else return reject('type');
@@ -804,6 +835,9 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       return false;
     },t);
     if(!alive)delete g.projectiles[id];
+   }
+   for(const [seat,unit] of Object.entries(g.gad2Walls||{})){
+     if(unit.kind!=='portable_wall'||unit.until<=t)delete g.gad2Walls[seat];
    }
    for(const [seat,beacon] of Object.entries(g.gad2Beacons||{})){
      if(beacon.kind==='warp_beacon'&&beacon.until>t&&
@@ -988,7 +1022,8 @@ const BrawlProjectileV1=Object.freeze({
     {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾が壁に当たると最大1回反射・反射後は威力70%'},
     {id:'trap_mine',name:'トラップマイン',family:'gadget2',desc:'GAD2: 9秒間の接近感知地雷。1回だけ8ダメージ＋1.4秒鈍足'},
     {id:'smoke',name:'スモーク',family:'gadget2',desc:'GAD2: 4秒・半径100の煙幕。ブッシュ隠密、攻撃で700ms露出'},
-    {id:'warp_beacon',name:'ワープビーコン',family:'gadget2',desc:'GAD2: 7秒内に2度押しで安全な位置へ瞬間帰還、CD15秒'}
+    {id:'warp_beacon',name:'ワープビーコン',family:'gadget2',desc:'GAD2: 7秒内に2度押しで安全な位置へ瞬間帰還、CD15秒'},
+    {id:'portable_wall',name:'ポータブルウォール',family:'gadget2',desc:'GAD2: 42×112の固い遮蔽物を4秒設置。12秒クールダウン'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
@@ -1066,7 +1101,7 @@ function squadBlastAuthorize(d,seat,fireActionId,t){
   return true;
 }
 // GAD2 is a separate slot. When several are owned, the latest acquired is equipped.
-const SQUAD_GAD2_IDS=['trap_mine','smoke','warp_beacon']; // wall and hologram remain gated.
+const SQUAD_GAD2_IDS=['trap_mine','smoke','warp_beacon','portable_wall']; // hologram remains gated.
 function squadGad2Equipped(d,seat){
  const owned=squadHand(d,seat);
  return [...owned].reverse().find(id=>SQUAD_GAD2_IDS.includes(id))||null;
@@ -2064,7 +2099,7 @@ function quietKoTickSafe(g,age){
  if(!g||g.phase!=='playing'||g.mode!=='ko'||!g.clock||
   !Number.isFinite(age)||age<0||g.clock.t+Math.max(200,age)>=QUIET_KO_GAS_GUARD_MS)return false;
  if(Object.keys(g.projectiles||{}).length||Object.keys(g.scheduled||{}).length||
-    Object.keys(g.debuffs||{}).length||Object.keys(g.events||{}).length)return false;
+    Object.keys(g.gad2Walls||{}).length||Object.keys(g.debuffs||{}).length||Object.keys(g.events||{}).length)return false;
  const seats=Object.values(g.seats||{});
  // Clock-sensitive resources must already be full/inactive, or a fresh
  // action might observe stale refill/regen timers while the write is deferred.
@@ -2146,7 +2181,7 @@ function alive(id){return (game?.hp?.[id]??0)>0;}
 function combatReady(){return !(solo&&document.hidden)&&scene==='game'&&clockReady&&lobbyReady&&gameReady&&presenceReady&&game?.matchId===lobby?.matchId&&roundResetKey===game.matchId+':'+game.round&&positionsReady&&effectsReady&&!pageSuspended&&connected&&game?.phase==='playing'&&!paused&&serverNow()>=game.startAt;}
 function targetPoint(id){if(id===myId)return {...local};return engine().point(game,id,positions);}
 function shotLineBlocked(x1,y1,x2,y2,radius=6){
- return WALLS.some(w=>{
+ return [...WALLS,...draftVisibleWalls()].some(w=>{
   let lo=0,hi=1;
   for(const [p,d,min,max] of [[x1,x2-x1,w.x-radius,w.x+w.w+radius],[y1,y2-y1,w.y-radius,w.y+w.h+radius]]){
    if(Math.abs(d)<1e-8){if(p<min||p>max)return false;continue;}
@@ -2302,7 +2337,7 @@ function projectileStep(list,dt,authoritative){const hits=[];
   const activeSec=bullet.spawnAt>now-dt*1000?Math.max(0,(now-bullet.spawnAt)/1000):dt;
   const aliveBullet=BrawlProjectileV1.advance(bullet,activeSec,{
    width:W,height:H,rangeFirst:true,
-   wallHit:(x,y,r)=>WALLS.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
+   wallHit:(x,y,r)=>[...WALLS,...draftVisibleWalls()].some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
    targetHit:b=>{
     if(!authoritative)return previewVisibleBulletCollision(b,b.x,b.y);
     for(const k of SEATS){
@@ -2381,7 +2416,12 @@ async function considerRematch(){if(rematchBusy||!isAuthoritative()||game?.phase
   },undefined,false);
  }catch(e){console.error('Rematch failed',e);}finally{rematchBusy=false;}
 }
-function touchingWall(x,y){return WALLS.some(w=>x+R>w.x&&x-R<w.x+w.w&&y+R>w.y&&y-R<w.y+w.h);}
+function draftVisibleWalls(){
+ return Object.values(game?.gad2Walls||{}).filter(w=>
+  w.kind==='portable_wall'&&w.start<=combatNow()&&w.until>combatNow());
+}
+function touchingWall(x,y){return [...WALLS,...draftVisibleWalls()].some(w=>
+  x+R>w.x&&x-R<w.x+w.w&&y+R>w.y&&y-R<w.y+w.h);}
 function moveWithWall(dx,dy){const nx=clamp(local.x+dx,R,W-R),ny=clamp(local.y+dy,R,H-R);
  if(!touchingWall(nx,local.y))local.x=nx;if(!touchingWall(local.x,ny))local.y=ny;}
 // Recover foreground movement lost to rAF stalls without jumping through
@@ -2535,6 +2575,14 @@ function drawArena(){
  const m=scene==='game'?gasMargin():0;
  if(m>0){ctx.fillStyle='rgba(255,50,95,.23)';ctx.fillRect(0,0,W,m);ctx.fillRect(0,H-m,W,m);ctx.fillRect(0,m,m,Math.max(0,H-2*m));ctx.fillRect(W-m,m,m,Math.max(0,H-2*m));ctx.strokeStyle='#ff527a';ctx.lineWidth=3;ctx.strokeRect(m,m,Math.max(0,W-2*m),Math.max(0,H-2*m));}
  if(game?.mode==='area'){ctx.fillStyle=game.area?.contested?'rgba(255,204,110,.14)':'rgba(105,217,255,.10)';ctx.strokeStyle=game.area?.contested?'#ffd17c':'#78eefe';ctx.lineWidth=3;ctx.beginPath();ctx.arc(W/2,H/2,BALANCE.areaRadius,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.textAlign='center';ctx.font='bold 14px system-ui';ctx.fillStyle='#d8eef4';ctx.fillText(game.area?.contested?'CONTESTED':'HOT ZONE',W/2,H/2+5);}
+  for(const unit of draftVisibleWalls()){
+   ctx.save();ctx.fillStyle=unit.team===myTeam()?'rgba(87,207,198,.94)':'rgba(238,125,113,.9)';
+   ctx.fillRect(unit.x,unit.y,unit.w,unit.h);
+   ctx.strokeStyle='#e6fff6';ctx.lineWidth=3;
+   ctx.strokeRect(unit.x+.5,unit.y+.5,unit.w-1,unit.h-1);
+   ctx.fillStyle='#17333d';ctx.fillRect(unit.x+8,unit.y+9,unit.w-16,unit.h-18);
+   ctx.restore();
+  }
   for(const cloud of Object.values(game?.gad2Smokes||{})){
     if(cloud.kind!=='smoke'||visualCombatNow()>=cloud.until)continue;
     ctx.save();ctx.fillStyle='rgba(111,173,195,.25)';
@@ -2677,6 +2725,7 @@ function drawMinimap(now){
  c.clearRect(0,0,ww,hh);c.fillStyle='#142633';c.fillRect(0,0,ww,hh);
  c.save();c.scale(mapScaleX,mapScaleY);
  c.fillStyle='#516679';for(const w of WALLS)c.fillRect(w.x,w.y,w.w,w.h);
+ c.fillStyle='#72d5c2';for(const w of draftVisibleWalls())c.fillRect(w.x,w.y,w.w,w.h);
  c.fillStyle='rgba(46,151,146,.38)';for(const z of BUSHES)c.fillRect(z.x,z.y,z.w,z.h);
  if(game.mode==='area'){c.strokeStyle='#7de8ee';c.lineWidth=4;c.beginPath();c.arc(W/2,H/2,BALANCE.areaRadius,0,Math.PI*2);c.stroke();}
  const left=clamp(-view.ox/view.scale,0,W),top=clamp(-view.oy/view.scale,0,H);
@@ -2953,7 +3002,7 @@ function updateBots(dt){if(!combatReady()||solo&&$('botFreeze').checked)return;c
   const seat=lobby.seats[playerSeat(id)];if(t>=b.nextThink){const input=inputSnapshot();for(const [actorId,actor]of Object.entries(botActors)){const stats=game.stats[actorId],motion=game.motions[actorId],scope=game.matchId+':'+game.round+':'+stats?.life+':'+motion?.rev+':'+(actorId===myId?myConnection:'local');if(stats&&actor.scope===scope)input[actorId]={...actor,matchId:game.matchId,round:game.round,motionRev:motion.rev,life:stats.life};}
    b.plan=brainEngine.decide({game,positions:input,owner:id,actor:b,level:seat.botLevel||'normal',brain:b.brain,wallNow:serverNow()});b.brain=b.plan.brain;b.nextThink=t+160;if(b.plan.action)botAction(id,b,b.plan);
   }
-  const speed=CHARS[st.char].speed*squadMoveFactor(game.draft,playerSeat(id),st.ammo,t)*(st.boostUntil>t?1.5:1)*(game.debuffs?.[id]?.slowUntil>t?BALANCE.bomberSlowFactor:1),old={x:b.x,y:b.y};const p=engine().move(b,b.plan.move.dx*speed*dt,b.plan.move.dy*speed*dt);b.x=p.x;b.y=p.y;b.vx=(b.x-old.x)/(dt||1);b.vy=(b.y-old.y)/(dt||1);b.a=b.plan.targetId?b.plan.angle:Math.hypot(b.plan.move.dx,b.plan.move.dy)>.1?Math.atan2(b.plan.move.dy,b.plan.move.dx):b.a;
+  const speed=CHARS[st.char].speed*squadMoveFactor(game.draft,playerSeat(id),st.ammo,t)*(st.boostUntil>t?1.5:1)*(game.debuffs?.[id]?.slowUntil>t?BALANCE.bomberSlowFactor:1),old={x:b.x,y:b.y};const p=engine().move(b,b.plan.move.dx*speed*dt,b.plan.move.dy*speed*dt,game);b.x=p.x;b.y=p.y;b.vx=(b.x-old.x)/(dt||1);b.vy=(b.y-old.y)/(dt||1);b.a=b.plan.targetId?b.plan.angle:Math.hypot(b.plan.move.dx,b.plan.move.dy)>.1?Math.atan2(b.plan.move.dy,b.plan.move.dx):b.a;
   if(id===myId){local={x:b.x,y:b.y,a:b.a,vx:b.vx,vy:b.vy};appliedMotionRev=m.rev;}
   if(now-b.lastSend>=80){b.lastSend=now;const payload={x:Math.round(b.x*10)/10,y:Math.round(b.y*10)/10,vx:Math.round(b.vx),vy:Math.round(b.vy),a:Math.round(b.a*100)/100,seq:id===myId?++sendSeq:++b.seq,connectionId:id===myId?myConnection:id+'_connection',matchId:game.matchId,round:game.round,motionRev:m.rev,life:st.life};room.child('positions/'+id).set(payload).catch(()=>{});}
  }
@@ -3019,9 +3068,9 @@ function squadGad2ButtonRefresh(){
  const beacon=id==='warp_beacon'&&game?.gad2Beacons?.[seat];
  const activeBeacon=!!(beacon&&beacon.owner===myId&&beacon.until>combatNow());
  b.disabled=(remaining>0&&!activeBeacon)||!combatReady()||!alive(myId);
- const name=id==='smoke'?'煙幕':id==='warp_beacon'?(activeBeacon?'帰還':'ビーコン'):'地雷';
+ const name=id==='smoke'?'煙幕':id==='warp_beacon'?(activeBeacon?'帰還':'ビーコン'):id==='portable_wall'?'壁':'地雷';
  b.textContent=remaining>0?name+'\n'+Math.ceil(remaining/1000)+'秒':'GAD2\n'+name;
- b.setAttribute('aria-label','GAD2 '+(id==='warp_beacon'?(activeBeacon?'ビーコンに帰還':'ワープビーコン'):id==='smoke'?'スモーク':'トラップマイン')+(remaining>0?' 再使用まで'+Math.ceil(remaining/1000)+'秒':''));
+ b.setAttribute('aria-label','GAD2 '+(id==='warp_beacon'?(activeBeacon?'ビーコンに帰還':'ワープビーコン'):id==='smoke'?'スモーク':id==='portable_wall'?'ポータブルウォール':'トラップマイン')+(remaining>0?' 再使用まで'+Math.ceil(remaining/1000)+'秒':''));
  squadGad2ButtonPosition();
 }
 function squadRender(){
@@ -3085,7 +3134,7 @@ squadInit();applyFit();showScene('home');requestAnimationFrame(frame);
 window.__brawlDraftMoveQA=(x,y)=>{
   if(!combatReady()||!Number.isFinite(x)||!Number.isFinite(y)||
      x<R+4||x>W-R-4||y<R+4||y>H-R-4||
-     WALLS.some(w=>x>=w.x-R-3&&x<=w.x+w.w+R+3&&y>=w.y-R-3&&y<=w.y+w.h+R+3))return false;
+     [...WALLS,...draftVisibleWalls()].some(w=>x>=w.x-R-3&&x<=w.x+w.w+R+3&&y>=w.y-R-3&&y<=w.y+w.h+R+3))return false;
   local.x=x;local.y=y;sendPositionNow();return true;
 };
 // Read-only diagnostics used by the local mock test harness; no live-server controls.
@@ -3100,6 +3149,9 @@ window.__brawlDraftGad2QA=()=>({
  equipped:squadGad2Equipped(game?.draft,mySeat()),mineCount:Object.keys(game?.gad2Mines||{}).length,
  smokes:structuredClone(game?.gad2Smokes||{}),
  beacons:structuredClone(game?.gad2Beacons||{}),
+ walls:structuredClone(game?.gad2Walls||{}),
+ wallPlaced:game?.draftCardStats?.gad2WallsPlaced||0,
+ wallCollisionQA:(x,y,r=6)=>[...WALLS,...draftVisibleWalls()].some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
  beaconPlaced:game?.draftCardStats?.gad2BeaconsPlaced||0,
  warpReturned:game?.draftCardStats?.gad2WarpReturns||0,
  beaconBroken:game?.draftCardStats?.gad2BeaconsBroken||0,

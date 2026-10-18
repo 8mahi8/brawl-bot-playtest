@@ -15,7 +15,8 @@
     {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾が壁に当たると最大1回反射・反射後は威力70%'},
     {id:'trap_mine',name:'トラップマイン',family:'gadget2',desc:'GAD2: 9秒間の接近感知地雷。1回だけ8ダメージ＋1.4秒鈍足'},
     {id:'smoke',name:'スモーク',family:'gadget2',desc:'GAD2: 4秒・半径100の煙幕。ブッシュ隠密、攻撃で700ms露出'},
-    {id:'warp_beacon',name:'ワープビーコン',family:'gadget2',desc:'GAD2: 7秒内に2度押しで安全な位置へ瞬間帰還、CD15秒'}
+    {id:'warp_beacon',name:'ワープビーコン',family:'gadget2',desc:'GAD2: 7秒内に2度押しで安全な位置へ瞬間帰還、CD15秒'},
+    {id:'portable_wall',name:'ポータブルウォール',family:'gadget2',desc:'GAD2: 42×112の固い遮蔽物を4秒設置。12秒クールダウン'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
@@ -93,7 +94,7 @@ function squadBlastAuthorize(d,seat,fireActionId,t){
   return true;
 }
 // GAD2 is a separate slot. When several are owned, the latest acquired is equipped.
-const SQUAD_GAD2_IDS=['trap_mine','smoke','warp_beacon']; // wall and hologram remain gated.
+const SQUAD_GAD2_IDS=['trap_mine','smoke','warp_beacon','portable_wall']; // hologram remains gated.
 function squadGad2Equipped(d,seat){
  const owned=squadHand(d,seat);
  return [...owned].reverse().find(id=>SQUAD_GAD2_IDS.includes(id))||null;

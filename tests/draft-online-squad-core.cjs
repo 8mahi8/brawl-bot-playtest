@@ -109,7 +109,7 @@ const advStart=html.indexOf('  function draftAdvance(b,dt,g,targetHit,now){');
 const advEnd=html.indexOf('  function initialize(matchId,seats,mode,startAt){',advStart);
 assert(advStart>0&&advEnd>advStart,'exact host split physics must be embedded');
 const advance=vm.runInNewContext(
- 'const W=1000,H=600,tankDamage=()=>10,wall=()=>false;'+
+ 'const W=1000,H=600,tankDamage=()=>10,wall=()=>false,draftSolid=(g,x,y,r)=>wall(x,y,r);'+
  'const BrawlProjectileV1={damage:b=>b.damage,advance:()=>true};'+
  html.slice(advStart,advEnd)+'\n draftAdvance',
  {},{timeout:1000});
@@ -124,13 +124,13 @@ assert(html.includes('damage:BALANCE.bomberDamage*(half?.5:1)'),'Bomber mini-bla
 assert(html.includes('enhanced:!!s.armed&&(!half||i===0)'),'Bomber enhanced DOT may be applied only once');
 assert(html.includes('squadBlastAuthorize(draft,seat,actionId,t)'),'delayed blast must preserve one per original action');
 // Execute the EXACT host reflection and Bomber geometry, not a duplicated test implementation.
-const ricochetStart=html.indexOf('  function draftReflectAxis(px,py,nx,ny,r){');
+const ricochetStart=html.indexOf('  function draftReflectAxis(px,py,nx,ny,r,g){');
 const ricochetEnd=html.indexOf('  function initialize(matchId,seats,mode,startAt){',ricochetStart);
 assert(ricochetStart>0&&ricochetEnd>ricochetStart,'reflector must belong to the host reducer');
 const ricochetFunctions=vm.runInNewContext(
  "const W=1000,H=600;"+
  "const wall=(x,y,r=0)=>x+r>150&&x-r<190&&y+r>80&&y-r<160;"+
- "const BrawlProjectileV1={advance:()=>true};"+
+ "const draftSolid=(g,x,y,r)=>wall(x,y,r);const BrawlProjectileV1={advance:()=>true};"+
  html.slice(ricochetStart,ricochetEnd)+"\n({draftAdvance,draftBombBounce})",
  {},{timeout:1000});
 const rebound={id:'r:0',fireId:'r',x:105,y:120,vx:120,vy:0,dist:0,
@@ -174,6 +174,55 @@ assert(html.includes("ricochetEnabled:(s.draftCards||[]).includes('ricochet')"),
 assert(html.includes("if(!b.splitCenter&&!b.ricochetEnabled)"),
  'non-card projectiles stay on original verified physics');
 
+// Test the actual host rectangle placement / expiring wall collision helpers.
+const placementBegin=html.indexOf('  const boxTouch=(x,y,r,w)=>');
+const placementEnd=html.indexOf('  const bounded=o=>',placementBegin);
+assert(placementBegin>0&&placementEnd>placementBegin,'host wall helpers extracted');
+const realWallGeometry=html.slice(placementBegin,placementEnd);
+const makeWallFixture=(physical=[])=>vm.runInNewContext(
+ "const W=1000,H=600,R=18,BALANCE={areaRadius:118};"+
+ "const walls="+JSON.stringify(physical)+";"+
+ "const seatKeys=['blue1','blue2','red1','red2'];"+
+ "const point=(g,id,input)=>input[id];"+
+ realWallGeometry+"\n ({draftSolid,draftWallBoxes,draftWallPlacement})",
+ {},{timeout:1000});
+const wallsVM=makeWallFixture();
+const positions={a:{x:200,y:300},b:{x:750,y:300},c:{x:850,y:500},d:{x:850,y:100}};
+const wallMatch={mode:'ko',clock:{t:100},seats:{blue1:{id:'a'},blue2:{id:'b'},
+ red1:{id:'c'},red2:{id:'d'}},hp:{a:160,b:100,c:100,d:100},gad2Walls:{}};
+const rect=wallsVM.draftWallPlacement(wallMatch,'a',positions.a,0,positions,100);
+assert(rect&&rect.w===42&&rect.h===112&&rect.x===274&&rect.y===244,
+ 'portable wall appears 95 units ahead, size exactly 42x112');
+wallMatch.gad2Walls.blue1={kind:'portable_wall',start:100,until:4100,...rect};
+assert(wallsVM.draftSolid(wallMatch,290,300,6,200),'active wall blocks projectiles');
+assert(wallsVM.draftSolid(wallMatch,290,300,18,200),'active wall blocks players');
+assert(!wallsVM.draftSolid(wallMatch,290,300,6,4100),'wall stops blocking at 4s expiry');
+assert.equal(wallsVM.draftWallPlacement(wallMatch,'a',positions.a,0,positions,200),null,
+ 'cannot overlap any still-active portable wall');
+const ownerInside={...positions,a:{x:295,y:300}};
+assert.equal(wallsVM.draftWallPlacement({...wallMatch,gad2Walls:{}},'a',{x:200,y:300},0,ownerInside,100),null,
+ 'reject wall that would trap any live teammate or enemy');
+const physical=makeWallFixture([{x:275,y:240,w:42,h:115}]);
+assert.equal(physical.draftWallPlacement({...wallMatch,gad2Walls:{}},'a',positions.a,0,positions,100),null,
+ 'cannot overlap permanent KO terrain');
+assert.equal(wallsVM.draftWallPlacement({...wallMatch,gad2Walls:{}},'a',{x:40,y:300},Math.PI,positions,100),null,
+ 'reject out-of-bounds deployment');
+assert(src.includes("id:'portable_wall'")&&
+ src.includes("'warp_beacon','portable_wall'"),'wall must be offered only when host supports it');
+assert(html.includes("g.gad2Walls[seat]={kind:'portable_wall'")&&
+ html.includes("g.draft.gadget2ReadyAt[seat]=t+12000")&&
+ html.includes("until:t+4000"),'host owns one wall and its 4s/12s timers');
+assert(html.includes("wallHit:(x,y,r)=>draftSolid(g,x,y,r)"),
+ 'straight bullets collide with temporary walls');
+assert(html.includes("if(draftSolid(g,nx,ny,b.radius))"),
+ 'split and ricochet bullets collide with temporary walls');
+assert(html.includes("function touchingWall(x,y){return [...WALLS,...draftVisibleWalls()]"),
+ 'Safari player collision uses the same host-authored wall set');
+assert(html.includes("if(!draftSolid(g,px,py,R+3))")===false,
+ 'warp safety uses dynamic wall rejection rather than accepting an occupied endpoint');
+assert(html.includes("Object.keys(g.gad2Walls||{}).length"),
+ 'quiet host tick must not defer temporary wall expiry');
+
 const singleVolley=squadNewMatch();
 singleVolley.owned.blue1=['followthrough'];
 const sameG={draft:singleVolley,seats:Object.fromEntries(seats.map(s=>[s,{id:s+'_id'}])),
@@ -209,7 +258,7 @@ assert(html.includes("delete g.gad2Mines[seat]"),'mine consumed or expired');
 assert(html.includes("if(team(k)===mine.team)continue"),'no friendly fire');
 assert(html.includes("if(!canHit(victim)||"),'no hit on invulnerable or dead targets');
 assert(html.includes("break; // One enemy activation"),'one trigger only');
-assert(html.includes("if(wall(x,y,12))return reject('gadget2_wall')"),'no placement inside walls');
+assert(html.includes("if(draftSolid(g,x,y,12))return reject('gadget2_wall')"),'no placement inside walls');
 assert(html.includes("['shot','gadget','gadget2','ultimate']"),'protocol whitelists GAD2');
 assert(html.includes("b.id='squadGad2Action'"),'separate mobile button exists');
 assert(html.includes("window.__brawlDraftGad2FireQA"),'live E2E uses normal action dispatch');
@@ -243,7 +292,8 @@ const warpEvaluate=(obstacles,positions)=>{
  const mocked="const W=1000,H=600,R=18,seatKeys=['blue1','red1'];"+
    "const point=(g,id,input)=>input[id];"+
    "const wall=(x,y,r)=>["+JSON.stringify(obstacles)+"][0].some(w=>"+
-   "x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);";
+   "x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);"+
+   "const draftSolid=(g,x,y,r)=>wall(x,y,r);";
  return vm.runInNewContext(mocked+warpSource+"\n draftWarpLanding",
    {},{timeout:1000})(
    {seats:{blue1:{id:'blueId'},red1:{id:'redId'}},hp:{blueId:160,redId:100}},
@@ -264,7 +314,7 @@ assert(occupiedByEnemy&&Math.hypot(occupiedByEnemy.x-560,occupiedByEnemy.y-300)>
 assert.equal(warpEvaluate([{x:0,y:0,w:1000,h:600}],{x:560,y:300}),null,
  'fully blocked destination cancels warp rather than wall clipping');
 assert(src.includes("id:'warp_beacon'")&&src.includes("'trap_mine','smoke','warp_beacon'"),
- 'Warp offered and equipped without enabling gated hologram/wall');
+ 'Warp offered and equipped with hologram still gated');
 assert(html.includes("g.gad2Beacons[seat]={kind:'warp_beacon'"),'canonical one beacon per seat');
 assert(html.includes("ownerLife:s.life,team:team(seat),x:pos.x,y:pos.y,start:t,until:t+7000"),
  'beacon saves exact live owner position, life, and 7-second expiry');
