@@ -123,7 +123,7 @@ async function run(){
     await window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
       if(g?.phase!=='playing'||g.round!==5)return;
       const id=g.seats.blue1.id;
-      g.draft.owned.blue1=['recoil_shot','delayed_blast'];
+      g.draft.owned.blue1=['recoil_shot','split_round','delayed_blast'];
       g.stats[id].draftCards=[...g.draft.owned.blue1];
       return g;
     },undefined,false);
@@ -158,6 +158,15 @@ async function run(){
     'one recoil impulse moved blue1 backwards, clipped only by cover if necessary');
   assert(moved.seq>first.seq,'recoil belongs to accepted normal shot action');
   assert(moved.recoilUntil>0,'recoil cooldown stored in canonical combat state');
+
+  // A real Tank volley triggers exactly one center split in the host reducer.
+  await blue1.waitForFunction(async()=>{
+    const q=window.__brawlV3QA();if(!q?.roomId)return false;
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats/splits').once('value');
+    return (snap.val()||0)>=1;
+  },null,{timeout:12000,polling:300});
+  const splitAudit=await committedGame(code);
+  assert.equal(splitAudit.draftCardStats?.splits,1,'Tank five-pellet volley splits only its center exactly once');
 
   // Genuine 4-browser network regression: normal projectile contact schedules one
   // canonical delayed blast, resolves it on the host, and syncs enemy HP.
