@@ -206,9 +206,9 @@ function applyEvent(state,event){
   assert(event.round===next.round+1&&Number.isSafeInteger(event.round),'next sequential round required');
   next.round=event.round;
   for(const p of Object.values(next.players)){
-   p.hp=p.maxHp;p.ammo=3;p.ult=0;p.reloadProgress=0;p.moveSince=null;p.lastReloadAt=at;
+   p.hp=p.maxHp;p.ammo=3;p.reloadProgress=0;p.moveSince=null;p.lastReloadAt=at;
    p.lastDamageAt=at;p.chainStartAt=null;p.lastNormalHits={};p.buffs={};p.revealedUntil=0;
-   // Cooldowns survive round changes; cards survive until a new match.
+   // Match ULT resources, cooldowns and owned cards persist across KO rounds, as in the current online squad.
   }
  }else throw Error('unknown effect event '+event.type);
  return {state:next,result};
