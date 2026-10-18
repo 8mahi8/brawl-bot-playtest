@@ -89,7 +89,7 @@ async function run(){
     const s=window.__brawlV29QA();
     await window.firebase.database().ref('roomsDraft1v1/'+s.roomId+'/game').transaction(g=>{
       if(g?.phase!=='playing'||g.round!==5)return;
-      g.draft.owned.host=['recoil_shot',...(g.draft.owned.host||[]).filter(id=>id!=='recoil_shot').slice(0,2)];
+      g.draft.owned.host=['recoil_shot','split_round','delayed_blast'];
       return g;
     },undefined,false);
   });
@@ -107,6 +107,28 @@ async function run(){
   await host.evaluate(()=>window.__brawlDraftFireQA(Math.PI));
   const secondAfter=(await qa(host)).local.x;
   assert(Math.abs(secondAfter-secondBefore)<5,'recoil cannot multiply within cooldown');
+
+  // Real 1vs1 center-bullet split from Tank/Gunner volley (other pellets unchanged).
+  assert.equal(await host.evaluate(()=>window.__brawlDraftMoveQA(150,300)),true);
+  await host.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.ammo>0,null,{timeout:11000});
+  assert.equal(await host.evaluate(()=>window.__brawlDraftFireQA(0)),true);
+  await host.waitForFunction(()=>window.__brawlDraftSplitCountQA?.()>=1,null,{timeout:9000});
+  assert.equal(await host.evaluate(()=>window.__brawlDraftSplitCountQA()),1,
+    'only central bullet splits once in a true online volley');
+
+  // Reposition a real guest client into the same unobstructed firing lane.
+  // The host alone schedules damage and the 700ms follow-up blast in the same RTDB state.
+  assert.equal(await guest.evaluate(()=>window.__brawlDraftMoveQA(315,300)),true);
+  await host.waitForFunction(()=>Math.abs((window.__brawlV29QA()?.remote?.targetX||0)-315)<5,
+    null,{timeout:12000});
+  assert.equal(await host.evaluate(()=>window.__brawlDraftMoveQA(150,300)),true);
+  await host.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.ammo>0,null,{timeout:11000});
+  assert.equal(await host.evaluate(()=>window.__brawlDraftFireQA(0)),true,'actual host shot into positioned guest');
+  await host.waitForFunction(()=>Object.keys(window.__brawlV29QA()?.game?.draft?.blastUsed||{}).length>=1,
+    null,{timeout:13000});
+  const triggered=(await qa(host)).game;
+  assert.equal(Object.keys(triggered.draft.blastUsed).length,1,
+    'multiple Tank/Gunner bullets schedule only one delayed blast per fireActionId');
 
   await host.evaluate(()=>{
     const state=window.__brawlV29QA(),g=state.game;
