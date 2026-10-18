@@ -1,0 +1,15 @@
+{
+  "database": {
+    "rules": "network/staging/DRAFT_AUTHZ_INPUT_GATE_TEST_ONLY.rules.json"
+  },
+  "emulators": {
+    "database": {
+      "host": "127.0.0.1",
+      "port": 9000
+    },
+    "ui": {
+      "enabled": false
+    }
+  },
+  "singleProjectMode": true
+}
