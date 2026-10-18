@@ -4,13 +4,13 @@
   const EXTRA_CARDS=[
     {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中央弾が遠距離で2発に分裂（各60%）'},
     {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾が壁で1回だけ反射（威力70%）'},
-    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃+10%・発射時に後ろへ22移動'},
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃+10%・射撃で後方へ60移動'},
     {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'命中で0.7秒後に小爆発（射撃1回に1個）'},
-    {id:'portable_wall',name:'ポータブルウォール',family:'gadget2',desc:'GAD2：4秒続く小さな遮蔽物'},
+    {id:'portable_wall',name:'ポータブルウォール',family:'gadget2',desc:'GAD2：縦長の壁（42×112）を4秒設置'},
     {id:'trap_mine',name:'トラップマイン',family:'gadget2',desc:'GAD2：近付く敵に小ダメージ＋鈍足'},
-    {id:'hologram',name:'ホログラム',family:'gadget2',desc:'GAD2：最大7秒間の囮を出す'},
-    {id:'warp_beacon',name:'ワープビーコン',family:'gadget2',desc:'GAD2：設置したビーコンに戻る'},
-    {id:'smoke',name:'スモーク',family:'gadget2',desc:'GAD2：射線上の視認を妨げる煙幕'}
+    {id:'hologram',name:'ホログラム',family:'gadget2',desc:'GAD2：7秒間の移動する分身・見せ弾は無害'},
+    {id:'warp_beacon',name:'ワープビーコン',family:'gadget2',desc:'GAD2：7秒以内なら途中の壁を越えて帰還'},
+    {id:'smoke',name:'スモーク',family:'gadget2',desc:'GAD2：煙幕で潜伏・攻撃やULTで姿がばれる'}
   ];
   DRAFT_CARDS.push(...EXTRA_CARDS);
   for(const c of EXTRA_CARDS)draftById.set(c.id,c);
@@ -100,6 +100,8 @@
       extraUseGadget('host');
     });
     document.getElementById('controls').prepend(b);
+    const status=document.createElement('div');status.id='extraStatusHud';status.className='hidden';
+    status.setAttribute('aria-live','off');document.getElementById('appStage').appendChild(status);
     applyButtonLayout();
     window.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='f'&&!e.repeat)extraUseGadget('host');});
     extraButton();
@@ -116,7 +118,31 @@
       warp_beacon:'ビーコン',smoke:'煙幕'}[g]||'GAD2';
     const txt=beacon?'帰還':remaining>0?short+'\n'+Math.ceil(remaining/1000)+'秒':short;
     if(b.textContent!==txt)b.textContent=txt;
-    b.title=name;b.setAttribute('aria-label','GAD2：'+name);
+    if(b.title!==name)b.title=name;
+    const label='GAD2：'+name;
+    if(b.getAttribute('aria-label')!==label)b.setAttribute('aria-label',label);
+    extraStatusUI();
+  }
+  function extraStatusUI(){
+    const label=document.getElementById('extraStatusHud');if(!label||!extraState)return;
+    const stage=document.getElementById('appStage');
+    const active=solo&&stage?.dataset.scene==='game'&&game?.phase==='playing';
+    label.classList.toggle('hidden',!active);
+    if(!active)return;
+    const now=time(),values=[];
+    const s=extraSmokeStatus('host');
+    if(s!=='none')values.push(s==='hidden'?'◉ 煙幕：潜伏中':'◎ 煙幕：発見中');
+    const h=extraDecoy('host');
+    if(h)values.push('◇ 分身 '+Math.ceil((h.until-now)/1000)+'秒');
+    const w=extraState.beacons.host;
+    if(w?.until>now)values.push('↩ 帰還 '+Math.ceil((w.until-now)/1000)+'秒');
+    const mine=extraState.mines.find(m=>m.side==='host'&&m.until>now);
+    if(mine)values.push('◆ 地雷 '+Math.ceil((mine.until-now)/1000)+'秒');
+    const wall=extraState.wall.find(v=>v.side==='host'&&v.until>now);
+    if(wall)values.push('▯ 壁 '+Math.ceil((wall.until-now)/1000)+'秒');
+    const value=values.join('  ·  ');
+    if(label.textContent!==value)label.textContent=value;
+    label.classList.toggle('hidden',!value);
   }
   function extraWallCollision(x,y,r){
     if(!solo||!extraState)return false;
@@ -127,10 +153,12 @@
   function extraSmokeHidden(side,viewer){
     if(!solo||side===viewer)return false;
     const actor=extraSideActor(side),observer=extraSideActor(viewer);
-    return extraState.smoke.some(s=>s.until>time()&&
+    const now=time(),revealedUntil=Math.max(
+      extraState.used['reveal:'+side]||0,shotReveal[side]||0);
+    return extraState.smoke.some(s=>s.until>now&&
       Math.hypot(actor.x-s.x,actor.y-s.y)<s.radius &&
       Math.hypot(observer.x-s.x,observer.y-s.y)>s.radius &&
-      (extraState.used['reveal:'+side]||0)<=time());
+      revealedUntil<=now);
   }
   function extraSmokeStatus(side){
     if(!solo)return 'none';
@@ -294,7 +322,9 @@
       // If cover blocks pursuit, sidestep, rather than remaining a stationary hologram.
       if(Math.hypot(h.x-prevX,h.y-prevY)<.2)moveWithWall(h,-uy*h.strafe*90*dt,ux*h.strafe*90*dt);
       h.angle=aim;
-      if(now>=h.fireAt&&dist<CHARS[h.char].range+110&&!lineBlocked(h.x,h.y,enemy.x,enemy.y,4)){
+      const enemySide=extraOther(h.side);
+      const canSee=targetVisible(h,enemy,enemySide)&&!extraSmokeHidden(enemySide,h.side);
+      if(now>=h.fireAt&&canSee&&dist<CHARS[h.char].range+110&&!lineBlocked(h.x,h.y,enemy.x,enemy.y,4)){
         // Fake shots are ONLY visual objects: not inserted into shots[] and never hit HP/ULT.
         const sx=h.x+Math.cos(aim)*22,sy=h.y+Math.sin(aim)*22;
         extraState.fakeShots.push({side:h.side,x:sx,y:sy,vx:Math.cos(aim)*390,
@@ -400,6 +430,11 @@
     gadget:extraGadget('host'),smokeStatus:extraSmokeStatus('host'),state:structuredClone(extraState),
     choose:(cards)=>{if(!Array.isArray(cards)||cards.length>3||cards.some(id=>!draftById.has(id)))return false;extraManualDeck=[...cards];return true;},
     useGadget:()=>extraUseGadget('host'),
+    isLineBlocked:(x1,y1,x2,y2)=>[x1,y1,x2,y2].every(Number.isFinite)?lineBlocked(x1,y1,x2,y2):null,
+    revealForTest:(ms)=>{
+      if(!solo||game?.phase!=='playing'||!Number.isFinite(ms)||ms<0||ms>5000)return false;
+      shotReveal.host=time()+ms;return true;
+    },
     // QA-only: position edit is limited to this offline experimental BOT build.
     setLocalPosition:(x,y)=>{
       if(!solo||game?.phase!=='playing'||!Number.isFinite(x)||!Number.isFinite(y)||
