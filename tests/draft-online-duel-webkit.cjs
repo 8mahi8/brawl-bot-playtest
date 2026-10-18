@@ -129,6 +129,10 @@ async function run(){
   const triggered=(await qa(host)).game;
   assert.equal(Object.keys(triggered.draft.blastUsed).length,1,
     'multiple Tank/Gunner bullets schedule only one delayed blast per fireActionId');
+  await host.waitForFunction(()=>Object.keys(window.__brawlV29QA()?.game?.draftBlasts||{}).length===0,
+    null,{timeout:10000});
+  assert((await qa(host)).game.hp.guest<triggered.hp.guest,
+    '700ms delayed blast executes and further reduces the real guest HP');
 
   await host.evaluate(()=>{
     const state=window.__brawlV29QA(),g=state.game;
