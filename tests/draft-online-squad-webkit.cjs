@@ -182,13 +182,13 @@ async function run(){
   assert.equal(result.audit.blasts,1,'one delayed blast per accepted fireActionId, not per pellet');
   // IMPORTANT: read from RED1, a NON-HOST browser. The host's own Firebase
   // transaction listener may see an uncommitted local speculative snapshot.
-  const confirmedHit=await red1.waitForFunction(async()=>{
+  // waitForFunction only resolves for a truthy return. It is itself the assert:
+  // do not re-read a mutable Firebase snapshot after the wait has resolved.
+  await red1.waitForFunction(async()=>{
     const q=window.__brawlV3QA();
     const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats/blastHits').once('value');
-    return (snap.val()||0)>=1?snap.val():false;
+    return (snap.val()||0)>=1;
   },null,{timeout:14000,polling:350});
-  assert((await confirmedHit.jsonValue())>=1,
-    'non-host peer has observed host-confirmed delayed explosion impact');
   // Do not read the same transient hit a second time: a round-ending hit can
   // replace the entire game state before another once(value) completes.
 
