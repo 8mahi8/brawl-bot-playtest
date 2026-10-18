@@ -6,9 +6,9 @@ const html=fs.readFileSync(path.join(root,'online/draft-squad-online-lab.html'),
 assert(html.includes(src),'Standalone squad HTML inlines pure draft reducer verbatim');
 for(const [i,m] of [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].entries())
  if(m[1].trim())new vm.Script(m[1],{filename:'draft-squad-lab#'+i});
-const names=['squadNewMatch','squadHand','squadOrder','squadOffer','squadBegin','squadPick','squadNextRound','squadDamage','squadMoveFactor','squadReloadFactor','squadBlastAuthorize'];
+const names=['squadNewMatch','squadHand','squadOrder','squadOffer','squadBegin','squadPick','squadNextRound','squadDamage','squadMoveFactor','squadReloadFactor','squadBlastAuthorize','squadGad2Equipped'];
 const api=vm.runInNewContext(src+'\n({'+names.join(',')+'})',{},{timeout:2000});
-const {squadNewMatch,squadHand,squadOrder,squadOffer,squadBegin,squadPick,squadNextRound,squadDamage,squadMoveFactor,squadReloadFactor,squadBlastAuthorize}=api;
+const {squadNewMatch,squadHand,squadOrder,squadOffer,squadBegin,squadPick,squadNextRound,squadDamage,squadMoveFactor,squadReloadFactor,squadBlastAuthorize,squadGad2Equipped}=api;
 const seats=['blue1','blue2','red1','red2'];
 assert.deepEqual(Array.from(squadOrder('blue',0)),['blue1','red1','red2','blue2']);
 assert.deepEqual(Array.from(squadOrder('blue',1)),['blue2','red2','red1','blue1']);
