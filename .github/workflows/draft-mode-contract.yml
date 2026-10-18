@@ -5,6 +5,11 @@ on:
       - 'draft/**'
       - 'tests/draft-mode-contract.cjs'
       - 'tests/draft-card-catalog.cjs'
+      - 'tests/draft-card-combat-sim.cjs'
+      - 'tests/draft-card-balance-audit.cjs'
+      - 'tests/draft-online-stat-parity.cjs'
+      - 'online/ipad-duel-v2-lab.html'
+      - 'online/ipad-squad-v2-lab.html'
       - 'sites/BRAWL_FRIENDS_1vs1.html'
       - 'sites/BRAWL_FRIENDS_2vs2.html'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
@@ -14,6 +19,11 @@ on:
       - 'draft/**'
       - 'tests/draft-mode-contract.cjs'
       - 'tests/draft-card-catalog.cjs'
+      - 'tests/draft-card-combat-sim.cjs'
+      - 'tests/draft-card-balance-audit.cjs'
+      - 'tests/draft-online-stat-parity.cjs'
+      - 'online/ipad-duel-v2-lab.html'
+      - 'online/ipad-squad-v2-lab.html'
       - 'sites/BRAWL_FRIENDS_1vs1.html'
       - 'sites/BRAWL_FRIENDS_2vs2.html'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
@@ -34,5 +44,11 @@ jobs:
         run: node tests/draft-mode-contract.cjs
       - name: Verify draft card pool, tactical counters and late-pick availability
         run: node tests/draft-card-catalog.cjs
+      - name: Verify deterministic card combat event engine, 18 effects and cooldowns
+        run: node tests/draft-card-combat-sim.cjs
+      - name: Evaluate four-character matchup sensitivity under scripted attack timings
+        run: node tests/draft-card-balance-audit.cjs
+      - name: Guard draft prototype stats against current online duel and squad HTML
+        run: node tests/draft-online-stat-parity.cjs
       - name: Verify unchanged pinned public friend-online releases
         run: node tests/sites-friends-release-freeze.cjs

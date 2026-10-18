@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "description": "Draft-only offline card effect simulator snapshots the CURRENT 2026-10-18 ONLINE lab HTML character stats; do not substitute older shared foundation contract. Monitored by tests/draft-online-stat-parity.cjs.",
+  "sources": {
+    "1vs1": "online/ipad-duel-v2-lab.html",
+    "2vs2": "online/ipad-squad-v2-lab.html"
+  },
+  "characters": {
+    "1vs1": {
+      "tank": {
+        "hp": 160,
+        "baseDamage": 11,
+        "reloadMs": 833.3333333333334
+      },
+      "gunner": {
+        "hp": 100,
+        "baseDamage": 10,
+        "reloadMs": 1250
+      },
+      "sniper": {
+        "hp": 70,
+        "baseDamage": 36,
+        "reloadMs": 1833.3333333333333
+      },
+      "bomber": {
+        "hp": 90,
+        "baseDamage": 28,
+        "reloadMs": 1500
+      }
+    },
+    "2vs2": {
+      "tank": {
+        "hp": 160,
+        "baseDamage": 11,
+        "reloadMs": 833
+      },
+      "gunner": {
+        "hp": 100,
+        "baseDamage": 10,
+        "reloadMs": 1250
+      },
+      "sniper": {
+        "hp": 70,
+        "baseDamage": 36,
+        "reloadMs": 1833
+      },
+      "bomber": {
+        "hp": 90,
+        "baseDamage": 28,
+        "reloadMs": 1500
+      }
+    }
+  }
+}
