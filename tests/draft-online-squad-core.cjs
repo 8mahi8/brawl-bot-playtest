@@ -258,7 +258,7 @@ assert(html.includes("delete g.gad2Mines[seat]"),'mine consumed or expired');
 assert(html.includes("if(team(k)===mine.team)continue"),'no friendly fire');
 assert(html.includes("if(!canHit(victim)||"),'no hit on invulnerable or dead targets');
 assert(html.includes("break; // One enemy activation"),'one trigger only');
-assert(html.includes("if(wall(x,y,12))return reject('gadget2_wall')"),'no placement inside walls');
+assert(html.includes("if(draftSolid(g,x,y,12))return reject('gadget2_wall')"),'no placement inside walls');
 assert(html.includes("['shot','gadget','gadget2','ultimate']"),'protocol whitelists GAD2');
 assert(html.includes("b.id='squadGad2Action'"),'separate mobile button exists');
 assert(html.includes("window.__brawlDraftGad2FireQA"),'live E2E uses normal action dispatch');
