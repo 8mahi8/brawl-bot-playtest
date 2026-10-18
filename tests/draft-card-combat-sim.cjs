@@ -24,7 +24,7 @@ assert.deepEqual(modifiers(s,'host',{at:1000}),{
 });
 let out=step(s,{type:'reload',seat:'host',dtMs:200,at:1000});s=out.state;
 assert.equal(out.result.modifiers.reloadSpeedPct,20);
-assert.throws(()=>step(s,{type:'reload',seat:'host',dtMs:200,at:1000}),/overlapping reload interval/);
+assert.throws(()=>step(out.state,{type:'reload',seat:'host',dtMs:200,at:1000}),/overlapping reload interval/);
 assert.equal(s.players.host.reloadProgress,200*1.2/contract.common.characters.gunner.reloadMs);
 s=t(s,{type:'move',seat:'host',moving:false,at:1010});
 assert.equal(modifiers(s,'host').reloadSpeedPct,16);
