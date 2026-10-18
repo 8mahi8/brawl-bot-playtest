@@ -3,7 +3,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const {createCombat,modifiers,applyEvent}=require('../draft/card-combat-sim.cjs');
-const contract=require('../shared/brawl-core-contract.json');
+const onlineProfile=require('../draft/online-stat-profile.json');
 const roster1={host:{team:'host',char:'gunner'},guest:{team:'guest',char:'sniper'}};
 const roster2={
  blue1:{team:'blue',char:'gunner'},blue2:{team:'blue',char:'tank'},
@@ -25,16 +25,16 @@ assert.deepEqual(modifiers(s,'host',{at:1000}),{
 let out=step(s,{type:'reload',seat:'host',dtMs:200,at:1000});s=out.state;
 assert.equal(out.result.modifiers.reloadSpeedPct,20);
 assert.throws(()=>step(out.state,{type:'reload',seat:'host',dtMs:200,at:1000}),/overlapping reload interval/);
-assert.equal(s.players.host.reloadProgress,200*1.2/contract.common.characters.gunner.reloadMs);
+assert.equal(s.players.host.reloadProgress,200*1.2/onlineProfile.characters['1vs1'].gunner.reloadMs);
 s=t(s,{type:'move',seat:'host',moving:false,at:1010});
 assert.equal(modifiers(s,'host').reloadSpeedPct,16);
 assert.equal(JSON.parse(original).players.host.ammo,3,'pure engine must not mutate prior state');
 assert.throws(()=>step(s,{type:'reload',seat:'host',dtMs:3000,at:1020}),/host-bounded/);
 assert.throws(()=>step(s,{type:'ammo',seat:'host',ammo:5,at:1020}),/authoritative ammo/);
 assert.throws(()=>step(s,{type:'ammo',seat:'host',ammo:0,at:900}),/monotonic/);
-for(const [char,hp] of Object.entries(contract.common.characters)){
+for(const [char,stats] of Object.entries(onlineProfile.characters['1vs1'])){
  const x=createCombat({mode:'1vs1.ko',participants:{host:{team:'host',char},guest:{team:'guest',char:'gunner'}}});
- assert.equal(x.players.host.hp,hp.hp,'must reflect canonical HP for '+char);
+ assert.equal(x.players.host.hp,stats.hp,'must reflect LIVE online HP for '+char);
 }
 s=begin(owned(['hit_stride','brush_boost','empty_sprint'],[]));
 out=step(s,{type:'hit',attacker:'host',victim:'guest',kind:'normal',baseDamage:5,at:100});
