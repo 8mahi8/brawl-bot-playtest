@@ -88,6 +88,43 @@ async function run(){
    for(const seat of Object.keys(bySeat))assert.equal((finished.owned?.[seat]||[]).length,Math.min(3,round));
    await Promise.all(clients.map(c=>c.page.waitForFunction(r=>window.__brawlV3QA?.()?.game==='playing'&&window.__brawlV3QA?.()?.round===r,round+1,{timeout:20000})));
   }
+  // Real accepted shot from seat blue1, rather than forcing a recoil position.
+  // The host-authoritative reducer must set a motion revision and move exactly once.
+  const blue1=bySeat.blue1;
+  await blue1.evaluate(async()=>{
+    const s=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      const id=g.seats.blue1.id;
+      g.draft.owned.blue1=['recoil_shot',...(g.draft.owned.blue1||[]).filter(c=>c!=='recoil_shot').slice(0,2)];
+      g.stats[id].draftCards=[...g.draft.owned.blue1];
+      return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(()=>{const s=window.__brawlV3QA();
+    return s?.stats?.[s.myId]?.draftCards?.includes('recoil_shot');},null,{timeout:12000});
+  await blue1.waitForTimeout(2000); // countdown ends on every device
+  const first=await blue1.evaluate(async()=>{
+    const s=window.__brawlV3QA(),snap=await window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').once('value');
+    const g=snap.val(),id=g.seats.blue1.id;
+    return {id,round:g.round,motion:g.motions[id],seq:g.stats[id].lastActionSeq};
+  });
+  assert.equal(first.round,5);
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true);
+  await blue1.waitForFunction(({id,rev})=>{
+    const q=window.__brawlV3QA(),s=q?.stats?.[id];return s&&s.lastActionSeq>0&&q.local.x>150;
+  },{id:first.id,rev:first.motion.rev},{timeout:14000});
+  const moved=await blue1.evaluate(async id=>{
+    const q=window.__brawlV3QA(),snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').once('value');
+    const state=snap.val();
+    return {motion:state.motions[id],recoilUntil:state.stats[id].draftRecoilUntil,clock:state.clock?.t,seq:state.stats[id].lastActionSeq};
+  },first.id);
+  assert(moved.motion.rev>first.motion.rev,'host wrote authoritative recoil movement');
+  assert(moved.motion.x-first.motion.x>15&&moved.motion.x-first.motion.x<=61,
+    'one recoil impulse moved blue1 backwards, clipped only by cover if necessary');
+  assert(moved.seq>first.seq,'recoil belongs to accepted normal shot action');
+  assert(moved.recoilUntil>0,'recoil cooldown stored in canonical combat state');
+
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
    return window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
