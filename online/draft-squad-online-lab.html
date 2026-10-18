@@ -2777,6 +2777,16 @@ const remotes={};
    ctx.lineWidth=bullet.char==='sniper'?4:3;
    ctx.beginPath();ctx.arc(p.x,p.y,bullet.char==='sniper'?6:4,0,Math.PI*2);ctx.stroke();
   }
+  // Visual-only hologram projectiles deliberately never touch collision,
+  // enemy HP, client predicted hits, stats or real projectile collections.
+  for(const fake of Object.values(game?.gad2FakeShots||{})){
+   if(fake.kind!=='hologramFakeShot'||fake.until<=visualCombatNow())continue;
+   const ahead=Math.min(.09,Math.max(0,(serverNow()-game.clock.wallAt)/1000));
+   const x=fake.x+fake.vx*ahead,y=fake.y+fake.vy*ahead;
+   ctx.strokeStyle=fake.team==='blue'?'#9ce6ff':'#ffbdc8';
+   ctx.lineWidth=fake.char==='sniper'?4:3;
+   ctx.beginPath();ctx.arc(x,y,fake.char==='sniper'?6:4,0,Math.PI*2);ctx.stroke();
+  }
   for(const id of bulletVisuals.keys())if(!ids.has(id))bulletVisuals.delete(id);
   // Local shooter prediction already advances at requestAnimationFrame speed.
   for(const bullet of clientBullets){
@@ -2897,6 +2907,31 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
   if((game?.hp?.[s.id]??0)>0)drawPlayer(p,seat,s.id===myId,visible);
  }
  }else if(scene==='layout'){for(const seat of SEATS){const s=SPAWNS[seat];drawPlayer({...s,char:seat==='blue1'?'tank':'gunner'},seat,false);}}
+ // The same sprite and enemy resource bar appear for opponents; ONLY
+ // same-team players receive the "分身" mark, so decoys remain convincing.
+ if(scene==='game'&&game){
+  for(const h of Object.values(game.gad2Holograms||{})){
+   if(h.kind!=='hologram'||h.until<=visualCombatNow())continue;
+   const ally=h.team===myTeam();
+   const concealed=draftConcealed(h);
+   if(!ally&&!BrawlStealthV1.visible({viewer:local,target:h,concealed,
+       revealedUntil:0,now:combatNow()}))continue;
+   const char=CHARS[h.char]||CHARS.tank;
+   BrawlVisualV1.character(ctx,{x:h.x,y:h.y,angle:h.a||0,char:h.char,
+     color:char.color,team:h.team,mine:false});
+   const st=game.stats?.[h.owner],ammo=BrawlDesignV1.ammo(st,combatNow(),char.reload);
+   BrawlVisualV1.resources(ctx,{x:h.x,y:h.y,
+     hp:game.hp?.[h.owner]??char.hp,maxHp:char.hp,
+     ammo:ammo.ammo,reload:ammo.progress,ult:st?.ult||0,
+     showUlt:ally,team:h.team,label:ally?'分身':'ENEMY'});
+   if(ally){
+    ctx.save();ctx.strokeStyle='#9fffe2';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(h.x,h.y-51);ctx.lineTo(h.x+9,h.y-42);
+    ctx.lineTo(h.x,h.y-33);ctx.lineTo(h.x-9,h.y-42);
+    ctx.closePath();ctx.stroke();ctx.restore();
+   }
+  }
+ }
  if(scene==='game'){for(const [owner,st] of Object.entries(game?.stats||{})){
  if(st?.char!=='tank'||!(st.guardUntil>combatNow())||!st.guardTargetId||!(game.hp?.[st.guardTargetId]>0)||!(game.hp?.[owner]>0))continue;
  const a=targetPoint(owner),b=targetPoint(st.guardTargetId);if(!a||!b)continue;
@@ -2913,7 +2948,7 @@ function draw(dt=1/60){const sw=canvas.clientWidth,sh=canvas.clientHeight;if(sw<
   ctx.restore();
  }
  for(const f of fx){ctx.save();if(f.type==='laserWarn'||f.type==='laser'){ctx.strokeStyle='#dfb9f5';ctx.lineWidth=f.type==='laser'?16:3;ctx.globalAlpha=f.type==='laser'?.84:.66;ctx.setLineDash(f.type==='laser'?[]:[9,7]);ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x+Math.cos(f.angle)*900,f.y+Math.sin(f.angle)*900);ctx.stroke();}
- else {ctx.strokeStyle=f.type==='shockwave'?'#bd75ff':f.type==='hit'?'#ffe476':'#ffcc75';ctx.lineWidth=f.type==='jumpWarn'?3:f.type==='hit'?5:4;ctx.beginPath();const max=f.type==='shockwave'?140:f.type==='jumpWarn'?76:40;ctx.arc(f.x,f.y,f.type==='jumpWarn'?76:max*(1-Math.max(0,f.t||0)/.5)+4,0,Math.PI*2);ctx.stroke();
+ else {ctx.strokeStyle=f.type==='hologramDissolve'?'#86e9ff':f.type==='shockwave'?'#bd75ff':f.type==='hit'?'#ffe476':'#ffcc75';ctx.lineWidth=f.type==='jumpWarn'?3:f.type==='hit'?5:4;ctx.beginPath();const max=f.type==='shockwave'?140:f.type==='jumpWarn'?76:40;ctx.arc(f.x,f.y,f.type==='jumpWarn'?76:max*(1-Math.max(0,f.t||0)/.5)+4,0,Math.PI*2);ctx.stroke();
  if(f.type==='hit'&&Number.isFinite(f.amount)){
   ctx.font='bold 15px system-ui';ctx.textAlign='center';ctx.fillStyle='#fff0aa';
   if(!f.guarded)ctx.fillText('-'+Math.round(f.amount),f.x,f.y-38-(1-Math.max(0,f.t||0)/.5)*15);
@@ -3154,9 +3189,9 @@ function squadGad2ButtonRefresh(){
  const beacon=id==='warp_beacon'&&game?.gad2Beacons?.[seat];
  const activeBeacon=!!(beacon&&beacon.owner===myId&&beacon.until>combatNow());
  b.disabled=(remaining>0&&!activeBeacon)||!combatReady()||!alive(myId);
- const name=id==='smoke'?'煙幕':id==='warp_beacon'?(activeBeacon?'帰還':'ビーコン'):id==='portable_wall'?'壁':'地雷';
+ const name=id==='smoke'?'煙幕':id==='warp_beacon'?(activeBeacon?'帰還':'ビーコン'):id==='portable_wall'?'壁':id==='hologram'?'分身':'地雷';
  b.textContent=remaining>0?name+'\n'+Math.ceil(remaining/1000)+'秒':'GAD2\n'+name;
- b.setAttribute('aria-label','GAD2 '+(id==='warp_beacon'?(activeBeacon?'ビーコンに帰還':'ワープビーコン'):id==='smoke'?'スモーク':id==='portable_wall'?'ポータブルウォール':'トラップマイン')+(remaining>0?' 再使用まで'+Math.ceil(remaining/1000)+'秒':''));
+ b.setAttribute('aria-label','GAD2 '+(id==='warp_beacon'?(activeBeacon?'ビーコンに帰還':'ワープビーコン'):id==='smoke'?'スモーク':id==='portable_wall'?'ポータブルウォール':id==='hologram'?'ホログラム':'トラップマイン')+(remaining>0?' 再使用まで'+Math.ceil(remaining/1000)+'秒':''));
  squadGad2ButtonPosition();
 }
 function squadRender(){
@@ -3236,6 +3271,11 @@ window.__brawlDraftGad2QA=()=>({
  smokes:structuredClone(game?.gad2Smokes||{}),
  beacons:structuredClone(game?.gad2Beacons||{}),
  walls:structuredClone(game?.gad2Walls||{}),
+ holograms:structuredClone(game?.gad2Holograms||{}),
+ fakeShots:structuredClone(game?.gad2FakeShots||{}),
+ holoPlaced:game?.draftCardStats?.gad2HologramsPlaced||0,
+ holoDissolves:game?.draftCardStats?.gad2HologramsDissolved||0,
+ holoShotsFired:game?.draftCardStats?.gad2HoloShotsFired||0,
  wallPlaced:game?.draftCardStats?.gad2WallsPlaced||0,
  wallCollisionQA:(x,y,r=6)=>[...WALLS,...draftVisibleWalls()].some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
  beaconPlaced:game?.draftCardStats?.gad2BeaconsPlaced||0,
@@ -3248,6 +3288,11 @@ window.__brawlDraftGad2QA=()=>({
  cooldownUntil:game?.draft?.gadget2ReadyAt?.[mySeat()]||0,
  now:combatNow(),
  canUse:combatReady()&&!!squadGad2Equipped(game?.draft,mySeat())
+});
+window.__brawlDraftHoloViewQA=(seat)=>({
+ visible:!!game?.gad2Holograms?.[seat],
+ ally:game?.gad2Holograms?.[seat]?.team===myTeam(),
+ label:game?.gad2Holograms?.[seat]?.team===myTeam()?'分身':'ENEMY'
 });
 window.__brawlDraftStealthQA=(targetId)=>({
  ownState:ownStealthState(),
