@@ -54,6 +54,61 @@ async function forcedKO(page,winner,scores,round){
   },undefined,false);
  },{winner,scores,round});
 }
+// Round 1 uses REAL shots and the actual KO reducer. The fixture sets both
+// defending tanks to critical HP but never changes phase, winner or score.
+async function realKORoundOne(bySeat,host,code){
+ const shooters=[bySeat.blue1,bySeat.blue2],victims=[bySeat.red1,bySeat.red2];
+ const attackerIds=await Promise.all(shooters.map(get));
+ const victimIds=await Promise.all(victims.map(get));
+ for(let i=0;i<2;i++){
+  const y=i===0?420:700;
+  assert.equal(await shooters[i].evaluate(y=>window.__brawlDraftMoveQA(525,y),y),true,
+    'attacker moves to clear KO firing lane');
+  assert.equal(await victims[i].evaluate(y=>window.__brawlDraftMoveQA(640,y),y),true,
+    'opponent moves to clear KO firing lane');
+ }
+ await host.waitForFunction(ids=>{
+  const p=window.__brawlV3QA?.()?.positionValues||{};
+  return ids.every(({id,x,y})=>Math.abs((p[id]?.x||0)-x)<5&&
+    Math.abs((p[id]?.y||0)-y)<5);
+ },[{id:attackerIds[0].myId,x:525,y:420},
+    {id:attackerIds[1].myId,x:525,y:700},
+    {id:victimIds[0].myId,x:640,y:420},
+    {id:victimIds[1].myId,x:640,y:700}],{timeout:15000});
+ const seeded=await host.evaluate(async ids=>{
+  const q=window.__brawlV3QA();
+  return window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+   if(g?.phase!=='playing'||g.round!==1)return;
+   for(const id of ids){g.hp[id]=1;g.combatAt[id]=g.clock.t;delete g.protection[id];}
+   return g; // *Never* write match outcomes or forced enemy deaths in this test.
+  },undefined,false).then(r=>r.committed);
+ },victimIds.map(q=>q.myId));
+ assert(seeded,'one-time 1 HP fixture set without modifying winner/phase');
+ await Promise.all(shooters.map(page=>page.waitForFunction(()=>
+  window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:15000})));
+ for(const page of shooters)assert.equal(await page.evaluate(()=>
+  window.__brawlDraftFireQA(0)),true,'real shot submitted through the normal action bus');
+ let result,last=null;
+ const deadline=Date.now()+13000;
+ while(Date.now()<deadline){
+  const g=await committedGame(code);
+  last={phase:g?.phase,hp:victimIds.map(p=>g?.hp?.[p.myId]),
+   scores:g?.scores,winner:g?.winner,kos:g?.battleStats,
+   accepted:Object.values(g?.usedActions||{}).filter(a=>a.type==='shot'&&a.status==='accepted').length};
+  if(['round_end','draft'].includes(g?.phase)&&g.winner==='blue'&&
+    g.scores?.blue===1&&g.scores?.red===0&&
+    victimIds.every(v=>g.hp?.[v.myId]===0)){result=g;break;}
+  await new Promise(resolve=>setTimeout(resolve,120));
+ }
+ assert(result,'2 real Tank volleys must cause KO -> round_end/draft without forced score: '+
+  JSON.stringify(last));
+ assert(result.combatRev>1,'real battle must advance host combat state');
+ assert(result.battleStats?.[attackerIds[0].myId]?.damage>0||
+  result.battleStats?.[attackerIds[1].myId]?.damage>0,
+  'host damage audit reflects actual combat, not direct winner assignment');
+ console.log('PASS LIVE natural KO: two real Tank shots, red team eliminated, host score 1-0, draft begins');
+}
+
 async function run(){
  await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));
  let browser;
@@ -77,10 +132,11 @@ async function run(){
   for(const c of clients){const s=await get(c.page);assert.equal(s.round,1);assert.equal(s.protocol,13012);}
   console.log('PASS 4 WebKit clients connected / independent draft squad room / READY');
   const scores={blue:0,red:0};
+  await realKORoundOne(bySeat,host,code);
   for(let round=1;round<=4;round++){
    const winner=round%2?'blue':'red';
    scores[winner]++;
-   await forcedKO(host,winner,scores,round);
+   if(round!==1)await forcedKO(host,winner,scores,round);
    await Promise.all(clients.map(c=>wait(c.page,'draft')));
    const d=(await get(host)).draft;
    assert.equal(d.winner,winner);
