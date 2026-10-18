@@ -178,7 +178,7 @@
     const distance=clamp(reach,55,BALANCE.bomberRange),x=actor.x+Math.cos(angle)*distance,y=actor.y+Math.sin(angle)*distance;
     const px=-Math.sin(angle),py=Math.cos(angle),now=time();
     for(const sign of [-1,1]){
-      extraState.bombs.push({side,x:x+px*30*sign,y:y+py*30*sign,damage:BALANCE.bomberDamage*.5,radius:BALANCE.bomberRadius*.72,
+      extraState.bombs.push({side,x:x+px*30*sign,y:y+py*30*sign,damage:BALANCE.bomberDamage*.5*(draftHas(side,'recoil_shot')?1.10:1),radius:BALANCE.bomberRadius*.72,
         due:now+BALANCE.bomberFlightMs,round:game.round,fireId});
     }
     fx.push({type:'impact',x,y,ttl:.35,max:.35});
@@ -257,6 +257,7 @@
         fx.push({type:'impact',x:blast.x,y:blast.y,ttl:.32,max:.32});
         const side=extraOther(blast.side),actor=extraSideActor(side);
         if(Math.hypot(actor.x-blast.x,actor.y-blast.y)<blast.radius+RADIUS){
+          if(blast.fireId)extraOnBulletHit({owner:blast.side,fireId:blast.fireId,x:blast.x,y:blast.y,ult:false});
           applySoloDamage(side,blast.damage,blast.side,blast.x,blast.y,'effect');
           if(game.phase!=='playing')return;
         }
@@ -311,5 +312,6 @@
     cards:EXTRA_CARDS.map(c=>c.id),manual:[...extraManualDeck],owned:structuredClone(draftOwned),
     gadget:extraGadget('host'),state:structuredClone(extraState),
     choose:(cards)=>{if(!Array.isArray(cards)||cards.length>3||cards.some(id=>!draftById.has(id)))return false;extraManualDeck=[...cards];return true;},
-    useGadget:()=>extraUseGadget('host')
+    useGadget:()=>extraUseGadget('host'),
+    fire:(angle=0)=>{if(!solo||!isPlaying())return false;shoot(false,angle);return true;}
   });
