@@ -1,0 +1,83 @@
+// Squad Tactical Draft: static and deterministic transaction contracts, no cloud.
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const root=path.resolve(__dirname,'..'),src=fs.readFileSync(path.join(root,'draft/squad-online-prototype.inc.js'),'utf8');
+const html=fs.readFileSync(path.join(root,'online/draft-squad-online-lab.html'),'utf8');
+assert(html.includes(src),'Standalone squad HTML inlines pure draft reducer verbatim');
+for(const [i,m] of [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].entries())
+ if(m[1].trim())new vm.Script(m[1],{filename:'draft-squad-lab#'+i});
+const names=['squadNewMatch','squadHand','squadOrder','squadOffer','squadBegin','squadPick','squadNextRound','squadDamage','squadMoveFactor','squadReloadFactor'];
+const api=vm.runInNewContext(src+'\n({'+names.join(',')+'})',{},{timeout:2000});
+const {squadNewMatch,squadHand,squadOrder,squadOffer,squadBegin,squadPick,squadNextRound,squadDamage,squadMoveFactor,squadReloadFactor}=api;
+const seats=['blue1','blue2','red1','red2'];
+assert.deepEqual(Array.from(squadOrder('blue',0)),['blue1','red1','red2','blue2']);
+assert.deepEqual(Array.from(squadOrder('blue',1)),['blue2','red2','red1','blue1']);
+assert.deepEqual(Array.from(squadOrder('red',0)),['red1','blue1','blue2','red2']);
+assert.deepEqual(Array.from(squadOrder('red',1)),['red2','blue2','blue1','red1']);
+const asPlain=o=>JSON.parse(JSON.stringify(o));
+let game={phase:'playing',mode:'ko',round:1,winner:null,endedAt:0,
+ scores:{blue:0,red:0},draft:squadNewMatch()};
+for(let round=1;round<=4;round++){
+ const winner=round%2?'blue':'red';
+ game={...game,phase:'round_end',round,winner,scores:{blue:Math.ceil(round/2),red:Math.floor(round/2)}};
+ const state=squadBegin(game,'12345');
+ assert(state?.phase==='draft');
+ assert.equal(state.draft.order[0],squadOrder(winner,round-1)[0]);
+ assert.equal(squadBegin(state,'12345'),null,'cannot begin already-active draft');
+ assert.equal(squadPick(state,state.draft.order[1],state.draft.offered[0]),null,'cannot steal first pick');
+ let cur=state;
+ const before=JSON.stringify(state);
+ for(const seat of state.draft.order){
+  const owned=squadHand(cur.draft,seat);
+  const taken=cur.draft.taken||[];
+  const card=cur.draft.offered.find(id=>!taken.includes(id)&&!owned.includes(id));
+  assert(card,'safe offer must allow each player to select sequentially');
+  if(owned.length>=3)assert.equal(squadPick(cur,seat,card),null,'replacement is explicit');
+  const next=squadPick(cur,seat,card,owned.length>=3?owned[0]:null);
+  assert(next,'legal selection');
+  cur=next;
+  assert.equal(squadHand(cur.draft,seat).length,Math.min(round,3));
+  assert.equal(new Set(cur.draft.taken).size,cur.draft.taken.length);
+  assert.equal(cur.draft.taken.length,cur.draft.turn);
+ }
+ assert.equal(JSON.stringify(state),before,'reducer does not mutate previous Firebase snapshot');
+ assert.equal(cur.phase,'round_end');
+ assert.equal(cur.draft.complete,true);
+ game={...cur,phase:'playing',round:round+1,draft:squadNextRound(cur.draft)};
+ for(const seat of seats)assert.equal(squadHand(game.draft,seat).length,Math.min(round,3));
+}
+game.phase='match_end';game.scores.blue=3;
+assert.equal(squadBegin(game,'12345'),null);
+const occupied={blue1:['empty_sprint','moving_reload','last_shell'],blue2:['hit_stride','finisher','followthrough'],
+ red1:['opening_guard','clutch_armor','last_shell'],red2:['moving_reload','finisher','empty_sprint']};
+for(let round=5;round<12;round++){
+ const order=squadOrder(round%2?'blue':'red',round-1),offer=squadOffer(occupied,'45678',round,order);
+ assert(offer.length>=6&&offer.length<=8,'late-hand can widen offer when necessary');
+ assert.equal(new Set(offer).size,offer.length);
+ function walk(i,taken){
+  if(i===4)return;
+  const seat=order[i],options=offer.filter(id=>!taken.includes(id)&&!occupied[seat].includes(id));
+  assert(options.length>0,'no early sequence may starve late picker');
+  for(const id of options)walk(i+1,[...taken,id]);
+ }
+ walk(0,[]);
+}
+const draft=squadNewMatch();
+draft.owned.blue1=['finisher','followthrough','hit_stride'];
+draft.owned.red1=['opening_guard','clutch_armor'];
+const g={draft,seats:Object.fromEntries(seats.map(s=>[s,{id:s+'_id'}])),
+ hp:{blue1_id:100,red1_id:70},stats:{red1_id:{char:'sniper'}}};
+const attack={owner:'blue1_id',victim:'red1_id',amount:10,kind:'normal'};
+const first=squadDamage(g,attack,7000);
+assert.equal(first.amount,3,'opening guard 7 damage mitigation');
+assert.equal(g.draft.strideUntil.blue1,8800,'hit stride activation');
+const low=squadDamage({...g,hp:{...g.hp,red1_id:22}},attack,8000);
+assert.equal(low.amount,16,'finisher and followthrough cap at 7, 8% armor');
+assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
+assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
+assert.equal(squadReloadFactor({owned:{blue1:['moving_reload']}},'blue1',1,900,600),1);
+assert(html.includes("const ROOT='roomsDraft2v2',PROTOCOL=13012"),'isolated four-person Firebase protocol');
+assert(html.includes("db.useEmulator('127.0.0.1',9000)"));
+assert(!html.includes("db.ref('rooms2v2/"),'normal online rooms are not used');
+assert(!fs.existsSync(path.join(root,'sites/BRAWL_DRAFT_2vs2.html')),'cannot publish before approval');
+console.log('PASS squad draft: four-seat winner/loser snake, deterministic anti-starvation offers, 4-round picks, 3-card replacement, duel cards, isolated emulator');
