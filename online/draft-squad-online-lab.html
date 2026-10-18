@@ -526,22 +526,46 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
  /* END SHARED RUNTIME COMBAT_ACTIONS */
   // Online Tactical Draft projectile physics is part of the HOST reducer, not client prediction.
   // Original bullets use the proven shared physics; only the central split bullet is handled here.
+  // Authoritative terrain bounce. Ambiguous corners or overlapping walls absorb the
+  // shot rather than inventing a reflection normal or allowing wall penetration.
+  function draftReflectAxis(px,py,nx,ny,r){
+    const hitX=wall(nx,py,r),hitY=wall(px,ny,r);
+    if(hitX===hitY)return '';
+    return hitX?'x':'y';
+  }
   function draftAdvance(b,dt,g,targetHit,now){
-    if(!b.splitCenter)return BrawlProjectileV1.advance(b,dt,{width:W,height:H,rangeFirst:true,
-      wallHit:(x,y,r)=>wall(x,y,r),targetHit});
+    if(!b.splitCenter&&!b.ricochetEnabled)
+      return BrawlProjectileV1.advance(b,dt,{width:W,height:H,rangeFirst:true,
+        wallHit:(x,y,r)=>wall(x,y,r),targetHit});
     const speed=Math.hypot(b.vx,b.vy),distance=speed*dt,steps=Math.max(1,Math.ceil(distance/6));
-    const dx=b.vx*dt/steps,dy=b.vy*dt/steps,dd=distance/steps;
+    if(!Number.isFinite(dt)||dt<0||!Number.isFinite(speed))throw Error('Invalid draft projectile');
+    const timePerStep=dt/steps,dd=distance/steps;
     for(let i=0;i<steps;i++){
-      b.x+=dx;b.y+=dy;b.dist+=dd;
-      if(b.x<0||b.x>W||b.y<0||b.y>H||wall(b.x,b.y,b.radius)||b.dist>=b.range)return false;
-      if(targetHit(b))return false;
-      if(b.dist>=b.range*.5){
-        // Daughter IDs are stable under RTDB transaction retries and preserve one original action ID.
+      const nx=b.x+b.vx*timePerStep,ny=b.y+b.vy*timePerStep;
+      b.dist+=dd;
+      if(nx<0||nx>W||ny<0||ny>H)return false;
+      if(wall(nx,ny,b.radius)){
+        if(!b.ricochetEnabled||b.ricochetUsed||wall(b.x,b.y,b.radius))return false;
+        const axis=draftReflectAxis(b.x,b.y,nx,ny,b.radius);
+        if(!axis)return false;
+        if(axis==='x')b.vx=-b.vx;else b.vy=-b.vy;
+        b.ricochetUsed=1;
+        b.damageScale=(b.damageScale||1)*.7;
+        g.draftCardStats ||= {};
+        g.draftCardStats.ricochets=(g.draftCardStats.ricochets||0)+1;
+        if(b.dist>=b.range)return false;
+        continue;
+      }
+      b.x=nx;b.y=ny;
+      if(targetHit(b)||b.dist>=b.range)return false;
+      if(b.splitCenter&&b.dist>=b.range*.5){
+        // One central projectile -> exactly two non-recursive children.
+        // Children keep the original fireId and the parent's bounce count.
         const a=Math.atan2(b.vy,b.vx);
         for(const sign of [-1,1]){
           const key=b.id+':child:'+sign,theta=a+sign*.21;
-          g.draftCardStats ||= {splits:0,blasts:0};
-          if(sign===-1)g.draftCardStats.splits++;
+          g.draftCardStats ||= {};
+          if(sign===-1)g.draftCardStats.splits=(g.draftCardStats.splits||0)+1;
           g.projectiles[key]={...b,id:key,splitCenter:false,splitChild:true,
             damageScale:(b.damageScale||1)*.6,
             vx:Math.cos(theta)*speed,vy:Math.sin(theta)*speed,spawnAt:now};
@@ -550,6 +574,28 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       }
     }
     return true;
+  }
+  // Bomber keeps a single normal bomb attack; with ricochet the throw path
+  // reflects from a wall once, not through it. Collision at a corner terminates
+  // at the last safe point and never grants a second detonation.
+  function draftBombBounce(start,target){
+    const length=Math.hypot(target.x-start.x,target.y-start.y);
+    const steps=Math.max(1,Math.ceil(length/6));
+    let x=start.x,y=start.y,dx=(target.x-start.x)/steps,dy=(target.y-start.y)/steps;
+    let bounced=false;
+    for(let i=0;i<steps;i++){
+      const nx=x+dx,ny=y+dy;
+      if(nx<0||nx>W||ny<0||ny>H)return {x,y,bounced,blocked:true};
+      if(wall(nx,ny,6)){
+        if(bounced||wall(x,y,6))return {x,y,bounced,blocked:true};
+        const axis=draftReflectAxis(x,y,nx,ny,6);
+        if(!axis)return {x,y,bounced,blocked:true};
+        if(axis==='x')dx=-dx;else dy=-dy;
+        bounced=true;continue;
+      }
+      x=nx;y=ny;
+    }
+    return bounced?{x,y,bounced}:{x:target.x,y:target.y,bounced:false};
   }
   function initialize(matchId,seats,mode,startAt){const hp={},stats={},motions={},combatAt={},battleStats={};
    for(const k of seatKeys){const p=seats[k];hp[p.id]=chars[p.char].hp;combatAt[p.id]=0;battleStats[p.id]={damage:0,kos:0,deaths:0};stats[p.id]={char:p.char,ammo:3,refillAt:0,ult:0,gadgets:mode==='area'?1:2,gadgetReadyAt:0,boostUntil:0,overdriveUntil:0,lastShotAt:0,lastActionSeq:0,life:0,armed:false,guardUntil:0,guardTargetId:'',guardTargetLife:-1,guardSaved:0};motions[p.id]={rev:0,...spawns[k]};}
@@ -578,16 +624,25 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
      for(let i=0;i<count;i++){
        const key=half?a.eventId+':split:'+i:a.eventId,sign=half?split[i]:0;
        const px=-Math.sin(a.angle)*30*sign,py=Math.cos(a.angle)*30*sign;
+       const trajectory=(s.draftCards||[]).includes('ricochet')?
+         draftBombBounce(pos,{x:dst.x+px,y:dst.y+py}):
+         {x:dst.x+px,y:dst.y+py,bounced:false};
        g.scheduled[key]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key,
         fireId:a.eventId,blastEligible:(s.draftCards||[]).includes('delayed_blast'),
-        x:dst.x+px,y:dst.y+py,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,
-        damage:BALANCE.bomberDamage*(half?.5:1),radius:BALANCE.bomberRadius*(half?.72:1),
+        x:trajectory.x,y:trajectory.y,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,
+        damage:BALANCE.bomberDamage*(half?.5:1)*(trajectory.bounced?.7:1),
+        radius:BALANCE.bomberRadius*(half?.72:1),
         enhanced:!!s.armed&&(!half||i===0),normalAttack:true};
+       if(trajectory.bounced){
+         g.draftCardStats ||= {};
+         g.draftCardStats.bombRicochets=(g.draftCardStats.bombRicochets||0)+1;
+       }
      }
      s.armed=false;
     }else{const shots=burst({...a,x:pos.x,y:pos.y},s,g);
        shots.forEach((b,i)=>{g.projectiles[b.id]={...b,fireId:a.eventId,
          splitCenter:(s.draftCards||[]).includes('split_round')&&i===Math.floor(shots.length/2),
+         ricochetEnabled:(s.draftCards||[]).includes('ricochet'),ricochetUsed:0,
          blastEligible:(s.draftCards||[]).includes('delayed_blast'),
          spawnAt:t+(char==='gunner'?i*BrawlWeaponV1.gapMs(s.overdriveUntil>t):0)};});
       }
@@ -790,7 +845,8 @@ const BrawlProjectileV1=Object.freeze({
     {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
     {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'},
     {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常射撃の最初の命中から0.7秒後に10ダメージの小爆発（3秒CD）'},
-    {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'}
+    {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'},
+    {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾が壁に当たると最大1回反射・反射後は威力70%'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
