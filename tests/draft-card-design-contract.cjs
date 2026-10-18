@@ -56,6 +56,14 @@ for(const item of registry.cards) {
     '2vs2 split must affect authoritative projectiles and normal Bomber bombs');
   assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damageScale:(b.damageScale||1)*.6"),
    '1vs1 central shot must generate two 60% children');
+ }else if(item.id==='warp_beacon'){
+  assert(!online1.includes("id:'warp_beacon'"),'1v1 warp still gated');
+  assert(online2.includes("id:'warp_beacon'"),'2v2 supports warp only after host reducer exists');
+  assert(squadLab.includes("g.gad2Beacons[seat]={kind:'warp_beacon'")&&
+    squadLab.includes("function draftWarpLanding(g,owner,x,y,input)")&&
+    squadLab.includes("g.draft.gadget2ReadyAt[seat]=t+15000")&&
+    squadLab.includes("g.draftCardStats.gad2BeaconsBroken"),
+    'host placement/safe return/cooldown/enemy counterplay required');
  }else if(item.id==='smoke'){
   assert(!online1.includes("id:'smoke'"),'1vs1 smoke remains gated');
   assert(online2.includes("id:'smoke'"),'2vs2 smoke offered after stealth implementation');
@@ -101,4 +109,4 @@ for(const item of registry.cards) {
   assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
  }
 }
-console.log('PASS recoil/split/blast/ricochet in both modes; 2vs2 mine/smoke GAD2 with three other cards gated');
+console.log('PASS four shot cards both modes; 2v2 mine/smoke/warp GAD2, hologram and wall gated');

@@ -234,6 +234,60 @@ assert(html.includes(")?700:1500"),'attack in smoke reveals for exactly 700ms');
 assert(html.includes("window.__brawlDraftStealthQA"),'WebKit smoke visibility uses actual game function');
 assert(!html.includes("db.ref('rooms2v2/"),'normal online rooms remain isolated');
 
+// Run the EXACT host warp landing code in VM, not a duplicate test algorithm.
+const warpStart=html.indexOf('  function draftWarpLanding(g,owner,x,y,input){');
+const warpEnd=html.indexOf('  function initialize(matchId,seats,mode,startAt){',warpStart);
+assert(warpStart>0&&warpEnd>warpStart,'warp landing helper must be host scoped');
+const warpSource=html.slice(warpStart,warpEnd);
+const warpEvaluate=(obstacles,positions)=>{
+ const mocked="const W=1000,H=600,R=18,seatKeys=['blue1','red1'];"+
+   "const point=(g,id,input)=>input[id];"+
+   "const wall=(x,y,r)=>["+JSON.stringify(obstacles)+"][0].some(w=>"+
+   "x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h);";
+ return vm.runInNewContext(mocked+warpSource+"\n draftWarpLanding",
+   {},{timeout:1000})(
+   {seats:{blue1:{id:'blueId'},red1:{id:'redId'}},hp:{blueId:160,redId:100}},
+   'blueId',positions.x,positions.y,{redId:{x:positions.enemyX||850,y:positions.enemyY||450}});
+};
+const unobstructed=warpEvaluate([],{x:560,y:300});
+assert.equal(unobstructed.x,560);
+assert.equal(unobstructed.y,300,'exact beacon point when safe');
+const blockedByWall=warpEvaluate([{x:520,y:265,w:70,h:70}],{x:560,y:300});
+assert(blockedByWall&&Math.hypot(blockedByWall.x-560,blockedByWall.y-300)<=76.01,
+ 'blocked beacon finds first safe landing within 76 units');
+assert(!((blockedByWall.x+21>520&&blockedByWall.x-21<590)&&
+ (blockedByWall.y+21>265&&blockedByWall.y-21<335)),
+ 'wall landing stays outside expanded wall box');
+const occupiedByEnemy=warpEvaluate([],{x:560,y:300,enemyX:560,enemyY:300});
+assert(occupiedByEnemy&&Math.hypot(occupiedByEnemy.x-560,occupiedByEnemy.y-300)>38,
+ 'cannot warp on top of a live opponent');
+assert.equal(warpEvaluate([{x:0,y:0,w:1000,h:600}],{x:560,y:300}),null,
+ 'fully blocked destination cancels warp rather than wall clipping');
+assert(src.includes("id:'warp_beacon'")&&src.includes("'trap_mine','smoke','warp_beacon'"),
+ 'Warp offered and equipped without enabling gated hologram/wall');
+assert(html.includes("g.gad2Beacons[seat]={kind:'warp_beacon'"),'canonical one beacon per seat');
+assert(html.includes("ownerLife:s.life,team:team(seat),x:pos.x,y:pos.y,start:t,until:t+7000"),
+ 'beacon saves exact live owner position, life, and 7-second expiry');
+assert(html.includes("const dst=draftWarpLanding(g,a.owner,live.x,live.y,input)"),
+ 'return position is host validated');
+assert(html.includes("if(!dst)return reject('gadget2_warp_blocked')"),
+ 'no safe landing preserves the beacon, rejects warp and does not consume cooldown');
+assert(html.includes("motion(g,a.owner,{...dst,a:a.angle})"),
+ 'warp uses persisted authoritative motion revision, not client-only prediction');
+assert(html.includes("g.draft.gadget2ReadyAt[seat]=t+15000"),
+ '15-second cooldown begins on successful return');
+assert(html.includes("old.until+15000"),
+ '15-second cooldown begins after expired beacon before another host tick');
+assert(html.includes("g.draftCardStats.gad2WarpReturns"),'host writes return audit');
+assert(html.includes("g.draftCardStats.gad2BeaconsBroken"),
+ 'enemy damage can destroy one-hit beacon');
+assert(html.includes("if(beacon.team===bullet.team||beacon.until<=t)continue"),
+ 'friendly shots may not destroy allied beacon');
+assert(html.includes("g.gad2Beacons ||= {}"),
+ 'RTDB transaction owns the beacon state without external mutation');
+assert(html.includes("beacons:structuredClone(game?.gad2Beacons||{})"),
+ 'actual WebKit can read replicated beacon state');
+
 assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
 assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
 assert.equal(squadReloadFactor({owned:{blue1:['moving_reload']}},'blue1',1,900,600),1);

@@ -393,6 +393,83 @@ async function run(){
   assert(revealed,'host must reveal normal shooter within smoke for 700ms');
   console.log('PASS 2vs2 LIVE GAD2 smoke: 4 clients, canonical duration/cooldown, bush conceal, 700ms attack reveal');
 
+  // REAL 4-client host transaction: place a warp beacon, move beyond a solid
+  // wall, return without path collision, and reconcile all clients from motion.rev.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.draft.owned.blue1=['warp_beacon','split_round','delayed_blast'];
+      g.draft.gadget2ReadyAt.blue1=0; // isolated test fixture after mine/smoke
+      g.stats[g.seats.blue1.id].draftCards=[...g.draft.owned.blue1];
+      return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(()=>window.__brawlDraftGad2QA?.()?.equipped==='warp_beacon',
+    null,{timeout:12000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,300)),true,
+    'warp owner approaches wall-free beacon origin');
+  await host.waitForFunction(id=>{
+    const p=window.__brawlV3QA?.()?.positionValues?.[id];
+    return p&&Math.abs(p.x-575)<4&&Math.abs(p.y-300)<4;
+  },blueId,{timeout:13000});
+  const beforeWarp=await committedGame(code);
+  const warpGadgets=beforeWarp.stats[blueId].gadgets;
+  const priorRev=beforeWarp.motions[blueId].rev;
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftGad2FireQA(0)),true,
+    'GAD2 uses real action bus to place beacon');
+  let placed=null;
+  const placedDeadline=Date.now()+9000;
+  while(Date.now()<placedDeadline){
+    const g=await committedGame(code);
+    if(g?.gad2Beacons?.blue1?.kind==='warp_beacon'&&g?.draftCardStats?.gad2BeaconsPlaced===1){
+      placed=g;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,120));
+  }
+  assert(placed,'host must commit beacon before return');
+  assert.equal(placed.gad2Beacons.blue1.until-placed.gad2Beacons.blue1.start,7000);
+  assert(Math.hypot(placed.gad2Beacons.blue1.x-575,placed.gad2Beacons.blue1.y-300)<5,
+    'host saves the real original position, not the eventual destination');
+  assert.equal(placed.stats[blueId].gadgets,warpGadgets,
+    'beacon placement does not consume normal gadget');
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(970,300)),true,
+    'test player moves beyond the solid central wall');
+  await host.waitForFunction(id=>{
+    const p=window.__brawlV3QA?.()?.positionValues?.[id];
+    return p&&Math.abs(p.x-970)<5&&Math.abs(p.y-300)<5;
+  },blueId,{timeout:13000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftGad2FireQA(0)),true,
+    'reusing GAD2 returns through the intervening wall');
+  let warped=null,lastWarp=null;
+  const returnDeadline=Date.now()+10500;
+  while(Date.now()<returnDeadline){
+    const g=await committedGame(code);
+    lastWarp={phase:g?.phase,returns:g?.draftCardStats?.gad2WarpReturns||0,
+      beacons:Object.keys(g?.gad2Beacons||{}),motion:g?.motions?.[blueId],
+      cooldown:g?.draft?.gadget2ReadyAt?.blue1||0,time:g?.clock?.t};
+    if(lastWarp.phase==='playing'&&lastWarp.returns===1&&
+      lastWarp.beacons.length===0&&lastWarp.motion?.rev>priorRev){
+      warped=g;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,150));
+  }
+  assert(warped,'server-side warp is not committed: '+JSON.stringify(lastWarp));
+  assert(Math.hypot(warped.motions[blueId].x-575,warped.motions[blueId].y-300)<6,
+    'warp MUST return to beacon across intervening wall');
+  assert(warped.draft.gadget2ReadyAt.blue1-warped.clock.t>13500,
+    '15s return cooldown belongs to canonical combat clock');
+  assert.equal(warped.stats[blueId].gadgets,warpGadgets,
+    'GAD2 round trip never spends normal gadget');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(({id,rev})=>{
+    const s=window.__brawlV3QA?.(),m=s?.motions?.[id];
+    return m&&m.rev>rev&&Math.hypot(m.x-575,m.y-300)<6;
+  },{id:blueId,rev:priorRev},{timeout:14000})));
+  await blue1.waitForFunction(()=>{const p=window.__brawlV3QA?.()?.local;
+    return p&&Math.hypot(p.x-575,p.y-300)<9;},null,{timeout:10000});
+  console.log('PASS LIVE GAD2 warp: 7s beacon, real 4-client position sync, wall bypass, 15s cooldown, no normal gadget use');
+
+
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
    return window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
