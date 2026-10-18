@@ -22,7 +22,7 @@
 
 ユーザーレビューにより、**戦い方が変わる新カード9枚を試作採用**。旧候補05「追跡マーカー」は不採用。特に旧03「反動射撃」は反動移動に加えて通常攻撃の威力+10%を仮採用し、旧04「遅延爆発」はタンク5弾・ガンナー3弾でも**射撃アクション1回につき爆発最大1個**とする設計。カード候補と調整値は `draft/STYLE_CHANGING_CARDS_V1.md` / `draft/style-changing-cards.v1.json` で管理する。
 
-**新9枚は専用BOT試遊版（`sites/BRAWL_DRAFT_BOT_PLAYTEST.html`）へ実装済み**。オンラインの1vs1/2vs2ローカルFirebaseエミュレーター試作には、初期8枚に加えて**反動射撃を両方のゲーム固有通信/物理処理へ移植**（第一段階）。残る8枚はオンラインでは効果未実装のため候補へ出さない。射撃1回1反動、火力+10%（ULT除外）、2vs2ホスト確定の位置同期を優先。テスト記録は `draft/ONLINE_MIGRATION_WAVE1.md`、BOT版の安定化は `draft/BOT_STABILIZATION_V04.md` を参照。**正式公開は未実施**。
+**新9枚は専用BOT試遊版（`sites/BRAWL_DRAFT_BOT_PLAYTEST.html`）へ実装済み**。オンライン1vs1/2vs2の**ローカルFirebaseエミュレーター試作**には、初期8枚に加えて**反動射撃・分裂弾・遅延爆発**を両モードへ移植（11枚）。分裂は射撃1回の中心弾のみ2分裂（命中距離で算出した元のダメージの各60%）、ボマーは2つの小型爆発へ変更。遅延爆発は元射撃ID単位で最大1回／3秒CD、700ms予告を表示する。**跳弾および追加ガジェット5種はオンライン未実装のため候補へ出さない。** 記録は `draft/ONLINE_MIGRATION_WAVE1.md` / `draft/ONLINE_MIGRATION_WAVE2.md`、BOT版の安定化は `draft/BOT_STABILIZATION_V04.md` を参照。**正式公開は未実施**。
 
 ## まだ公開できない理由
 両ドラフト開発HTMLは**localhost限定**で、ローカルFirebase RTDBエミュレーターにのみ接続する。既存の本番Firebase Rules/Auth/Google Sitesは変更していない。これは本番ルームの権限・通信・実機表示の確認をせずに公開して事故を起こすのを避けるためである。
