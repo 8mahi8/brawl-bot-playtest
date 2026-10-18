@@ -1,0 +1,109 @@
+// Four ACTUAL Safari/WebKit clients on a LOCAL RTDB emulator. Never hits live cloud.
+'use strict';
+const fs=require('node:fs'),http=require('node:http'),path=require('node:path'),assert=require('node:assert/strict');
+const {webkit}=require('playwright-core');
+if(!/^(127\.0\.0\.1|localhost):9000$/.test(process.env.FIREBASE_DATABASE_EMULATOR_HOST||''))
+ throw Error('Requires loopback Firebase emulator');
+const root=path.resolve(__dirname,'..'),src=fs.readFileSync(path.join(root,'online/draft-squad-online-lab.html'),'utf8');
+const sdk=path.join(root,'artifacts/firebase-sdk'),port=8872,clients=[];
+const server=http.createServer((req,res)=>{
+ if(req.url!=='/squad'){res.writeHead(404);res.end();return;}
+ res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(src);
+});
+async function client(browser,index){
+ const ctx=await browser.newContext({viewport:{width:1024,height:650},isMobile:true,hasTouch:true,deviceScaleFactor:1,locale:'ja-JP'});
+ const page=await ctx.newPage(),errors=[];
+ page.on('pageerror',e=>errors.push('PAGE '+e.message));
+ page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text().slice(0,250));});
+ await page.route('https://www.gstatic.com/firebasejs/10.8.0/*',async route=>{
+  const name=route.request().url().split('/').pop();
+  if(!['firebase-app-compat.js','firebase-database-compat.js'].includes(name))return route.abort();
+  return route.fulfill({status:200,contentType:'application/javascript',body:fs.readFileSync(path.join(sdk,name))});
+ });
+ await page.goto('http://127.0.0.1:'+port+'/squad');
+ await page.waitForFunction(()=>typeof window.__brawlV3QA==='function',null,{timeout:18000});
+ return {ctx,page,index,errors};
+}
+const get=page=>page.evaluate(()=>window.__brawlV3QA());
+async function wait(p,phase){
+ await p.waitForFunction(s=>window.__brawlV3QA?.()?.game===s,phase,{timeout:22000});
+}
+async function forcedKO(page,winner,scores,round){
+ await page.evaluate(({winner,scores,round})=>{
+  const state=window.__brawlV3QA();
+  return window.firebase.database().ref('roomsDraft2v2/'+state.roomId+'/game').transaction(g=>{
+   if(g?.phase!=='playing'||g.round!==round)return;
+   g.phase='round_end';g.winner=winner;g.scores={blue:scores.blue,red:scores.red};
+   g.endedAt=Date.now();return g;
+  },undefined,false);
+ },{winner,scores,round});
+}
+async function run(){
+ await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));
+ let browser;
+ try{
+  browser=await webkit.launch({headless:true});
+  for(let i=0;i<4;i++)clients.push(await client(browser,i));
+  const [host,...others]=clients.map(c=>c.page);
+  assert(await host.locator('#soloBtn').isHidden());
+  await host.locator('#createBtn').click();
+  await host.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:18000});
+  const code=(await get(host)).roomId;
+  for(const p of others){
+   await p.locator('#roomInput').fill(code);
+   await p.locator('#joinBtn').click();
+   await p.waitForFunction(code=>window.__brawlV3QA?.()?.roomId===code&&window.__brawlV3QA?.()?.seat!==null,code,{timeout:16000});
+  }
+  const bySeat=Object.fromEntries((await Promise.all(clients.map(c=>get(c.page)))).map((s,i)=>[s.seat,clients[i].page]));
+  assert.deepEqual(Object.keys(bySeat).sort(),['blue1','blue2','red1','red2']);
+  for(const c of clients)await c.page.locator('#readyBtn').click();
+  await Promise.all(clients.map(c=>wait(c.page,'playing')));
+  for(const c of clients){const s=await get(c.page);assert.equal(s.round,1);assert.equal(s.protocol,13012);}
+  console.log('PASS 4 WebKit clients connected / independent draft squad room / READY');
+  const scores={blue:0,red:0};
+  for(let round=1;round<=4;round++){
+   const winner=round%2?'blue':'red';
+   scores[winner]++;
+   await forcedKO(host,winner,scores,round);
+   await Promise.all(clients.map(c=>wait(c.page,'draft')));
+   const d=(await get(host)).draft;
+   assert.equal(d.winner,winner);
+   assert.equal(d.order.length,4);
+   assert.equal(d.order[0],winner+(((round-1)%2)+1));
+   const cardChosen=[];
+   for(const [i,seat] of d.order.entries()){
+    const p=bySeat[seat];
+    await p.locator('#squadDraftOverlay button[data-squad-draft]:not([disabled])').first().waitFor({timeout:10000});
+    if(round===4)assert.equal(await p.locator('#squadReplace').count(),1,'swap after three cards');
+    const before=(await get(p)).draft;
+    const id=await p.locator('#squadDraftOverlay button[data-squad-draft]:not([disabled])').first().getAttribute('data-squad-draft');
+    await p.locator('#squadDraftOverlay button[data-squad-draft="'+id+'"]').click();
+    cardChosen.push(id);
+    await host.waitForFunction(n=>window.__brawlV3QA?.()?.draft?.turn===n||window.__brawlV3QA?.()?.draft?.complete&&n===4,i+1,{timeout:12000});
+   }
+   assert.equal(new Set(cardChosen).size,4);
+   await Promise.all(clients.map(c=>wait(c.page,'round_end')));
+   const finished=(await get(host)).draft;
+   assert.equal(finished.complete,true);
+   for(const seat of Object.keys(bySeat))assert.equal((finished.owned?.[seat]||[]).length,Math.min(3,round));
+   await Promise.all(clients.map(c=>c.page.waitForFunction(r=>window.__brawlV3QA?.()?.game==='playing'&&window.__brawlV3QA?.()?.round===r,round+1,{timeout:20000})));
+  }
+  await host.evaluate(()=>{
+   const s=window.__brawlV3QA();
+   return window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
+    if(g?.phase!=='playing'||g.round!==5)return;
+    g.phase='match_end';g.winner='blue';g.scores={blue:3,red:2};g.endedAt=Date.now();return g;
+   },undefined,false);
+  });
+  await Promise.all(clients.map(c=>wait(c.page,'match_end')));
+  assert.equal((await get(host)).scores.blue,3);
+  assert.equal(await host.locator('#squadDraftOverlay:not(.hidden)').count(),0);
+  for(const c of clients)assert.deepEqual(c.errors,[],'WebKit errors client '+c.index);
+  console.log('PASS 4 WebKit browsers with REAL local RTDB: winner-first alternating snake, four drafts, cap swaps, three-win finish');
+ }finally{
+  for(const c of clients)try{await c.ctx.close();}catch(_){}
+  if(browser)await browser.close();
+  await new Promise(resolve=>server.close(resolve));
+ }
+}
+run().catch(e=>{console.error(e);process.exitCode=1;try{server.close();}catch(_){}});
