@@ -56,6 +56,14 @@ for(const item of registry.cards) {
     '2vs2 split must affect authoritative projectiles and normal Bomber bombs');
   assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damageScale:(b.damageScale||1)*.6"),
    '1vs1 central shot must generate two 60% children');
+ }else if(item.id==='smoke'){
+  assert(!online1.includes("id:'smoke'"),'1vs1 smoke remains gated');
+  assert(online2.includes("id:'smoke'"),'2vs2 smoke offered after stealth implementation');
+  assert(squadLab.includes("g.gad2Smokes[seat]={kind:'smoke'")&&
+    squadLab.includes("concealed:draftConcealed(p)")&&
+    squadLab.includes("g.draft.gadget2ReadyAt[seat]=t+12000")&&
+    squadLab.includes("window.__brawlDraftStealthQA"),
+    'host-owned smoke, bush visibility and E2E diagnostic must all exist');
  }else if(item.id==='trap_mine'){
   assert(!online1.includes("id:'trap_mine'"),'1vs1 mine remains gated');
   assert(online2.includes("id:'trap_mine'"),'2vs2 only offers host-owned mine');
@@ -93,4 +101,4 @@ for(const item of registry.cards) {
   assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
  }
 }
-console.log('PASS four shot modifier cards in both online labs; mine-only 2v2 GAD2, others gated');
+console.log('PASS recoil/split/blast/ricochet in both modes; 2vs2 mine/smoke GAD2 with three other cards gated');
