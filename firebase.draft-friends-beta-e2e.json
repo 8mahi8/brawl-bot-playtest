@@ -1,0 +1,15 @@
+{
+  "database": {
+    "rules": "network/emulator/DRAFT_FRIENDS_BETA_E2E_TEST_ONLY.rules.json"
+  },
+  "emulators": {
+    "database": {
+      "host": "127.0.0.1",
+      "port": 9000
+    },
+    "ui": {
+      "enabled": false
+    }
+  },
+  "singleProjectMode": true
+}
