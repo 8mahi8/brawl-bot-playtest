@@ -1917,7 +1917,7 @@ const BrawlAbilityV1=Object.freeze({
       const victim=bullet.owner==='host'?'guest':'host',pos=victim===role?local:getRemotePredicted();
       if(!BrawlProjectileV1.hitCircle(bullet.x,bullet.y,pos.x,pos.y,RADIUS+bullet.radius))return false;
       if(isHost&&game.phase==='playing')
-        applyDamage(victim,BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage),
+        applyDamage(victim,BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage)*(bullet.damageScale||1),
           bullet.owner,bullet.x,bullet.y,bullet.ult?'effect':'normal',bullet.fireId);
       return true;
     };
@@ -1931,10 +1931,10 @@ const BrawlAbilityV1=Object.freeze({
       if(targetHit(b)||b.dist>=b.range)return false;
       if(b.dist>=b.range*.5){
         // Splitting replaces the center projectile; all other pellets stay unchanged.
-        const a=Math.atan2(b.vy,b.vx),damage=BrawlProjectileV1.damage(b,BrawlCombatV8.tankDamage)*.6;
+        const a=Math.atan2(b.vy,b.vx);
         netSplitProof++;
         for(const sign of [-1,1])shots.push({...b,id:b.id+':child:'+sign,splitCenter:false,
-          splitChild:true,char:'split_child',sniper:false,damage,
+          splitChild:true,damageScale:(b.damageScale||1)*.6,
           vx:Math.cos(a+sign*.21)*speed,vy:Math.sin(a+sign*.21)*speed});
         return false;
       }
