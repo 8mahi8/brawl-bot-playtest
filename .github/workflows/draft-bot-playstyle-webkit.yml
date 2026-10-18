@@ -1,0 +1,35 @@
+name: BRAWL offline playstyle draft BOT WebKit
+on:
+  push:
+    paths:
+      - 'sites/BRAWL_DRAFT_BOT_PLAYTEST.html'
+      - 'draft/duel-bot-playstyle-extras.inc.js'
+      - 'tests/draft-bot-playstyle-webkit.cjs'
+      - '.github/workflows/draft-bot-playstyle-webkit.yml'
+  pull_request:
+    paths:
+      - 'sites/BRAWL_DRAFT_BOT_PLAYTEST.html'
+      - 'draft/duel-bot-playstyle-extras.inc.js'
+      - 'tests/draft-bot-playstyle-webkit.cjs'
+      - '.github/workflows/draft-bot-playstyle-webkit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safari-solo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate protected normal modes
+        run: node tests/sites-friends-release-freeze.cjs
+      - name: Check test syntax
+        run: node --check tests/draft-bot-playstyle-webkit.cjs
+      - name: Install WebKit
+        run: |
+          npm install --no-save --package-lock=false playwright-core@1.56.1
+          npx playwright-core install --with-deps webkit
+      - name: Run real offline Safari/WebKit card playtest
+        run: node tests/draft-bot-playstyle-webkit.cjs
