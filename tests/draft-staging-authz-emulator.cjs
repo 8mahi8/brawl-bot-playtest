@@ -100,11 +100,13 @@ async function run(){
   await allowed('fresh action after server sequence update',set(p(alice,'inputs/alice/action-0002'),{...action(),seq:2}));
 
   await denied('player cannot move teammate',set(p(alice,'positions/bob'),position(connB)));
-  await denied('invalid position session',set(p(alice,'positions/alice'),position('connection-fake')));
-  await denied('position with impossible coordinates',set(p(alice,'positions/alice'),{...position(),x:20000}));
-  await allowed('valid owner scoped position',set(p(alice,'positions/alice'),position()));
-  await denied('position replay sequence',set(p(alice,'positions/alice'),position()));
-  await allowed('later position packet',set(p(alice,'positions/alice'),{...position(),seq:2,x:580}));
+  await denied('client cannot set ANY server-position (even own)',set(p(alice,'positions/alice'),position()));
+  await denied('client cannot replay or spoof server-position',set(p(alice,'positions/alice'),{...position(),seq:2,x:580}));
+  await denied('client cannot delete server-position',remove(p(alice,'positions/alice')));
+  const move=(connectionId=connA,seq=3)=>({...action(connectionId),type:'move',seq,dx:1,dy:0});
+  await denied('move outside unit vector denied',set(p(alice,'inputs/alice/action-0003'),{...move(),dx:2}));
+  await denied('move missing direction denied',set(p(alice,'inputs/alice/action-0003'),{...action(),type:'move',seq:3}));
+  await allowed('bounded movement intent accepted',set(p(alice,'inputs/alice/action-0003'),move()));
 
   await denied('teammate presence impersonation',set(p(bob,'presence/alice/'+connA),{since:Date.now()}));
   await denied('other connection may not set presence',set(p(alice,'presence/alice/connection-fake'),{since:Date.now()}));
@@ -115,23 +117,23 @@ async function run(){
   // an earlier token must become unusable even with the original auth UID.
   const connA2='connection-alice002';
   await privileged('sessions/alice/connectionId',connA2);
-  await denied('stolen previous token cannot send position',set(p(alice,'positions/alice'),{...position(connA),seq:3}));
-  await denied('stolen previous token cannot submit action',set(p(alice,'inputs/alice/action-0003'),{...action(connA),seq:3}));
-  await allowed('same UID accepts rotated session and next position',set(p(alice,'positions/alice'),{...position(connA2),seq:3}));
-  await allowed('same UID accepted after trusted session rotation',set(p(alice,'inputs/alice/action-0003'),{...action(connA2),seq:3}));
+  await denied('stolen previous token cannot send movement',set(p(alice,'inputs/alice/action-0004'),{...move(connA,4)}));
+  await denied('stolen previous token cannot submit shot',set(p(alice,'inputs/alice/action-0005'),{...action(connA),seq:5}));
+  await allowed('same UID accepts rotated session and next movement',set(p(alice,'inputs/alice/action-0004'),move(connA2,4)));
+  await allowed('same UID accepts rotated session and next shot',set(p(alice,'inputs/alice/action-0005'),{...action(connA2),seq:5}));
 
   await privileged('server/phase','draft');
-  await denied('cannot fire during draft pick phase',set(p(alice,'inputs/alice/action-0004'),{...action(connA2),seq:4}));
+  await denied('cannot fire during draft pick phase',set(p(alice,'inputs/alice/action-0006'),{...action(connA2),seq:6}));
   await privileged('server/phase','playing');
   await privileged('server/hp/alice',0);
-  await denied('zero HP cannot issue actions',set(p(alice,'inputs/alice/action-0004'),{...action(connA2),seq:4}));
+  await denied('zero HP cannot issue actions',set(p(alice,'inputs/alice/action-0006'),{...action(connA2),seq:6}));
   await privileged('server/hp/alice',160);
   await privileged('sessions/alice/expiresAt',Date.now()-1000);
-  await denied('expired session cannot fire',set(p(alice,'inputs/alice/action-0004'),{...action(connA2),seq:4}));
+  await denied('expired session cannot fire',set(p(alice,'inputs/alice/action-0006'),{...action(connA2),seq:6}));
   await privileged('sessions/alice/expiresAt',Date.now()+120000);
   await privileged('members/alice/state','removed');
   await denied('removed member loses view access',get(p(alice,'views/alice')));
-  await denied('removed member cannot fire',set(p(alice,'inputs/alice/action-0004'),{...action(connA2),seq:4}));
+  await denied('removed member cannot fire',set(p(alice,'inputs/alice/action-0006'),{...action(connA2),seq:6}));
   let finalScore;
   await env.withSecurityRulesDisabled(async ctx=>{
     const snapshot=await get(p(ctx.database(),'server/scores/blue'));

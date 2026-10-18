@@ -30,10 +30,10 @@
         "inputs": {
           "$uid": {
             "$actionId": {
-              ".write": "auth !== null && auth.uid === $uid && root.child('draftStagingRooms/' + $roomId + '/members/' + $uid + '/state').val() === 'active' && root.child('draftStagingRooms/' + $roomId + '/sessions/' + $uid + '/expiresAt').val() > now && root.child('draftStagingRooms/' + $roomId + '/sessions/' + $uid + '/connectionId').val() === newData.child('connectionId').val() && !data.exists() && newData.exists() && $actionId.matches(/^[A-Za-z0-9_-]{8,80}$/) && newData.child('at').val() >= now - 5000 && newData.child('at').val() <= now + 1000 && newData.child('seq').val() > root.child('draftStagingRooms/' + $roomId + '/acceptedSeq/' + $uid).val() && root.child('draftStagingRooms/' + $roomId + '/server/phase').val() === 'playing' && root.child('draftStagingRooms/' + $roomId + '/server/matchId').val() === newData.child('matchId').val() && root.child('draftStagingRooms/' + $roomId + '/server/round').val() === newData.child('round').val() && root.child('draftStagingRooms/' + $roomId + '/server/lives/' + $uid).val() === newData.child('life').val() && root.child('draftStagingRooms/' + $roomId + '/server/hp/' + $uid).val() > 0",
-              ".validate": "newData.hasChildren(['type','seq','matchId','round','life','connectionId','at','x','y','angle','reach'])",
+              ".write": "auth !== null && auth.uid === $uid && root.child('draftStagingRooms/' + $roomId + '/members/' + $uid + '/state').val() === 'active' && root.child('draftStagingRooms/' + $roomId + '/sessions/' + $uid + '/expiresAt').val() > now && root.child('draftStagingRooms/' + $roomId + '/sessions/' + $uid + '/connectionId').val() === newData.child('connectionId').val() && !data.exists() && newData.exists() && $actionId.matches(/^[A-Za-z0-9_-]{8,80}$/) && newData.child('at').val() >= now - 5000 && newData.child('at').val() <= now + 1000 && newData.child('seq').val() > root.child('draftStagingRooms/' + $roomId + '/acceptedSeq/' + $uid).val() && root.child('draftStagingRooms/' + $roomId + '/server/phase').val() === 'playing' && root.child('draftStagingRooms/' + $roomId + '/server/matchId').val() === newData.child('matchId').val() && root.child('draftStagingRooms/' + $roomId + '/server/round').val() === newData.child('round').val() && root.child('draftStagingRooms/' + $roomId + '/server/lives/' + $uid).val() === newData.child('life').val() && root.child('draftStagingRooms/' + $roomId + '/server/hp/' + $uid).val() > 0 && newData.child('seq').val() <= root.child('draftStagingRooms/' + $roomId + '/acceptedSeq/' + $uid).val() + 32",
+              ".validate": "newData.hasChildren(['type','seq','matchId','round','life','connectionId','at','x','y','angle','reach']) && (newData.child('type').val() !== 'move' || (newData.hasChildren(['dx','dy']) && newData.child('dx').isNumber() && newData.child('dy').isNumber()))",
               "type": {
-                ".validate": "newData.isString() && (newData.val() === 'shot' || newData.val() === 'gadget' || newData.val() === 'gadget2' || newData.val() === 'ultimate')"
+                ".validate": "newData.isString() && (newData.val() === 'move' || newData.val() === 'shot' || newData.val() === 'gadget' || newData.val() === 'gadget2' || newData.val() === 'ultimate')"
               },
               "seq": {
                 ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 1000000 && newData.val() % 1 === 0"
@@ -67,46 +67,17 @@
               },
               "$other": {
                 ".validate": false
+              },
+              "dx": {
+                ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 1"
+              },
+              "dy": {
+                ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 1"
               }
             }
           }
         },
-        "positions": {
-          "$uid": {
-            ".write": "auth !== null && auth.uid === $uid && root.child('draftStagingRooms/' + $roomId + '/members/' + $uid + '/state').val() === 'active' && root.child('draftStagingRooms/' + $roomId + '/sessions/' + $uid + '/expiresAt').val() > now && root.child('draftStagingRooms/' + $roomId + '/sessions/' + $uid + '/connectionId').val() === newData.child('connectionId').val() && newData.exists() && (!data.exists() || newData.child('seq').val() > data.child('seq').val()) && root.child('draftStagingRooms/' + $roomId + '/server/phase').val() === 'playing' && root.child('draftStagingRooms/' + $roomId + '/server/matchId').val() === newData.child('matchId').val() && root.child('draftStagingRooms/' + $roomId + '/server/round').val() === newData.child('round').val() && root.child('draftStagingRooms/' + $roomId + '/server/lives/' + $uid).val() === newData.child('life').val() && root.child('draftStagingRooms/' + $roomId + '/server/hp/' + $uid).val() > 0",
-            ".validate": "newData.hasChildren(['connectionId','matchId','round','life','seq','x','y','a','at'])",
-            "connectionId": {
-              ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{8,80}$/)"
-            },
-            "matchId": {
-              ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{8,80}$/)"
-            },
-            "round": {
-              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 100 && newData.val() % 1 === 0"
-            },
-            "life": {
-              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100 && newData.val() % 1 === 0"
-            },
-            "seq": {
-              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() % 1 === 0"
-            },
-            "x": {
-              ".validate": "newData.isNumber() && newData.val() >= 18 && newData.val() <= 1902"
-            },
-            "y": {
-              ".validate": "newData.isNumber() && newData.val() >= 18 && newData.val() <= 1042"
-            },
-            "a": {
-              ".validate": "newData.isNumber() && newData.val() >= -6.28319 && newData.val() <= 6.28319"
-            },
-            "at": {
-              ".validate": "newData.isNumber() && newData.val() >= now - 5000 && newData.val() <= now + 1000"
-            },
-            "$other": {
-              ".validate": false
-            }
-          }
-        },
+        "positions": {},
         "presence": {
           "$uid": {
             "$connectionId": {
