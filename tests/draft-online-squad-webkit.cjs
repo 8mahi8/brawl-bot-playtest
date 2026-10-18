@@ -118,12 +118,15 @@ async function run(){
     const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/motions/'+id).once('value');
     return (snap.val()?.rev||0)>rev;
   },{id:first.id,rev:first.motion.rev},{timeout:14000,polling:350});
+  // Firebase transaction events can be speculative before the server confirms.
+  await blue1.waitForTimeout(420);
   const moved=await blue1.evaluate(async id=>{
     const q=window.__brawlV3QA(),snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').once('value');
     const state=snap.val();
     return {motion:state.motions[id],recoilUntil:state.stats[id].draftRecoilUntil,clock:state.clock?.t,seq:state.stats[id].lastActionSeq};
   },first.id);
-  assert(moved.motion.rev>first.motion.rev,'host wrote authoritative recoil movement');
+  assert(moved.motion.rev>first.motion.rev,
+    'host must COMMIT recoil motion, not only optimistically emit: '+JSON.stringify({first,moved}));
   assert(moved.motion.x-first.motion.x>15&&moved.motion.x-first.motion.x<=61,
     'one recoil impulse moved blue1 backwards, clipped only by cover if necessary');
   assert(moved.seq>first.seq,'recoil belongs to accepted normal shot action');
