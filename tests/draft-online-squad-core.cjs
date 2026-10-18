@@ -52,7 +52,7 @@ const occupied={blue1:['empty_sprint','moving_reload','last_shell'],blue2:['hit_
  red1:['opening_guard','clutch_armor','last_shell'],red2:['moving_reload','finisher','empty_sprint']};
 for(let round=5;round<12;round++){
  const order=squadOrder(round%2?'blue':'red',round-1),offer=squadOffer(occupied,'45678',round,order);
- assert(offer.length>=6&&offer.length<=8,'late-hand can widen offer when necessary');
+ assert(offer.length>=6&&offer.length<=9,'late-hand may expand offers safely across all nine cards');
  assert.equal(new Set(offer).size,offer.length);
  function walk(i,taken){
   if(i===4)return;
@@ -73,6 +73,19 @@ assert.equal(first.amount,3,'opening guard 7 damage mitigation');
 assert.equal(g.draft.strideUntil.blue1,8800,'hit stride activation');
 const low=squadDamage({...g,hp:{...g.hp,red1_id:22}},attack,8000);
 assert.equal(low.amount,16,'finisher and followthrough cap at 7, 8% armor');
+const recoilDraft=squadNewMatch();
+recoilDraft.owned.blue1=['recoil_shot'];
+const recoilGame={draft:recoilDraft,
+ seats:Object.fromEntries(seats.map(s=>[s,{id:s+'_id'}])),
+ stats:{red1_id:{char:'gunner'}},hp:{red1_id:100}};
+const normal=squadDamage(recoilGame,{owner:'blue1_id',victim:'red1_id',amount:10,kind:'normal'},9000);
+assert.equal(normal.amount,11,'recoil grants 10% damage in host-authoritative squad hit reducer');
+const ult=squadDamage(recoilGame,{owner:'blue1_id',victim:'red1_id',amount:10,kind:'effect'},9050);
+assert.equal(ult.amount,10,'recoil does not buff ultimate or gadget');
+assert(html.includes("motion(g,a.owner,{...delta,a:a.angle})"),'recoil motion belongs to authoritative host');
+assert(html.includes("s.draftRecoilUntil=t+1200"),'one movement per volley under 1.2 second cooldown');
+assert(html.includes("normalAttack:true"),'ordinary Bomber bombs distinguish from ultimate bomb fan');
+assert(html.includes("kind:u.normalAttack===true?'normal':'effect'"),'ULT does not receive recoil damage bonus');
 assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
 assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
 assert.equal(squadReloadFactor({owned:{blue1:['moving_reload']}},'blue1',1,900,600),1);

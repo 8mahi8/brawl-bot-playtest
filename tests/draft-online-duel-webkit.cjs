@@ -83,6 +83,31 @@ async function run(){
     await Promise.all([host.waitForFunction(r=>window.__brawlV29QA?.()?.game?.round===r&&window.__brawlV29QA?.()?.game?.phase==='playing',round+1,{timeout:14000}),
       guest.waitForFunction(r=>window.__brawlV29QA?.()?.game?.round===r&&window.__brawlV29QA?.()?.game?.phase==='playing',round+1,{timeout:14000})]);
   }
+  // Isolated emulator: enable recoil on host after all four legit draft rounds,
+  // then fire a REAL client shot and observe local motion + RTDB peer position.
+  await host.evaluate(async()=>{
+    const s=window.__brawlV29QA();
+    await window.firebase.database().ref('roomsDraft1v1/'+s.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.draft.owned.host=['recoil_shot',...(g.draft.owned.host||[]).filter(id=>id!=='recoil_shot').slice(0,2)];
+      return g;
+    },undefined,false);
+  });
+  await host.waitForFunction(()=>window.__brawlV29QA()?.game?.draft?.owned?.host?.includes('recoil_shot'),null,{timeout:10000});
+  await host.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.isPlaying,
+    null,{timeout:15000});
+  const beforeRecoil=(await qa(host)).local.x;
+  assert.equal(await host.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true,'online host fires normal shot');
+  const afterRecoil=(await qa(host)).local.x;
+  assert(afterRecoil-beforeRecoil>=50&&afterRecoil-beforeRecoil<=64,
+    'online recoil is one collision-safe ~60 unit displacement per ammo action');
+  await guest.waitForFunction(x=>window.__brawlV29QA()?.remote?.targetX>x+45,beforeRecoil,{timeout:10000});
+  // A quick second shot inside the 1.2 second recoil CD must not add another displacement.
+  const secondBefore=(await qa(host)).local.x;
+  await host.evaluate(()=>window.__brawlDraftFireQA(Math.PI));
+  const secondAfter=(await qa(host)).local.x;
+  assert(Math.abs(secondAfter-secondBefore)<5,'recoil cannot multiply within cooldown');
+
   await host.evaluate(()=>{
     const state=window.__brawlV29QA(),g=state.game;
     g.scores.host=3;g.scores.guest=2;g.loser='guest';g.phase='match_end';

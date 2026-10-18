@@ -35,8 +35,21 @@ assert.equal(registry.constraints.showPrototypeCardsOnlyAfterEffectsImplemented,
 assert.equal(registry.constraints.inventoryLimit,3);
 const online1=fs.readFileSync(path.join(root,'draft/duel-online-prototype.inc.js'),'utf8');
 const online2=fs.readFileSync(path.join(root,'draft/squad-online-prototype.inc.js'),'utf8');
+const duelLab=fs.readFileSync(path.join(root,'online/draft-duel-online-lab.html'),'utf8');
+const squadLab=fs.readFileSync(path.join(root,'online/draft-squad-online-lab.html'),'utf8');
 for(const item of registry.cards) {
- assert(!online1.includes("id:'"+item.id+"'"),'card must not appear in 1vs1 offering without behavior: '+item.id);
- assert(!online2.includes("id:'"+item.id+"'"),'card must not appear in 2vs2 offering without behavior: '+item.id);
+ if(item.id==='recoil_shot'){
+  assert(online1.includes("id:'recoil_shot'")&&online2.includes("id:'recoil_shot'"),
+   'approved first-wave recoil card must be offered in BOTH isolated online draft labs');
+  assert(duelLab.includes('netRecoilFire(aim)')&&duelLab.includes('netRecoilUntil=now+1200'),
+   '1vs1 must implement recoil physical effect before offering');
+  assert(squadLab.includes('s.draftRecoilUntil=t+1200')&&
+   squadLab.includes('motion(g,a.owner,{...delta,a:a.angle})'),
+   '2vs2 host must validate recoil in canonical authoritative state before offering');
+  assert(duelLab.includes("damage*=1.10"),'1vs1 Bomber must receive normal shot buff');
+ }else{
+  assert(!online1.includes("id:'"+item.id+"'"),'unimplemented online 1vs1 effect must remain gated: '+item.id);
+  assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
+ }
 }
-console.log('PASS 9 approved draft card ideas; tracking marker excluded; recoil +10%; delayed explosion 1/volley; gadget2 rules; no unimplemented offer injection');
+console.log('PASS nine accepted cards; only recoil enters BOTH isolated online labs with real runtime; other eight gated');

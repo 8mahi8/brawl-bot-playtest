@@ -9,7 +9,8 @@
     {id:'hit_stride',name:'追撃歩法',family:'mobility',desc:'通常攻撃命中後1.8秒、移動+7%'},
     {id:'clutch_armor',name:'崖際装甲',family:'defense',desc:'HP35%以下で通常射撃-8%'},
     {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
-    {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'}
+    {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃の威力+10%／一射撃で後方60移動（反動CD1.2秒）'}
   ];
   const netDraftCardMap=new Map(NET_DRAFT_CARDS.map(c=>[c.id,c]));
   function netDraftNewMatch(){
@@ -89,7 +90,7 @@
       now>updated.lastNormal[attacker]&&now-updated.lastNormal[attacker]<=2500&&ready(attacker,'followthrough')){
       bonus+=3;updated.cooldown[attacker].followthrough=now+8000;
     }
-    const raw=amount+Math.min(7,bonus);
+    const raw=(amount+Math.min(7,bonus))*(has(attacker,'recoil_shot')?1.10:1);
     const pct=has(victim,'clutch_armor')&&pre/max<=.35?8:0;
     let flat=0;
     if(has(victim,'opening_guard')&&now-updated.lastDamage[victim]>=6000&&ready(victim,'opening_guard')){
