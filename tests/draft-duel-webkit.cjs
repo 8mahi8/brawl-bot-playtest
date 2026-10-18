@@ -25,6 +25,14 @@ const run=async()=>{
     frame.srcdoc=src;document.body.append(frame);
    },html);
    const f=page.frameLocator('iframe'),qa=()=>f.locator('body').evaluate(()=>window.__brawlDraftQA());
+   async function forceKO(winner){
+    for(let attempt=0;attempt<90;attempt++){
+     const result=await f.locator('body').evaluate((_element,w)=>window.__brawlDraftQA()?.forceKO(w),winner);
+     if(result)return;
+     await new Promise(resolve=>setTimeout(resolve,55));
+    }
+    throw Error('Could not force '+winner+' KO: '+JSON.stringify(await qa()));
+   }
    await f.locator('#soloBtn').waitFor({timeout:15000});
    assert(await f.locator('#createBtn').isHidden(),'offline lab must not expose an online room');
    assert(await f.locator('#openJoinPanel').isHidden(),'offline lab must not expose online join');
@@ -35,14 +43,7 @@ const run=async()=>{
    const start=await qa();
    assert.equal(start.round,1);assert.deepEqual(start.owned,{host:[],guest:[]});
    async function forceRound(winner,expectedRound){
-    await f.locator('body').evaluate(async (_element,{winner})=>{
-      const end=Date.now()+4500;
-      while(Date.now()<end){
-       if(window.__brawlDraftQA()?.forceKO(winner))return;
-       await new Promise(resolve=>setTimeout(resolve,50));
-      }
-      throw Error('KO could not be forced for draft UI regression');
-    },{winner});
+    await forceKO(winner);
     await f.locator('#draftOverlay:not(.hidden)').waitFor({timeout:9000});
     const s=await qa();
     assert.equal(s.round,expectedRound);
@@ -69,14 +70,7 @@ const run=async()=>{
    await forceRound('guest',2);
    await forceRound('host',3);
    // At cap, fourth winner-first selection exposes a replacement drop-down.
-   await f.locator('body').evaluate(async ()=>{
-    const end=Date.now()+4500;
-    while(Date.now()<end){
-     if(window.__brawlDraftQA()?.forceKO('guest'))return;
-     await new Promise(resolve=>setTimeout(resolve,50));
-    }
-    throw Error('could not KO in round 4');
-   });
+   await forceKO('guest');
    await f.locator('#draftOverlay button[data-draft-id]:not([disabled])').first().waitFor({timeout:7000});
    assert(await f.locator('#draftReplace').count()===1,'player must choose replacement at 3-card limit');
    await f.locator('#draftOverlay button[data-draft-id]:not([disabled])').first().tap();
@@ -85,14 +79,8 @@ const run=async()=>{
    assert.equal(beforeFinal.round,5);
    assert.equal(beforeFinal.owned.host.length,3,'no fourth slot may be added');
    assert.equal(beforeFinal.owned.guest.length,3,'BOT must replace instead of accumulating a fourth slot');
-   await f.locator('body').evaluate(async ()=>{
-    const end=Date.now()+4500;
-    while(Date.now()<end){
-     if(window.__brawlDraftQA()?.forceKO('host'))return;
-     await new Promise(resolve=>setTimeout(resolve,50));
-    }
-    throw Error('could not KO in final');
-   });
+   console.log('TRACE before final',JSON.stringify(beforeFinal));
+   await forceKO('host');
    await f.locator('#appStage[data-scene="end"]').waitFor({timeout:8000});
    const finish=await qa();
    assert.equal(finish.round,5);assert.equal(finish.phase,'match_end');
