@@ -47,6 +47,12 @@ for(const item of registry.cards) {
    squadLab.includes('motion(g,a.owner,{...delta,a:a.angle})'),
    '2vs2 host must validate recoil in canonical authoritative state before offering');
   assert(duelLab.includes("damage*=1.10"),'1vs1 Bomber must receive normal shot buff');
+ }else if(item.id==='delayed_blast'){
+  assert(!online1.includes("id:'delayed_blast'"),'1vs1 blast not yet implemented');
+  assert(online2.includes("id:'delayed_blast'"),'squad host blast may be offered after implementation');
+  assert(squadLab.includes("kind:'draftBlast'")&&squadLab.includes("draft.blastUsed[actionId]")&&
+    squadLab.includes("until:t+700,damage:10,radius:55")&&
+    squadLab.includes("kind:'effect'"),'online 2vs2 blast must have authoritative, bounded, no-chain implementation');
  }else{
   assert(!online1.includes("id:'"+item.id+"'"),'unimplemented online 1vs1 effect must remain gated: '+item.id);
   assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
