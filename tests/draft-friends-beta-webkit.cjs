@@ -60,7 +60,7 @@ async function run(){
   await g.page.locator('#readyBtn').click();
   await Promise.all([h,g].map(x=>x.page.waitForFunction(()=>window.__brawlV29QA?.()?.game?.phase==='playing',null,{timeout:19000})));
   for(const x of [h,g]){const q=await x.page.evaluate(()=>window.__brawlV29QA());
-   assert.equal(q.protocol,1031);assert.equal(q.game.round,1);assert.equal(q.game.draft.owned.host?.length||0,0);}
+   assert.equal(q.protocol,1031);assert.equal(q.game.round,1);assert.equal(q.game.draft?.owned?.host?.length||0,0);}
   const duelDb=await h.page.evaluate(async code=>(await window.firebase.database().ref('rooms/'+code+'/v').once('value')).val(),duel);
   assert.equal(duelDb,1031,'duel beta uses normal friend RTDB root with isolated draft protocol');
   console.log('PASS FRIEND BETA 1vs1: two WebKit clients joined, READY, real RTDB playing, draft protocol separate');
