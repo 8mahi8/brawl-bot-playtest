@@ -327,6 +327,72 @@ async function run(){
   },{id:redId,hp:mineHit.hp},{timeout:14000})));
   console.log('PASS LIVE GAD2 mine: 4 WebKit clients, separate button, host 8 damage, 1 hit, cooldown and HP sync');
 
+  // Smoke must reuse bush stealth rules: hidden until enemy approaches or
+  // a normal shot reveals the shooter; smoke blocks no projectiles.
+  await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.draft.owned.blue1=['smoke','split_round','delayed_blast'];
+      g.draft.gadget2ReadyAt.blue1=0; // fixture: independent ability after mine.
+      g.stats[g.seats.blue1.id].draftCards=[...g.draft.owned.blue1];
+      return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(()=>window.__brawlDraftGad2QA?.()?.equipped==='smoke',
+    null,{timeout:12000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,420)),true);
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(970,500)),true);
+  const blueId=(await get(blue1)).myId;
+  await blue1.waitForFunction(id=>{
+    const p=window.__brawlV3QA()?.positionValues?.[id];
+    return p&&Math.abs(p.x-970)<5&&Math.abs(p.y-500)<5;
+  },redId,{timeout:13000});
+  await blue1.waitForFunction(()=>{
+    const q=window.__brawlV3QA(),p=q?.positionValues?.[q?.myId];
+    return p&&Math.abs(p.x-575)<5&&Math.abs(p.y-420)<5;
+  },null,{timeout:13000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftGad2FireQA(0)),true,
+    'real owner sends smoke GAD2 through normal action bus');
+  let cloudState=null;
+  const smokeDeadline=Date.now()+11000;
+  while(Date.now()<smokeDeadline){
+    const g=await committedGame(code);
+    if(g?.gad2Smokes?.blue1?.kind==='smoke'&&g?.draftCardStats?.gad2SmokesPlaced===1){
+      cloudState=g;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,160));
+  }
+  assert(cloudState,'host must COMMIT GAD2 smoke in same RTDB state');
+  assert.equal(cloudState.gad2Smokes.blue1.radius,100,'100 unit radius');
+  assert.equal(cloudState.gad2Smokes.blue1.until-cloudState.gad2Smokes.blue1.start,4000,
+    '4-second canonical smoke lifetime');
+  assert.equal(cloudState.draft.gadget2ReadyAt.blue1-cloudState.gad2Smokes.blue1.start,12000,
+    'same independent 12-second GAD2 cooldown');
+  await red1.waitForFunction(id=>{
+    const x=window.__brawlDraftStealthQA?.(id),q=window.__brawlV3QA?.();
+    return x&&q?.game==='playing'&&x.canSeeTarget===false;
+  },blueId,{timeout:3500,polling:100});
+  const hidden=await blue1.evaluate(()=>window.__brawlDraftStealthQA());
+  assert(hidden.ownInSmoke,'own player is concealed in canonical smoke');
+  assert.equal(hidden.ownState,'hidden','clear enemy distance yields owner-facing 潜伏中');
+  await blue1.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,
+    null,{timeout:9000});
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftFireQA(0)),true,
+    'firing from smoke is accepted as a normal shot');
+  let revealed=null;
+  const revealDeadline=Date.now()+2200;
+  while(Date.now()<revealDeadline){
+    const g=await committedGame(code);
+    const remaining=(g?.reveals?.[blueId]||0)-(g?.clock?.t||0);
+    if(remaining>0&&remaining<=700&&g?.gad2Smokes?.blue1){
+      revealed=remaining;break;
+    }
+    await new Promise(resolve=>setTimeout(resolve,85));
+  }
+  assert(revealed,'host must reveal normal shooter within smoke for 700ms');
+  console.log('PASS 2vs2 LIVE GAD2 smoke: 4 clients, canonical duration/cooldown, bush conceal, 700ms attack reveal');
+
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
    return window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
