@@ -50,8 +50,10 @@
     return 1+Math.min(20,pct)/100;
   }
   function draftAdjustHit(victim,amount,owner,kind){
-    if(!solo||!owner||!['host','guest'].includes(owner)||kind!=='normal')
-      return amount;
+    if(!solo)return amount;
+    if(!owner||!['host','guest'].includes(owner)||kind!=='normal'){
+      draftLastDamage[victim]=time();return amount;
+    }
     const now=time(),attacker=owner,pre=game.hp[victim],maximum=maxHp(game.chars[victim]);
     let bonus=0;
     if(draftHas(attacker,'finisher')&&pre/maximum<=.35&&draftReady(attacker,'finisher',now)){
