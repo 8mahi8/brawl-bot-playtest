@@ -590,6 +590,52 @@ async function run(){
   });
   await blue1.waitForFunction(()=>window.__brawlDraftGad2QA?.()?.equipped==='portable_wall',
     null,{timeout:11000});
+  // iPad Safari: host-rejected placement must explain WHY, preserve the
+  // GAD2 cooldown, and allow an immediate valid retry.
+  const gad2Layout=await blue1.evaluate(()=>{
+    const b=document.querySelector('#squadGad2Action')?.getBoundingClientRect(),
+      normal=document.querySelector('#gadAction')?.getBoundingClientRect(),
+      screen=document.querySelector('#app')?.getBoundingClientRect();
+    if(!b||!normal||!screen)return null;
+    return {
+      visible:b.width>30&&b.height>30,
+      inside:b.left>=screen.left-1&&b.top>=screen.top-1&&
+        b.right<=screen.right+1&&b.bottom<=screen.bottom+1,
+      overlaps:b.left<normal.right&&b.right>normal.left&&
+        b.top<normal.bottom&&b.bottom>normal.top
+    };
+  });
+  assert(gad2Layout?.visible&&gad2Layout.inside&&!gad2Layout.overlaps,
+    'landscape Safari GAD2 button must fit on screen without overlapping base gadget: '+
+      JSON.stringify(gad2Layout));
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,300)),true,
+    'begin rejected-placement test outside permanent KO wall');
+  await host.waitForFunction(id=>{
+    const p=window.__brawlV3QA?.()?.positionValues?.[id];
+    return p&&Math.abs(p.x-575)<5&&Math.abs(p.y-300)<5;
+  },blueId,{timeout:11000});
+  const invalidBefore=await committedGame(code);
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftGad2FireQA(0)),true,
+    'send an actual GAD2 button action into the permanent wall');
+  let denied=null;
+  const rejectDeadline=Date.now()+9500;
+  while(Date.now()<rejectDeadline){
+    const g=await committedGame(code);
+    const receipt=Object.values(g?.usedActions||{}).find(x=>
+      x.owner===blueId&&x.type==='gadget2'&&
+      x.status==='rejected'&&x.reason==='gadget2_wall_placement');
+    if(receipt){denied=g;break;}
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  assert(denied,'real host must reject wall overlap with an actionable reason');
+  assert(!denied.gad2Walls?.blue1,'rejected placement cannot create any cover');
+  assert.equal(denied.draft.gadget2ReadyAt?.blue1||0,0,
+    'a rejected ability must not spend its cooldown');
+  assert.equal(denied.stats[blueId].gadgets,invalidBefore.stats[blueId].gadgets,
+    'invalid GAD2 action cannot spend the original character gadget');
+  await blue1.waitForFunction(()=>window.__brawlDraftGad2QA?.()?.lastToast?.
+    includes('壁を設置できません'),null,{timeout:7000});
+  console.log('PASS LIVE GAD2 invalid placement: host reason, visible Japanese feedback, no cooldown/gadget spend');
   assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(575,500)),true);
   assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(720,500)),true);
   await host.waitForFunction(ids=>{
