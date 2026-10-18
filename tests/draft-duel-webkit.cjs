@@ -35,7 +35,7 @@ const run=async()=>{
    const start=await qa();
    assert.equal(start.round,1);assert.deepEqual(start.owned,{host:[],guest:[]});
    async function forceRound(winner,expectedRound){
-    await f.locator('body').evaluate(async ({winner})=>{
+    await f.locator('body').evaluate(async (_element,{winner})=>{
       const end=Date.now()+4500;
       while(Date.now()<end){
        if(window.__brawlDraftQA()?.forceKO(winner))return;
@@ -43,10 +43,8 @@ const run=async()=>{
       }
       throw Error('KO could not be forced for draft UI regression');
     },{winner});
-    console.log('TRACE forceKO',await f.locator('body').evaluate(()=>window.__draftLastForce));
     await f.locator('#draftOverlay:not(.hidden)').waitFor({timeout:9000});
     const s=await qa();
-    console.log('TRACE winner/round',JSON.stringify({expectedRound,winner,actual:s.winner,round:s.round,pick:s.pick,scores:s.scores,phase:s.phase}));
     assert.equal(s.round,expectedRound);
     assert.equal(s.winner,winner);
     assert.equal(s.phase,'round_end');
