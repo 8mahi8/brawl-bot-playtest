@@ -57,7 +57,13 @@ for(const item of registry.cards) {
   assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damageScale:(b.damageScale||1)*.6"),
    '1vs1 central shot must generate two 60% children');
  }else if(item.id==='ricochet'){
-  assert(!online1.includes("id:'ricochet'"),'1vs1 ricochet remains gated until its own online implementation');
+  assert(online1.includes("id:'ricochet'"),'1vs1 ricochet is offered only after implementation');
+  assert(duelLab.includes('function netDraftAdvanceBullet(b,dt,targetHit)')&&
+    duelLab.includes('function netDraftBombBounce(start,target)')&&
+    duelLab.includes('netRicochetProof++')&&
+    duelLab.includes('if(!axis)return false')&&
+    duelLab.includes('b.damageScale=(b.damageScale||1)*.7'),
+    '1vs1 terrain reflection, single bounce and 70% damage must be implemented');
   assert(online2.includes("id:'ricochet'"),'2vs2 ricochet must be offered only with host collision support');
   assert(squadLab.includes('function draftReflectAxis(px,py,nx,ny,r)')&&
     squadLab.includes('function draftBombBounce(start,target)')&&
@@ -79,4 +85,4 @@ for(const item of registry.cards) {
   assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
  }
 }
-console.log('PASS 2vs2 ricochet host physics enabled; 1vs1 ricochet and GAD2 still gated');
+console.log('PASS ricochet/recoil/split/delayed in both isolated online draft labs; five GAD2 gated');

@@ -87,6 +87,46 @@ assert.equal(sameVolley.amount,10,'split daughter in same fireActionId cannot ea
 const nextVolley=netDraftHit(sameVolley.draft,{host:'tank',guest:'tank'},{host:160,guest:140},
   'guest',10,'host','normal',8500,'volley-B');
 assert.equal(nextVolley.amount,13,'new fireActionId may trigger followthrough');
+// Exercise the exact isolated 1vs1 ricochet implementation against circular walls.
+const b0=html.indexOf('  function netDraftReflectAxis(px,py,nx,ny,r){');
+const b1=html.indexOf('  function netDraftPrepareBombs(before,after,p){',b0);
+const a0=html.indexOf('  function netDraftAdvanceBullet(b,dt,targetHit){');
+const a1=html.indexOf('  function moveBullet(b,dt){',a0);
+assert(b0>0&&b1>b0&&a0>0&&a1>a0,'host/client online ricochet helpers must be in standalone lab');
+const engine=vm.runInNewContext(
+ "const W=1000,H=600;"+
+ "const circleWall=(x,y,r)=>{const qx=Math.max(150,Math.min(190,x)),qy=Math.max(80,Math.min(160,y));return (x-qx)**2+(y-qy)**2<r*r};"+
+ "const BrawlProjectileV1={advance:()=>true};"+
+ "const shots=[];let netSplitProof=0,netRicochetProof=0;"+
+ html.slice(b0,b1)+html.slice(a0,a1)+
+ "\n({netDraftAdvanceBullet,netDraftBombBounce,shots})",
+ {},{timeout:1000});
+const bounce={id:'a',fireId:'original',owner:'host',x:105,y:120,vx:120,vy:0,
+ dist:0,range:240,radius:4,damage:10,splitCenter:false,ricochetEnabled:true,ricochetUsed:0};
+assert.equal(engine.netDraftAdvanceBullet(bounce,.55,()=>false),true,'shot remains after first bounce');
+assert.equal(bounce.ricochetUsed,1,'exactly one reflection');
+assert.equal(bounce.vx,-120,'vertical wall reverses x velocity');
+assert.equal(bounce.damageScale,.7,'post-bounce damage is 70%');
+bounce.x=145;bounce.y=120;bounce.vx=120;
+assert.equal(engine.netDraftAdvanceBullet(bounce,.1,()=>false),false,'second collision absorbs projectile');
+const corner={id:'c',x:125,y:55,vx:120,vy:120,dist:0,range:240,radius:3,
+ splitCenter:false,ricochetEnabled:true,ricochetUsed:0};
+assert.equal(engine.netDraftAdvanceBullet(corner,.4,()=>false),false,'ambiguous corner cannot bounce through');
+assert.equal(corner.ricochetUsed,0,'corner collision does not waste a valid bounce');
+const splitBounce={id:'d',fireId:'action-X',owner:'host',x:105,y:120,vx:120,vy:0,
+ dist:0,range:140,radius:4,damage:10,splitCenter:true,ricochetEnabled:true,ricochetUsed:0};
+assert.equal(engine.netDraftAdvanceBullet(splitBounce,.8,()=>false),false,'split replaces center bullet');
+assert.equal(engine.shots.length,2,'exactly two daughters');
+assert(engine.shots.every(b=>b.fireId==='action-X'&&b.ricochetUsed===1&&Math.abs(b.damageScale-.42)<1e-9),
+ 'split children preserve shot attribution and used bounce with .7 x .6 damage');
+const bomber=engine.netDraftBombBounce({x:100,y:120},{x:220,y:120});
+assert(bomber.bounced&&bomber.x<150,'normal Bomber throw reflects back without wall penetration');
+assert(engine.netDraftBombBounce({x:100,y:30},{x:200,y:130}).blocked,
+ 'Bomber corner must terminate safely');
+assert(html.includes("if(hand.includes('ricochet'))")&&html.includes('if(path.bounced)bomb.damage*=.7'),
+ 'only normal draft Bomber attacks gain reflected trajectory and 70% post-bounce damage');
+assert(html.includes("ricochetEnabled:!p.ult"),'ultimates do not bounce');
+
 assert.equal(netDraftMotion(0,0,0,0,1/60,102,true),false);
 assert.equal(netDraftMotion(0,0,2,0,1/60,102,true),true);
 assert.equal(netDraftMotion(0,0,2,0,1/60,102,false),false);
