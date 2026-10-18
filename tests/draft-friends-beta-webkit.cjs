@@ -4,7 +4,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),http=require('node:http');
 const {webkit}=require('playwright-core');
-if(!/^(127\\.0\\.0\\.1|localhost):9000$/.test(process.env.FIREBASE_DATABASE_EMULATOR_HOST||''))
+if(!/^(127\.0\.0\.1|localhost):9000$/.test(process.env.FIREBASE_DATABASE_EMULATOR_HOST||''))
   throw Error('LOCAL Firebase emulator is mandatory; never contact production');
 const dir=path.resolve(__dirname,'..'),sdk=path.join(dir,'artifacts/firebase-sdk');
 const demoUrl='https://demo-brawl-draft-beta-default-rtdb.firebaseio.com/';
@@ -50,7 +50,7 @@ async function run(){
   browser=await webkit.launch({headless:true});
   const [h,g]=await Promise.all([open(browser,'duel'),open(browser,'duel')]);all.push(h,g);
   await h.page.locator('#createBtn').click();
-  await h.page.waitForFunction(()=>/^\\d{5}$/.test(window.__brawlV29QA?.()?.roomId||''),null,{timeout:14000});
+  await h.page.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV29QA?.()?.roomId||''),null,{timeout:14000});
   const duel=(await h.page.evaluate(()=>window.__brawlV29QA())).roomId;
   await g.page.locator('#openJoinPanel').click();
   await g.page.locator('#roomInput').fill(duel);
@@ -69,7 +69,7 @@ async function run(){
   const clients=await Promise.all(Array.from({length:4},()=>open(browser,'squad')));all.push(...clients);
   const host=clients[0].page;
   await host.locator('#createBtn').click();
-  await host.waitForFunction(()=>/^\\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:17000});
+  await host.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:17000});
   const squad=(await host.evaluate(()=>window.__brawlV3QA())).roomId;
   for(const x of clients.slice(1)){
    await x.page.locator('#roomInput').fill(squad);
