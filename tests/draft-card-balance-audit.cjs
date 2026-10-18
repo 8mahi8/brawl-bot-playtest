@@ -4,9 +4,9 @@
 'use strict';
 const assert=require('node:assert/strict');
 const {createCombat,applyEvent,modifiers}=require('../draft/card-combat-sim.cjs');
-const contract=require('../shared/brawl-core-contract.json');
+const onlineProfile=require('../draft/online-stat-profile.json');
 const {catalog}=require('../draft/offer-policy.cjs');
-const specs=contract.common.characters,chars=Object.keys(specs);
+const specs=onlineProfile.characters['1vs1'],chars=Object.keys(specs);
 const AT=[6100,6200,6450,7000,7350,8600,10100,10350,10800,11500,11900,14200];
 const decks={
  none:[],
@@ -66,7 +66,7 @@ const summary={
  characterStats:chars.map(id=>({char:id,hp:specs[id].hp,damagePerScheduledNormalHit:specs[id].baseDamage,reloadMs:specs[id].reloadMs})),
  notes:[
   'Every scheduled normal attack is assumed to hit a live victim until KO; no miss, cover, skill, regen or real firing cooldown is modeled.',
-  'Tank and multi-projectile abilities are treated as a single shared-contract baseDamage hit; this is not real pellet DPS.',
+  'Tank and multi-projectile abilities are treated as a single online-profile baseDamage hit; this is not real pellet DPS.',
   'Hits-to-KO are 1..12 or >12; differences are sensitivity signals, not fair match outcome or win-rate evidence.',
   'No actual online RTDB, host authority, WebKit, iPad touch, replay, BOT or HOT ZONE capture test.'
  ],
