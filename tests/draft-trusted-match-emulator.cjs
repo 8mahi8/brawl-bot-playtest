@@ -60,7 +60,7 @@ async function run(){
   const move=intent(ids.blue1,'move',1,{dx:1,dy:0});
   await assertSucceeds(submit(a,ids.blue1,'action-move001',move));checked++;
   const moved=await consume(ids.blue1,'action-move001');
-  assert(moved.accepted,'server must accept authorized movement');
+  assert(moved.accepted,'server must accept authorized movement: '+JSON.stringify(moved));
   const pos=await adminGet('server/players/'+ids.blue1);
   assert(pos.x>=500&&pos.x<=530&&pos.y===420);
   assert(pos.x!==1900&&pos.y!==900,'untrusted coordinate cannot teleport player');checked++;
