@@ -31,8 +31,9 @@ const run=async()=>{
    const f=page.frameLocator('iframe'),qa=()=>f.locator('body').evaluate(()=>window.__brawlDraftQA());
    async function forceKO(winner){
     for(let attempt=0;attempt<90;attempt++){
-     const result=await f.locator('body').evaluate((_element,w)=>window.__brawlDraftQA()?.forceKO(w),winner);
-     if(result)return;
+     const result=await f.locator('body').evaluate((_element,w)=>{try{return {ok:window.__brawlDraftQA()?.forceKO(w)}}catch(e){return {error:String(e),stack:String(e?.stack||'').slice(0,1600)}}},winner);
+     if(result?.error)throw Error('In-browser KO threw: '+JSON.stringify(result));
+     if(result?.ok)return;
      await new Promise(resolve=>setTimeout(resolve,55));
     }
     throw Error('Could not force '+winner+' KO: '+JSON.stringify(await qa()));
