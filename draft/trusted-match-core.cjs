@@ -49,7 +49,7 @@ function lineTarget(state,attacker,angle){
   if(along<0||along>WORLD.shotRange)continue;
   const off=Math.abs(dx*uy-dy*ux);
   if(off>WORLD.hitRadius)continue;
-  if(state.walls.some(b=>segmentBox(attacker.x,attacker.y,v.x,v.y,b,5)))continue;
+  if((state.walls||[]).some(b=>segmentBox(attacker.x,attacker.y,v.x,v.y,b,5)))continue;
   candidates.push({id,along});
  }
  candidates.sort((a,b)=>a.along-b.along);
@@ -81,7 +81,7 @@ function applyIntent(input){
   const dt=Math.max(0,Math.min(WORLD.maxStepMs,now-actor.lastMoveAt));
   const x=Math.max(WORLD.radius,Math.min(WORLD.width-WORLD.radius,actor.x+dx*dt*WORLD.walkPxPerMs));
   const y=Math.max(WORLD.radius,Math.min(WORLD.height-WORLD.radius,actor.y+dy*dt*WORLD.walkPxPerMs));
-  if(!next.walls.some(b=>boxHas(x,y,b,WORLD.radius))){actor.x=x;actor.y=y;}
+  if(!(next.walls||[]).some(b=>boxHas(x,y,b,WORLD.radius))){actor.x=x;actor.y=y;}
   actor.lastMoveAt=now;
   events.push({type:'move',uid,x:actor.x,y:actor.y});
  }else{
