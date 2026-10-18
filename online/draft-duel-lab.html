@@ -1122,8 +1122,8 @@ const BrawlAbilityV1=Object.freeze({
     duelHudDisabled($('gadgetBtn'),!layoutEditing&&((bomberGadgetBusy||local.char==='bomber'&&game?.bomberArmed?.[role]||local.gadgets<=0&&!soloDebug('gadgets')) || !isPlaying()));
     duelHudDisabled($('ultBtn'),!layoutEditing&&((local.ult<100&&!soloDebug('ult')) || !isPlaying()));
     duelHudClass($('ultBtn'),'ready',local.ult>=100);
-    duelHudText($('scores'),`${'★'.repeat(score(role))}${'☆'.repeat(2-score(role))}  -  ${'★'.repeat(score(other))}${'☆'.repeat(2-score(other))}`);
-    duelHudText($('roundLabel'),game ? `ROUND ${game.round || 1} / 2勝先取` : '');
+    duelHudText($('scores'),`${'★'.repeat(score(role))}${'☆'.repeat(Math.max(0,3-score(role)))}  -  ${'★'.repeat(score(other))}${'☆'.repeat(Math.max(0,3-score(other)))}`);
+    duelHudText($('roundLabel'),game ? `ROUND ${game.round || 1} / 3勝先取` : '');
   }
   function listen(path,event,callback) {
     const r=ref.child(path); r.on(event,callback, e=>{console.error('Firebase listener',path,e); alertStatus('通信権限か接続のエラー',e);});
