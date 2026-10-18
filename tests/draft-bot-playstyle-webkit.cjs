@@ -140,16 +140,19 @@ async function run(){
 
   // Harmless hologram tracer must never be inserted into real combat bullets.
   const clone=await play(['hologram'],'tank');
+  assert.equal(await clone.page.evaluate(()=>window.__brawlPlaystyleQA().setBotFireCooldownForTest(4)),true);
   assert.equal(await clone.page.evaluate(()=>window.__brawlPlaystyleQA().setBotPosition(400,300)),true);
+  const beforeHP=await clone.page.evaluate(()=>window.__brawlV29QA().game.hp.guest);
   assert.equal(await clone.page.evaluate(()=>window.__brawlPlaystyleQA().useGadget()),true);
-  await clone.page.waitForTimeout(350);
+  await clone.page.waitForFunction(()=>window.__brawlPlaystyleQA().state.holo[0]?.shotCount>=1,null,{timeout:3000});
   const beforeClone=await clone.page.evaluate(()=>window.__brawlPlaystyleQA().state.holo[0]||null);
-  if(beforeClone){
-    assert(beforeClone.until>Date.now(),'hologram still alive or is hit by BOT');
-    assert(beforeClone.strafe===1||beforeClone.strafe===-1,'decoy bot has independent strafe state');
-  }
+  assert(beforeClone?.shotCount>=1,'independent hologram BOT visibly fires at enemy');
+  assert(beforeClone.strafe===1||beforeClone.strafe===-1,'decoy bot has independent strafe state');
   const fake=await clone.page.evaluate(()=>window.__brawlPlaystyleQA().state.fakeShots);
+  assert(fake.length>=1,'hologram spawned at least one visible tracer');
   assert(fake.every(s=>s.damage===0),'hologram must not deal damage');
+  assert.equal(await clone.page.evaluate(()=>window.__brawlV29QA().game.hp.guest),beforeHP,
+    'fake shots did not damage actual enemy when real BOT fire is paused');
   assert(!code.includes('shots.push({side:h.side'), 'fake shots may not enter damaging projectile collection');
   assert.deepEqual(clone.errors,[]);
   await clone.page.close();
