@@ -108,11 +108,13 @@
       "name": "ポータブルウォール",
       "type": "gadget2",
       "status": "adopted_needs_playtest",
-      "preview": "追加GAD2で短時間の遮蔽物を設置",
+      "preview": "ガジェット2で4秒持続する縦長の遮蔽物（42×112）を設置",
       "initialNumbers": {
         "durationMs": 4000,
         "maxActivePerPlayer": 1,
-        "cooldownMs": 12000
+        "cooldownMs": 12000,
+        "widthWorld": 42,
+        "heightWorld": 112
       },
       "safeguards": [
         "Solid collision for characters and projectiles must be consistent across all clients",
@@ -145,14 +147,16 @@
       "id": "hologram",
       "name": "ホログラム",
       "type": "gadget2",
-      "status": "adopted_duration_buff_ready_for_playtest",
-      "preview": "追加GAD2で7秒間、本人と同じ外観の移動分身を出す。敵の射撃1アクションを受けると消える",
+      "status": "adopted_bot_playtest_v03_autonomous_non_damaging",
+      "preview": "7秒間の自律囮BOT。敵を狙って移動し、ゼロダメージの見せ弾を撃つ。所有者には分身マークを表示",
       "initialNumbers": {
         "durationMs": 7000,
         "maxActivePerPlayer": 1,
         "cooldownMs": 14000,
         "healthAttackActions": 1,
-        "healthHits": null
+        "healthHits": null,
+        "fakeShotDamage": 0,
+        "decoyMoveSpeedWorldPerSec": 97
       },
       "safeguards": [
         "Seven-second maximum lifetime is long enough to feint and lure shots; it disappears early if hit by one enemy firing action",
@@ -161,7 +165,9 @@
         "Decoy cannot fire damaging shots, use GAD/ULT, charge ULT, capture Hot Zone, provide combat victory or count as KO",
         "Decoy should visually copy its owner and avoid a giveaway indicator for opponents; owner and ally UI must distinguish it",
         "Hit on decoy never deducts real player HP and should create a readable dissolve FX",
-        "Duration and cooldown clocks freeze during draft selection / combat pause, particularly Hot Zone's 20-second draft windows"
+        "Duration and cooldown clocks freeze during draft selection / combat pause, particularly Hot Zone's 20-second draft windows",
+        "Owner-facing hologram must have a distinct ring and visible '分身' marker; enemy-facing clone is not given a free obvious tell",
+        "Hologram may visually aim/fire but its effects never enter combat projectile pipeline; fake shot damage and ULT gain are strictly zero"
       ]
     },
     {
@@ -169,18 +175,19 @@
       "name": "ワープビーコン",
       "type": "gadget2",
       "status": "adopted_needs_playtest",
-      "preview": "GAD2の初回使用でビーコンを置き、再使用でそこへ瞬間移動",
+      "preview": "ビーコンを置いて7秒内に再使用すると戻る。途中の壁や距離はテレポートを妨げない",
       "initialNumbers": {
         "beaconMs": 7000,
-        "maxTeleportDistanceWorld": 260,
+        "maxTeleportDistanceWorld": null,
         "cooldownMs": 15000,
         "healthHits": 1
       },
       "safeguards": [
         "On teleport, validate end position, wall collision, occupied space and alive state on authority",
-        "Teleports outside radius or through invalid destinations must fail without clipping",
         "Beacon is destructible and visible to opponents",
-        "Button must clearly indicate place/return state"
+        "Button must clearly indicate place/return state",
+        "Beacon warp is an actual teleport: intervening walls do not block return, only destination safety matters",
+        "If a temporary wall/enemy blocks the exact beacon coordinate, find a nearby safe return position or report why no safe landing exists"
       ]
     },
     {
@@ -188,7 +195,7 @@
       "name": "スモーク",
       "type": "gadget2",
       "status": "adopted_needs_playtest",
-      "preview": "GAD2で煙幕を展開し、視線を切って移動できる",
+      "preview": "煙幕内にいる間は草むら同様の隠密を得る。ただし攻撃や接近による露出を分かりやすく表示",
       "initialNumbers": {
         "durationMs": 4000,
         "radiusWorld": 100,
@@ -199,7 +206,8 @@
         "Smoke does not block projectiles",
         "Own allies can still read teammate location",
         "Attacking from smoke briefly reveals position",
-        "Use the existing fog-of-war/stealth reveal contract; avoid HUD information leaks"
+        "Use the existing fog-of-war/stealth reveal contract; avoid HUD information leaks",
+        "Player sees '煙幕：潜伏中' versus '煙幕：発見中' over their own character and the BOT obeys visibility"
       ]
     }
   ]
