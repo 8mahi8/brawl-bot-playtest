@@ -326,5 +326,10 @@
     gadget:extraGadget('host'),state:structuredClone(extraState),
     choose:(cards)=>{if(!Array.isArray(cards)||cards.length>3||cards.some(id=>!draftById.has(id)))return false;extraManualDeck=[...cards];return true;},
     useGadget:()=>extraUseGadget('host'),
+    setOffer:(ids)=>{
+      if(!solo||game?.phase!=='round_end'||!Array.isArray(ids)||ids.length!==4||
+         new Set(ids).size!==4||ids.some(id=>!draftById.has(id)))return false;
+      draftOffer=[...ids];draftOfferTaken=new Set();draftOverlayRender();return true;
+    },
     fire:(angle=0)=>{if(!solo||!isPlaying())return false;shoot(false,angle);return true;}
   });
