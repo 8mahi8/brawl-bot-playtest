@@ -155,6 +155,17 @@ async function run(){
     const p=window.__brawlV3QA()?.positionValues?.[id];
     return p&&Math.abs(p.x-640)<5&&Math.abs(p.y-420)<5;
   },redId,{timeout:12000});
+  // Keep the target alive to observe the 700ms detonation. A Tank's five
+  // pellets can otherwise end KO immediately, rightly cancelling pending blasts.
+  await red1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(!g||g.phase!=='playing')return;
+      g.hp[q.myId]=500;return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(id=>window.__brawlV3QA()?.hp?.[id]===500,
+    redId,{timeout:10000});
   await blue1.waitForTimeout(1150);
   assert.equal(await blue1.evaluate(()=>window.__brawlDraftFireQA(0)),true,'blue1 fires into actual online enemy');
   await blue1.waitForFunction(async()=>{
