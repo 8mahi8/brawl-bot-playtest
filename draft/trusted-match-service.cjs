@@ -29,8 +29,14 @@ async function consumeIntent({db,roomId,uid,actionId,now=Date.now()}){
  // Transaction serializes accepted intents: concurrent attempts cannot both
  // use the same last sequence. All hit/motion results are computed server-side.
  let latest=null;
+ const baseline=snapshot.val();
  const txn=await runTransaction(at('server'),current=>{
-  if(!current)return;
+  // RTDB web SDK first invokes a cold transaction with null. Seed that
+  // speculative local pass from the trusted server snapshot; the emulator
+  // then performs the normal compare-and-retry against authoritative state.
+  // This compatibility bridge is test-only; a deployed service must use
+  // a privileged Admin SDK transaction with explicit deletion semantics.
+  current=current||baseline;
   latest=applyIntent({state:current,uid,actionId,intent,
    connectionId:session.connectionId,now});
   return latest.accepted?latest.state:undefined;
