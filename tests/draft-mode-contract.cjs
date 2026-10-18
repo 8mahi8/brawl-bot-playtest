@@ -24,6 +24,12 @@ for(const [name,page] of entries){
  }else{
   assert.equal(page.status,'reserved','draft is not ready for public release');
   assert(!fs.existsSync(path.join(root,page.releaseHtml)),'unapproved public draft HTML must not appear');
+  assert(page.onlineLabStatus==='local_emulator_only_not_public','draft lab is not published or cloud connected');
+  assert(fs.existsSync(path.join(root,page.onlineLabHtml)),'dedicated online draft lab exists');
+  const code=fs.readFileSync(path.join(root,page.onlineLabHtml),'utf8');
+  assert(code.includes("db.useEmulator('127.0.0.1',9000)"),'draft lab is pinned to local emulator');
+  assert(code.includes("['localhost','127.0.0.1'].includes(location.hostname)"),'draft cloud connection blocked off loopback');
+
   assert(!emulator.rules[page.roomRoot], 'local emulator must default-deny unimplemented draft room roots');
  }
 }
