@@ -983,7 +983,6 @@ async function run(){
   // An extra Safari context presenting a stolen/stale session seat ID must
   // NEVER attach as a fifth player or take over the currently active seat.
   const intruder=await client(browser,4);
-  clients.push(intruder);
   await intruder.page.evaluate(({room,id})=>
     sessionStorage.setItem('brawl-v3-2v2-seat-'+room,id),
     {room:code,id:red2Before.myId});
@@ -997,6 +996,8 @@ async function run(){
   assert.equal(intruderState.seat,null,'active red2 identity cannot be stolen');
   assert.equal((await get(host)).online,4,'duplicate attempt leaves four legitimate seats online');
   assert.equal((await get(host)).lobby.seats.red2.id,red2Before.myId);
+  assert.deepEqual(intruder.errors,[],'no Safari JavaScript errors on rejected join');
+  await intruder.ctx.close();
   console.log('PASS LIVE duplicate join: active session identity rejected, four seats preserved');
 
   // Host interruption: other clients pause (and do NOT become owner), then
@@ -1039,9 +1040,10 @@ async function run(){
   assert.equal(hostRestored.phase,'playing');
   assert.equal(hostRestored.round,beforeHostDrop.round);
   assert.deepEqual(hostRestored.scores,beforeHostDrop.scores);
-  assert.equal(hostRestored.hp[hostBefore.myId],beforeHostDrop.hp[hostBefore.myId]);
+  assert.equal(hostPaused.hp[hostBefore.myId],beforeHostDrop.hp[hostBefore.myId],
+    'pause itself must preserve host HP before combat resumes');
   assert.deepEqual(hostRestored.draft.owned.blue1,beforeHostDrop.draft.owned.blue1);
-  await Promise.all(bySeat.red2===host?[host]:[bySeat.blue2,bySeat.red1,bySeat.red2].map(p=>
+  await Promise.all([bySeat.blue2,bySeat.red1,bySeat.red2].map(p=>
     p.waitForFunction(()=>window.__brawlV3QA?.()?.game==='playing'&&
       window.__brawlV3QA?.()?.online===4,null,{timeout:16000})));
   console.log('PASS LIVE host recovery: peers pause, no authority hijack, new host token, same combat and cards');
