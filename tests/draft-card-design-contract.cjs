@@ -47,9 +47,17 @@ for(const item of registry.cards) {
    squadLab.includes('motion(g,a.owner,{...delta,a:a.angle})'),
    '2vs2 host must validate recoil in canonical authoritative state before offering');
   assert(duelLab.includes("damage*=1.10"),'1vs1 Bomber must receive normal shot buff');
+ }else if(item.id==='split_round'){
+  assert(online1.includes("id:'split_round'")&&online2.includes("id:'split_round'"));
+  assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damage=BrawlProjectileV1.damage")&&duelLab.includes("damage*.5"));
+  assert(squadLab.includes("draftAdvance(b,activeMs/1000")&&squadLab.includes("splitCenter:false")&&squadLab.includes("half?.5:1"));
+ }else if(item.id==='delayed_blast'){
+  assert(online1.includes("id:'delayed_blast'")&&online2.includes("id:'delayed_blast'"));
+  assert(duelLab.includes("netDraftScheduleBlast(")&&duelLab.includes("processDraftBlasts()"));
+  assert(squadLab.includes("scheduleDraftBlast(")&&squadLab.includes("t+3000"));
  }else{
   assert(!online1.includes("id:'"+item.id+"'"),'unimplemented online 1vs1 effect must remain gated: '+item.id);
   assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
  }
 }
-console.log('PASS nine accepted cards; only recoil enters BOTH isolated online labs with real runtime; other eight gated');
+console.log('PASS only recoil, split and delayed blast enter BOTH emulator-only online labs; ricochet and GAD2 remain gated');
