@@ -75,6 +75,18 @@ function squadPick(g,actorSeat,id,replaceId=null){
   const turn=d.turn+1,complete=turn===4;
   return {...g,phase:complete?'round_end':'draft',draft:{...d,owned,taken:[...(d.taken||[]),id],turn,complete}};
 }
+function squadBlastAuthorize(d,seat,fireActionId,t){
+  if(!d||!SQUAD_SEATS.includes(seat)||typeof fireActionId!=='string'||
+     fireActionId.length<1||fireActionId.length>128||!Number.isFinite(t)||
+     !squadHand(d,seat).includes('delayed_blast'))return false;
+  d.blastUsed ||= {};d.blastCooldown ||= {};
+  if(d.blastUsed[fireActionId]||(d.blastCooldown[seat]||0)>t)return false;
+  d.blastUsed[fireActionId]=1;d.blastCooldown[seat]=t+3000;
+  // Even unusually long matches must not grow this RTDB map without bound.
+  const keys=Object.keys(d.blastUsed);
+  if(keys.length>80)for(const key of keys.slice(0,keys.length-80))delete d.blastUsed[key];
+  return true;
+}
 function squadNextRound(d){
   const last=d||squadNewMatch();
   return {...last,owned:Object.fromEntries(SQUAD_SEATS.map(s=>[s,[...squadHand(last,s)]])),
