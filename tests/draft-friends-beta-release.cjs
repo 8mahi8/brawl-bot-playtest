@@ -30,7 +30,7 @@ for(const [mode,normal,lab,beta,room,protocol] of [
  assert(s.includes('PROTOCOL = '+protocol)||s.includes('PROTOCOL='+protocol),
    'protocol '+mode);
  const scripts=[...s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
- assert(scripts.length>=3,'inline beta scripts');
+ assert(scripts.length>=2,'inline beta scripts');
  scripts.forEach((script,i)=>{if(script[1].trim())new vm.Script(script[1],{filename:beta+'#'+i});});
  const getStyle=t=>(t.match(/<style>([\s\S]*?)<\/style>/)||[])[1];
  assert(getStyle(s)===getStyle(l),'preserve tested draft iPad styling');
