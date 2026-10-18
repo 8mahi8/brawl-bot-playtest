@@ -315,6 +315,45 @@ assert(html.includes("['shot','gadget','gadget2','ultimate']"),'protocol whiteli
 assert(html.includes("b.id='squadGad2Action'"),'separate mobile button exists');
 assert(html.includes("window.__brawlDraftGad2FireQA"),'live E2E uses normal action dispatch');
 
+// Combo drafting: among multiple owned GAD2 cards, the most recently picked
+// supported card stays equipped, including after 3-card replacement/round reset.
+const combo=squadNewMatch();
+combo.owned.blue1=['smoke','portable_wall','hologram'];
+assert.equal(squadGad2Equipped(combo,'blue1'),'hologram');
+combo.owned.blue1=['smoke','portable_wall','warp_beacon'];
+assert.equal(squadGad2Equipped(combo,'blue1'),'warp_beacon');
+combo.owned.blue1=['hologram','trap_mine','portable_wall'];
+assert.equal(squadGad2Equipped(combo,'blue1'),'portable_wall');
+const comboNewRound=squadNextRound(combo);
+assert.equal(squadGad2Equipped(comboNewRound,'blue1'),'portable_wall',
+ 'three-card loadout and GAD2 equip survive round transition');
+assert.equal(Object.keys(comboNewRound.gadget2ReadyAt||{}).length,0,
+ 'cooldowns never leak into the next round');
+
+// The UI uses the actual server reason, not local guesses; do not silently
+// drop a rejected card placement or pretend the cooldown was spent.
+const receiptStart=html.indexOf('function squadGad2ReceiptMessage(receipt,card,beaconActive){');
+const receiptEnd=html.indexOf('function squadGad2Receipts(){',receiptStart);
+assert(receiptStart>0&&receiptEnd>receiptStart,'GAD2 feedback must be wired to host receipts');
+const receiptMessage=vm.runInNewContext(html.slice(receiptStart,receiptEnd)+
+ '\nsquadGad2ReceiptMessage',{}, {timeout:1000});
+const accepted=card=>({status:'accepted'});
+const rejected=reason=>({status:'rejected',reason});
+assert.equal(receiptMessage(accepted('portable_wall'),'portable_wall',false),'壁を設置！');
+assert.equal(receiptMessage(accepted('hologram'),'hologram',false),'分身を召喚！');
+assert.equal(receiptMessage(accepted('warp_beacon'),'warp_beacon',true),'ビーコンを設置！');
+assert.equal(receiptMessage(accepted('warp_beacon'),'warp_beacon',false),'ビーコンに帰還！');
+for(const reason of ['gadget2_wall_placement','gadget2_wall','gadget2_occupied',
+ 'gadget2_warp_blocked','gadget2_beacon_wall','gadget2_cooldown']){
+ const message=receiptMessage(rejected(reason),'portable_wall',false);
+ assert(message.length>5&&!message.includes('GAD2を使用できませんでした'),
+   'host reason '+reason+' must produce specific Japanese feedback');
+}
+assert(html.includes('squadRender();gadgetReceipts();squadGad2Receipts();'),
+ 'online snapshot updates must display host-confirmed GAD2 receipts');
+assert(html.includes("Math.abs(serverNow()-r.acceptedAt)>5000"),
+ 'reconnect must not replay ancient GAD2 confirmations as new actions');
+
 mineDraft.owned.blue2=['smoke'];
 assert.equal(squadGad2Equipped(mineDraft,'blue2'),'smoke','GAD2 chooses the new smoke card');
 mineDraft.owned.blue2=['smoke','trap_mine'];
