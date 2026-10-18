@@ -111,9 +111,12 @@ async function run(){
   });
   assert.equal(first.round,5);
   assert.equal(await blue1.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true);
-  await blue1.waitForFunction(({id,rev})=>{
-    const q=window.__brawlV3QA(),s=q?.stats?.[id];return s&&s.lastActionSeq>0&&q.local.x>150;
-  },{id:first.id,rev:first.motion.rev},{timeout:14000});
+  await blue1.waitForFunction(async ({id,rev})=>{
+    const q=window.__brawlV3QA();
+    if(!q?.roomId)return false;
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/motions/'+id).once('value');
+    return (snap.val()?.rev||0)>rev;
+  },{id:first.id,rev:first.motion.rev},{timeout:14000,polling:350});
   const moved=await blue1.evaluate(async id=>{
     const q=window.__brawlV3QA(),snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').once('value');
     const state=snap.val();
