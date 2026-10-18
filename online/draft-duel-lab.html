@@ -2610,9 +2610,7 @@ const BrawlAbilityV1=Object.freeze({
     winner:draftWinner,pick:draftQueue[draftTurn]||null,offered:[...draftOffer],
     taken:[...draftOfferTaken],owned:structuredClone(draftOwned),hp:game?.hp,
     forceKO:(winner)=>{if(!solo||!isPlaying())return false;const victim=winner==='host'?'guest':'host';
-      const before={phase:game.phase,hp:{...game.hp},scores:{...game.scores}};
-      applySoloDamage(victim,(game.hp?.[victim]||0)+200,winner,500,300,'effect');
-      window.__draftLastForce={winner,victim,before,after:{phase:game.phase,hp:{...game.hp},scores:{...game.scores},loser:game.loser},draftWinner};return true;}});
+      applySoloDamage(victim,(game.hp?.[victim]||0)+200,winner,500,300,'effect');return true;}});
 
   function soloDebug(flag){return solo&&!!testFlags[flag];}
   function showTestControls(){
