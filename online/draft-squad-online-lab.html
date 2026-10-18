@@ -537,13 +537,14 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       if(targetHit(b))return false;
       if(b.dist>=b.range*.5){
         // Daughter IDs are stable under RTDB transaction retries and preserve one original action ID.
-        const a=Math.atan2(b.vy,b.vx),dmg=BrawlProjectileV1.damage(b,tankDamage)*.6;
+        const a=Math.atan2(b.vy,b.vx);
         for(const sign of [-1,1]){
           const key=b.id+':child:'+sign,theta=a+sign*.21;
           g.draftCardStats ||= {splits:0,blasts:0};
           if(sign===-1)g.draftCardStats.splits++;
-          g.projectiles[key]={...b,id:key,char:'split_child',splitCenter:false,splitChild:true,
-            damage:dmg,vx:Math.cos(theta)*speed,vy:Math.sin(theta)*speed,spawnAt:now};
+          g.projectiles[key]={...b,id:key,splitCenter:false,splitChild:true,
+            damageScale:(b.damageScale||1)*.6,
+            vx:Math.cos(theta)*speed,vy:Math.sin(theta)*speed,spawnAt:now};
         }
         return false;
       }
@@ -653,7 +654,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
        const v=g.seats[k].id;if(team(k)===bullet.team||!canHit(v))continue;
        const p=targets[v];
        if(BrawlProjectileV1.hitCircle(bullet.x,bullet.y,p.x,p.y,R+bullet.radius)){
-        hit(bullet.id,bullet.owner,v,BrawlProjectileV1.damage(bullet,tankDamage),
+        hit(bullet.id,bullet.owner,v,BrawlProjectileV1.damage(bullet,tankDamage)*(bullet.damageScale||1),
           {kind:'normal',blastEligible:!!bullet.blastEligible,fireId:bullet.fireId,x:bullet.x,y:bullet.y});return true;
        }
       }
