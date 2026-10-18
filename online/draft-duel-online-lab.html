@@ -1636,6 +1636,30 @@ const BrawlAbilityV1=Object.freeze({
   function renderBombEvents(){for(const [id,e]of Object.entries(game?.bombEvents||{})){if(seenBombFX.has(id))continue;seenBombFX.add(id);if(time()-e.at>500)continue;fx.push({type:e.type==='bombImpact'?'impact':'hit',x:e.x,y:e.y,ttl:.4,max:.4});if(e.victim)shotReveal[e.victim]=time()+REVEAL_MS;}if(seenBombFX.size>180)seenBombFX.delete(seenBombFX.values().next().value);}
   function drawBombFlights(){for(const p of Object.values(game?.bombs||{})){if(p.round!==game.round||time()<p.start)continue;const f=clamp((time()-p.start)/(p.until-p.start),0,1),x=p.fromX+(p.x-p.fromX)*f,y=p.fromY+(p.y-p.fromY)*f-Math.sin(f*Math.PI)*80;ctx.fillStyle='#ffb16a';ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff1ba';ctx.fillRect(x+4,y-13,3,6);}}
   function drawDebuff(p,who){const d=game?.debuffs?.[who];if(d?.slowUntil>time()){ctx.strokeStyle='#64ccff';ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(p.x,p.y+18,26,8,0,0,7);ctx.stroke();}if(d?.dotUntil>=time()){ctx.fillStyle='#ffab54';for(let i=0;i<6;i++){const a=i*Math.PI/3+performance.now()/160;ctx.beginPath();ctx.arc(p.x+Math.cos(a)*29,p.y+Math.sin(a)*29,3,0,7);ctx.fill();}}}
+  // Exact same one-wall geometry as 2vs2, using the 1vs1 circular-wall
+  // collision primitive. Ambiguous corner normals terminate safely.
+  function netDraftReflectAxis(px,py,nx,ny,r){
+    const xBlocked=circleWall(nx,py,r),yBlocked=circleWall(px,ny,r);
+    return xBlocked===yBlocked?'':xBlocked?'x':'y';
+  }
+  function netDraftBombBounce(start,target){
+    const length=Math.hypot(target.x-start.x,target.y-start.y);
+    const steps=Math.max(1,Math.ceil(length/6));
+    let x=start.x,y=start.y,dx=(target.x-start.x)/steps,dy=(target.y-start.y)/steps,bounced=false;
+    for(let i=0;i<steps;i++){
+      const nx=x+dx,ny=y+dy;
+      if(nx<0||nx>W||ny<0||ny>H)return {x,y,bounced,blocked:true};
+      if(circleWall(nx,ny,6)){
+        if(bounced||circleWall(x,y,6))return {x,y,bounced,blocked:true};
+        const axis=netDraftReflectAxis(x,y,nx,ny,6);
+        if(!axis)return {x,y,bounced,blocked:true};
+        if(axis==='x')dx=-dx;else dy=-dy;
+        bounced=true;continue;
+      }
+      x=nx;y=ny;
+    }
+    return bounced?{x,y,bounced}:{x:target.x,y:target.y,bounced:false};
+  }
   function netDraftPrepareBombs(before,after,p){
     if(after===before||p.ultimate)return after;
     const original=after.bombs?.[p.id+':0'];if(!original)return after;
@@ -1647,6 +1671,14 @@ const BrawlAbilityV1=Object.freeze({
         const key=p.id+':s'+sign,px=-Math.sin(p.angle)*30*sign,py=Math.cos(p.angle)*30*sign;
         after.bombs[key]={...original,id:key,fireId:p.id,x:original.x+px,y:original.y+py,
           damage:original.damage*.5,radius:original.radius*.72,enhanced:original.enhanced&&sign===-1};
+      }
+    }
+    if(hand.includes('ricochet')){
+      for(const bomb of Object.values(after.bombs||{})){
+        if(bomb.fireId!==p.id)continue;
+        const path=netDraftBombBounce({x:p.x,y:p.y},{x:bomb.x,y:bomb.y});
+        bomb.x=path.x;bomb.y=path.y;
+        if(path.bounced)bomb.damage*=.7;
       }
     }
     return after;
@@ -1773,7 +1805,7 @@ const BrawlAbilityV1=Object.freeze({
     }
     updateHUD();
   }
-  let netFireCounter=0,netSplitProof=0;
+  let netFireCounter=0,netSplitProof=0,netRicochetProof=0;
   function fireVolley(owner,char,x,y,angle,ult){
     const round=game?.round;
     const fireId=owner+':'+round+':'+(++netFireCounter)+':'+Math.round(time());
@@ -1907,10 +1939,46 @@ const BrawlAbilityV1=Object.freeze({
       damage:p.ult?s.ultDamage:s.damage,radius:p.ult?s.ultRadius:(s===CHARS.sniper?5:6),ult:!!p.ult,
       char:currentChar(p.owner),sniper:!p.ult&&currentChar(p.owner)==='sniper',
       fireId:typeof p.fireId==='string'?p.fireId:null,
-      splitCenter:!p.ult&&!!p.splitCenter&&!!game.draft?.owned?.[p.owner]?.includes('split_round')};
+      splitCenter:!p.ult&&!!p.splitCenter&&!!game.draft?.owned?.[p.owner]?.includes('split_round'),
+      ricochetEnabled:!p.ult&&!!game.draft?.owned?.[p.owner]?.includes('ricochet'),ricochetUsed:0};
     const age=clamp((time()-(p.firedAt||time()))/1000,0,.18);
     if(age && !moveBullet(b,age))return;
     shots.push(b);
+  }
+  function netDraftAdvanceBullet(b,dt,targetHit){
+    if(!b.splitCenter&&!b.ricochetEnabled)
+      return BrawlProjectileV1.advance(b,dt,{
+        width:W,height:H,rangeFirst:false,wallHit:(x,y,r)=>circleWall(x,y,r),targetHit});
+    const speed=Math.hypot(b.vx,b.vy),distance=speed*dt;
+    if(!Number.isFinite(dt)||dt<0||!Number.isFinite(speed))throw Error('Invalid draft bullet');
+    const steps=Math.max(1,Math.ceil(distance/6)),timePerStep=dt/steps,dd=distance/steps;
+    for(let i=0;i<steps;i++){
+      const nx=b.x+b.vx*timePerStep,ny=b.y+b.vy*timePerStep;
+      b.dist+=dd;
+      if(nx<0||nx>W||ny<0||ny>H)return false;
+      if(circleWall(nx,ny,b.radius)){
+        if(!b.ricochetEnabled||b.ricochetUsed||circleWall(b.x,b.y,b.radius))return false;
+        const axis=netDraftReflectAxis(b.x,b.y,nx,ny,b.radius);
+        if(!axis)return false;
+        if(axis==='x')b.vx=-b.vx;else b.vy=-b.vy;
+        b.ricochetUsed=1;b.damageScale=(b.damageScale||1)*.7;
+        netRicochetProof++;
+        if(b.dist>=b.range)return false;
+        continue;
+      }
+      b.x=nx;b.y=ny;
+      if(targetHit(b)||b.dist>=b.range)return false;
+      if(b.splitCenter&&b.dist>=b.range*.5){
+        const a=Math.atan2(b.vy,b.vx);
+        netSplitProof++;
+        // Daughter shots inherit same fire action and already-used bounce.
+        for(const sign of [-1,1])shots.push({...b,id:b.id+':child:'+sign,
+          splitCenter:false,splitChild:true,damageScale:(b.damageScale||1)*.6,
+          vx:Math.cos(a+sign*.21)*speed,vy:Math.sin(a+sign*.21)*speed});
+        return false;
+      }
+    }
+    return true;
   }
   function moveBullet(b,dt){
     const targetHit=bullet=>{
@@ -1921,25 +1989,7 @@ const BrawlAbilityV1=Object.freeze({
           bullet.owner,bullet.x,bullet.y,bullet.ult?'effect':'normal',bullet.fireId);
       return true;
     };
-    if(!b.splitCenter)return BrawlProjectileV1.advance(b,dt,{
-      width:W,height:H,rangeFirst:false,wallHit:(x,y,r)=>circleWall(x,y,r),targetHit});
-    const speed=Math.hypot(b.vx,b.vy),distance=speed*dt,steps=Math.max(1,Math.ceil(distance/6));
-    const dx=b.vx*dt/steps,dy=b.vy*dt/steps;
-    for(let i=0;i<steps;i++){
-      b.x+=dx;b.y+=dy;b.dist+=distance/steps;
-      if(b.x<0||b.x>W||b.y<0||b.y>H||circleWall(b.x,b.y,b.radius))return false;
-      if(targetHit(b)||b.dist>=b.range)return false;
-      if(b.dist>=b.range*.5){
-        // Splitting replaces the center projectile; all other pellets stay unchanged.
-        const a=Math.atan2(b.vy,b.vx);
-        netSplitProof++;
-        for(const sign of [-1,1])shots.push({...b,id:b.id+':child:'+sign,splitCenter:false,
-          splitChild:true,damageScale:(b.damageScale||1)*.6,
-          vx:Math.cos(a+sign*.21)*speed,vy:Math.sin(a+sign*.21)*speed});
-        return false;
-      }
-    }
-    return true;
+    return netDraftAdvanceBullet(b,dt,targetHit);
   }
   function applyDamage(victim,amount,owner,x,y,kind='effect',fireId=null) {
     if(solo){applySoloDamage(victim,amount,owner,x,y);return;}
@@ -2824,7 +2874,8 @@ const BrawlAbilityV1=Object.freeze({
     {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
     {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃の威力+10%／一射撃で後方60移動（反動CD1.2秒）'},
     {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'},
-    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常攻撃の初回命中後0.7秒で小爆発（3秒CD）'}
+    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常攻撃の初回命中後0.7秒で小爆発（3秒CD）'},
+    {id:'ricochet',name:'跳弾',family:'shot_mod',desc:'通常弾は壁で最大1回反射・威力70%（角は停止）'}
   ];
   const netDraftCardMap=new Map(NET_DRAFT_CARDS.map(c=>[c.id,c]));
   function netDraftNewMatch(){
@@ -3093,6 +3144,7 @@ const BrawlAbilityV1=Object.freeze({
     local.x=x;local.y=y;sendPosition();return true;
   };
   window.__brawlDraftSplitCountQA=()=>netSplitProof;
+  window.__brawlDraftRicochetCountQA=()=>netRicochetProof;
   window.__brawlDraftFireReadyQA=()=>({now:time(),startAt:game?.startAt,phase:game?.phase,
     isPlaying:isPlaying(),role,connected,ammo:local.ammo,
     hostOnline:!!players.host?.online,guestOnline:!!players.guest?.online});
