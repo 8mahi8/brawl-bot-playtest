@@ -1,0 +1,30 @@
+name: BRAWL Tactical Draft card design contract
+on:
+  push:
+    paths:
+      - 'draft/style-changing-cards.v1.json'
+      - 'draft/STYLE_CHANGING_CARDS_V1.md'
+      - 'tests/draft-card-design-contract.cjs'
+      - 'draft/duel-online-prototype.inc.js'
+      - 'draft/squad-online-prototype.inc.js'
+      - '.github/workflows/draft-card-design-contract.yml'
+  pull_request:
+    paths:
+      - 'draft/style-changing-cards.v1.json'
+      - 'draft/STYLE_CHANGING_CARDS_V1.md'
+      - 'tests/draft-card-design-contract.cjs'
+      - 'draft/duel-online-prototype.inc.js'
+      - 'draft/squad-online-prototype.inc.js'
+      - '.github/workflows/draft-card-design-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reviewed-design:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tests/draft-card-design-contract.cjs
