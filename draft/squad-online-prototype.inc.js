@@ -9,7 +9,9 @@
     {id:'clutch_armor',name:'崖際装甲',family:'defense',desc:'HP35%以下で通常射撃-8%'},
     {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
     {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
-    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'}
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'},
+    {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'},
+    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常攻撃の初回命中後0.7秒で小爆発（3秒CD）'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
