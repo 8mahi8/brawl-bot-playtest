@@ -49,7 +49,7 @@
     if(g?.phase!=='draft'||!d||!['host','guest'].includes(side)||
        d.order?.[d.turn]!==side||d.complete||!d.offered?.includes(id)||
        d.taken?.includes(id)||d.owned?.[side]?.includes(id)||!netDraftCardMap.has(id))return null;
-    const owned={host:[...d.owned.host],guest:[...d.owned.guest]};
+    const owned={host:[...(d.owned?.host||[])],guest:[...(d.owned?.guest||[])]};
     if(owned[side].length>=3){
       if(!owned[side].includes(replaceId))return null;
       owned[side]=owned[side].filter(x=>x!==replaceId);
@@ -67,6 +67,12 @@
   }
   function netDraftHit(d,chars,hp,victim,amount,owner,kind,now){
     const updated=structuredClone(d||netDraftNewMatch());
+    // RTDB omits empty arrays/objects: always normalize empty inventories and cooldown maps.
+    updated.owned={host:[...(updated.owned?.host||[])],guest:[...(updated.owned?.guest||[])]};
+    updated.cooldown={host:{...(updated.cooldown?.host||{})},guest:{...(updated.cooldown?.guest||{})}};
+    updated.lastNormal={host:updated.lastNormal?.host??-1,guest:updated.lastNormal?.guest??-1};
+    updated.lastDamage={host:updated.lastDamage?.host||0,guest:updated.lastDamage?.guest||0};
+    updated.hitStrideUntil={host:updated.hitStrideUntil?.host||0,guest:updated.hitStrideUntil?.guest||0};
     const has=(side,id)=>updated.owned?.[side]?.includes(id);
     const ready=(side,id)=>(updated.cooldown?.[side]?.[id]||0)<=now;
     if(kind!=='normal'||!['host','guest'].includes(owner)){
