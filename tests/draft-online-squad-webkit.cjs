@@ -103,7 +103,8 @@ async function run(){
   });
   await blue1.waitForFunction(()=>{const s=window.__brawlV3QA();
     return s?.stats?.[s.myId]?.draftCards?.includes('recoil_shot');},null,{timeout:12000});
-  await blue1.waitForTimeout(2000); // countdown ends on every device
+  await blue1.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,
+    null,{timeout:14000});
   const first=await blue1.evaluate(async()=>{
     const s=window.__brawlV3QA(),snap=await window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').once('value');
     const g=snap.val(),id=g.seats.blue1.id;
