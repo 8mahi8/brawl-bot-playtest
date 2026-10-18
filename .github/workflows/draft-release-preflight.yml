@@ -1,0 +1,43 @@
+name: BRAWL Draft release preflight — UI parity and fail-closed boundary
+on:
+  push:
+    paths:
+      - 'online/ipad-duel-v2-lab.html'
+      - 'online/draft-duel-online-lab.html'
+      - 'online/ipad-squad-v2-lab.html'
+      - 'online/draft-squad-online-lab.html'
+      - 'network/release/**'
+      - 'network/emulator/DRAFT_ONLINE_E2E_TEST_ONLY.rules.json'
+      - 'network/emulator/DRAFT_SQUAD_E2E_TEST_ONLY.rules.json'
+      - 'tests/draft-online-ui-release-parity.cjs'
+      - '.github/workflows/draft-release-preflight.yml'
+  pull_request:
+    paths:
+      - 'online/ipad-duel-v2-lab.html'
+      - 'online/draft-duel-online-lab.html'
+      - 'online/ipad-squad-v2-lab.html'
+      - 'online/draft-squad-online-lab.html'
+      - 'network/release/**'
+      - 'network/emulator/DRAFT_ONLINE_E2E_TEST_ONLY.rules.json'
+      - 'network/emulator/DRAFT_SQUAD_E2E_TEST_ONLY.rules.json'
+      - 'tests/draft-online-ui-release-parity.cjs'
+      - '.github/workflows/draft-release-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ipad-ui-firebase-release-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify unchanged public standard releases
+        run: node tests/sites-friends-release-freeze.cjs
+      - name: Compare both online draft UIs to standard iPad lab markup and CSS
+        run: node tests/draft-online-ui-release-parity.cjs
+      - name: Confirm 1vs1 draft transaction and emulator-only constraints
+        run: node tests/draft-online-duel-core.cjs
+      - name: Confirm 2vs2 draft transaction and emulator-only constraints
+        run: node tests/draft-online-squad-core.cjs
