@@ -207,6 +207,27 @@ assert.equal(physical.draftWallPlacement({...wallMatch,gad2Walls:{}},'a',positio
  'cannot overlap permanent KO terrain');
 assert.equal(wallsVM.draftWallPlacement({...wallMatch,gad2Walls:{}},'a',{x:40,y:300},Math.PI,positions,100),null,
  'reject out-of-bounds deployment');
+// Cross-card geometry: a live portable wall can occupy a warp beacon's
+// previous location. Execute BOTH exact host helpers together in a pure VM.
+const warpOnlyEnd=html.indexOf('  // Deterministic host-owned decoy physics.',warpStart);
+assert(warpOnlyEnd>warpStart,'host warp helper boundary before decoy AI');
+const liveWarp=vm.runInNewContext(
+ "const W=1000,H=600,R=18,BALANCE={areaRadius:118};"+
+ "const walls=[];const seatKeys=['blue1','blue2','red1','red2'];"+
+ "const point=(g,id,input)=>input[id];"+
+ realWallGeometry+html.slice(warpStart,warpOnlyEnd)+"\n draftWarpLanding",
+ {},{timeout:1000});
+const coverAndWarp={...wallMatch,clock:{t:200}};
+const safeReturn=liveWarp(coverAndWarp,'a',290,300,positions);
+assert(safeReturn&&Math.hypot(safeReturn.x-290,safeReturn.y-300)>20,
+ 'warp can still find a safe fallback when a teammate wall covers its beacon');
+assert(!wallsVM.draftSolid(coverAndWarp,safeReturn.x,safeReturn.y,21,200),
+ 'warp fallback never clips active 2vs2 portable cover');
+const afterCover={...coverAndWarp,clock:{t:4100}};
+const exactReturn=liveWarp(afterCover,'a',290,300,positions);
+assert(exactReturn&&Math.abs(exactReturn.x-290)<.01&&Math.abs(exactReturn.y-300)<.01,
+ 'at 4s wall expiration, warp can land at original beacon position');
+
 assert(src.includes("id:'portable_wall'")&&
  src.includes("'warp_beacon','portable_wall'"),'wall must be offered only when host supports it');
 assert(html.includes("g.gad2Walls[seat]={kind:'portable_wall'")&&
