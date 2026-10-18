@@ -1,0 +1,36 @@
+name: BRAWL Tactical Draft BOT WebKit prototype (offline only)
+on:
+  push:
+    paths:
+      - 'online/draft-duel-lab.html'
+      - 'draft/duel-bot-prototype.inc.js'
+      - 'tests/draft-duel-webkit.cjs'
+      - '.github/workflows/draft-duel-bot-webkit.yml'
+  pull_request:
+    paths:
+      - 'online/draft-duel-lab.html'
+      - 'draft/duel-bot-prototype.inc.js'
+      - 'tests/draft-duel-webkit.cjs'
+      - '.github/workflows/draft-duel-bot-webkit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  playable-offline-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify test script syntax
+        run: node --check tests/draft-duel-webkit.cjs
+      - name: Install iPad/Safari-like WebKit
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.56.1
+          npx playwright-core install --with-deps webkit
+      - name: Play through draft selection and 3-win BOT match offline
+        run: node tests/draft-duel-webkit.cjs
+      - name: Ensure normal public game HTML still pinned
+        run: node tests/sites-friends-release-freeze.cjs
