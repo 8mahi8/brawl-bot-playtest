@@ -43,6 +43,7 @@ const run=async()=>{
       }
       throw Error('KO could not be forced for draft UI regression');
     },{winner});
+    console.log('TRACE forceKO',await f.locator('body').evaluate(()=>window.__draftLastForce));
     await f.locator('#draftOverlay:not(.hidden)').waitFor({timeout:9000});
     const s=await qa();
     console.log('TRACE winner/round',JSON.stringify({expectedRound,winner,actual:s.winner,round:s.round,pick:s.pick,scores:s.scores,phase:s.phase}));
