@@ -56,6 +56,15 @@ for(const item of registry.cards) {
     '2vs2 split must affect authoritative projectiles and normal Bomber bombs');
   assert(duelLab.includes("splitCenter:false")&&duelLab.includes("damageScale:(b.damageScale||1)*.6"),
    '1vs1 central shot must generate two 60% children');
+ }else if(item.id==='hologram'){
+  assert(!online1.includes("id:'hologram'"),'1vs1 hologram must remain gated');
+  assert(online2.includes("id:'hologram'"),'hologram offered only with authoritative AI');
+  assert(squadLab.includes("function draftHoloAdvance(g,h,targets,dt,t)")&&
+    squadLab.includes("g.gad2FakeShots[k]={kind:'hologramFakeShot'")&&
+    squadLab.includes("until:t+380,damage:0")&&
+    squadLab.includes("g.draftCardStats.gad2HologramsDissolved")&&
+    squadLab.includes("label:ally?'分身':'ENEMY'"),
+    'host-only AI, fake shot isolation, enemy damage counterplay and ally-only mark');
  }else if(item.id==='portable_wall'){
   assert(!online1.includes("id:'portable_wall'"),'1vs1 portable wall still gated');
   assert(online2.includes("id:'portable_wall'"),'2vs2 wall cannot be offered before implemented');
@@ -118,4 +127,4 @@ for(const item of registry.cards) {
   assert(!online2.includes("id:'"+item.id+"'"),'unimplemented online 2vs2 effect must remain gated: '+item.id);
  }
 }
-console.log('PASS four shot cards both modes; 2v2 mine/smoke/warp/wall GAD2, hologram gated');
+console.log('PASS four shot modifiers both modes; all five 2v2 GAD2 implemented, 1v1 GAD2 gated');
