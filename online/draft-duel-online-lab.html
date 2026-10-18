@@ -1710,12 +1710,15 @@ const BrawlAbilityV1=Object.freeze({
     }
     updateHUD();
   }
+  let netFireCounter=0;
   function fireVolley(owner,char,x,y,angle,ult){
     const round=game?.round;
+    const fireId=owner+':'+round+':'+(++netFireCounter)+':'+Math.round(time());
     if(char==='bomber'){const actor={x,y};const target=owner===role?getRemotePredicted():local;throwBomb(owner,actor,angle,Math.hypot(target.x-x,target.y-y),false);return;}
-    if(ult || char==='sniper')emitOneShot(owner,x,y,angle,ult,round);
+    if(ult || char==='sniper')emitOneShot(owner,x,y,angle,ult,round,fireId,!ult);
     else if(char==='tank'){
-      for(const spread of BrawlWeaponV1.spread('tank'))emitOneShot(owner,x,y,angle+spread,false,round);
+      BrawlWeaponV1.spread('tank').forEach((spread,i)=>
+        emitOneShot(owner,x,y,angle+spread,false,round,fireId,i===2));
     } else {
       // Three-round burst, one ammo charge. Cancel if a new round begins.
       const angles=BrawlWeaponV1.spread('gunner'),gap=BrawlWeaponV1.gapMs(actorOverdrive(owner)>0);
@@ -1723,7 +1726,7 @@ const BrawlAbilityV1=Object.freeze({
         const send=()=>{
           if(!game||game.phase!=='playing'||game.round!==round||!isPlaying())return;
           // Always use the initial muzzle position, matching host-validated 2vs2 bursts.
-          emitOneShot(owner,x,y,angle+angles[i],false,round);
+          emitOneShot(owner,x,y,angle+angles[i],false,round,fireId,i===1);
         };
         if(i===0)send();else setTimeout(send,i*gap);
       }
@@ -1819,9 +1822,10 @@ const BrawlAbilityV1=Object.freeze({
       }ctx.restore();
     }
   }
-  function emitOneShot(owner,x,y,angle,ult,round){
+  function emitOneShot(owner,x,y,angle,ult,round,fireId=null,splitCenter=false){
     if(!game||game.phase!=='playing'||round!==game.round)return;
-    const bullet={round,owner,x,y,angle,ult:!!ult,firedAt:Math.round(time())};
+    const bullet={round,owner,x,y,angle,ult:!!ult,fireId,splitCenter,
+      firedAt:Math.round(time())};
     if(solo)spawnShot({...bullet,id:'solo_volley_'+(++soloShotNumber)});
     else {const entry=ref.child('shots').push();
       spawnShot({...bullet,id:entry.key});
@@ -1838,22 +1842,40 @@ const BrawlAbilityV1=Object.freeze({
       vx:Math.cos(p.angle)*(p.ult?960:BrawlWeaponV1.bulletSpeed),vy:Math.sin(p.angle)*(p.ult?960:BrawlWeaponV1.bulletSpeed),
       dist:0,range:p.ult?s.ultRange:s.range,
       damage:p.ult?s.ultDamage:s.damage,radius:p.ult?s.ultRadius:(s===CHARS.sniper?5:6),ult:!!p.ult,
-      char:currentChar(p.owner),sniper:!p.ult&&currentChar(p.owner)==='sniper'};
+      char:currentChar(p.owner),sniper:!p.ult&&currentChar(p.owner)==='sniper',
+      fireId:typeof p.fireId==='string'?p.fireId:null,
+      splitCenter:!p.ult&&!!p.splitCenter&&!!game.draft?.owned?.[p.owner]?.includes('split_round')};
     const age=clamp((time()-(p.firedAt||time()))/1000,0,.18);
     if(age && !moveBullet(b,age))return;
     shots.push(b);
   }
   function moveBullet(b,dt){
-    return BrawlProjectileV1.advance(b,dt,{
-     width:W,height:H,rangeFirst:false,
-     wallHit:(x,y,r)=>circleWall(x,y,r),
-     targetHit:bullet=>{
+    const targetHit=bullet=>{
       const victim=bullet.owner==='host'?'guest':'host',pos=victim===role?local:getRemotePredicted();
       if(!BrawlProjectileV1.hitCircle(bullet.x,bullet.y,pos.x,pos.y,RADIUS+bullet.radius))return false;
-      if(isHost&&game.phase==='playing')applyDamage(victim,BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage),bullet.owner,bullet.x,bullet.y,bullet.ult?'effect':'normal');
+      if(isHost&&game.phase==='playing')
+        applyDamage(victim,BrawlProjectileV1.damage(bullet,BrawlCombatV8.tankDamage),
+          bullet.owner,bullet.x,bullet.y,bullet.ult?'effect':'normal',bullet.fireId);
       return true;
-     }
-    });
+    };
+    if(!b.splitCenter)return BrawlProjectileV1.advance(b,dt,{
+      width:W,height:H,rangeFirst:false,wallHit:(x,y,r)=>circleWall(x,y,r),targetHit});
+    const speed=Math.hypot(b.vx,b.vy),distance=speed*dt,steps=Math.max(1,Math.ceil(distance/6));
+    const dx=b.vx*dt/steps,dy=b.vy*dt/steps;
+    for(let i=0;i<steps;i++){
+      b.x+=dx;b.y+=dy;b.dist+=distance/steps;
+      if(b.x<0||b.x>W||b.y<0||b.y>H||circleWall(b.x,b.y,b.radius))return false;
+      if(targetHit(b)||b.dist>=b.range)return false;
+      if(b.dist>=b.range*.5){
+        // Splitting replaces the center projectile; all other pellets stay unchanged.
+        const a=Math.atan2(b.vy,b.vx),damage=BrawlProjectileV1.damage(b,BrawlCombatV8.tankDamage)*.6;
+        for(const sign of [-1,1])shots.push({...b,id:b.id+':child:'+sign,splitCenter:false,
+          splitChild:true,char:'split_child',sniper:false,damage,
+          vx:Math.cos(a+sign*.21)*speed,vy:Math.sin(a+sign*.21)*speed});
+        return false;
+      }
+    }
+    return true;
   }
   function applyDamage(victim,amount,owner,x,y,kind='effect') {
     if(solo){applySoloDamage(victim,amount,owner,x,y);return;}
@@ -2728,7 +2750,9 @@ const BrawlAbilityV1=Object.freeze({
     {id:'clutch_armor',name:'崖際装甲',family:'defense',desc:'HP35%以下で通常射撃-8%'},
     {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
     {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
-    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃の威力+10%／一射撃で後方60移動（反動CD1.2秒）'}
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃の威力+10%／一射撃で後方60移動（反動CD1.2秒）'},
+    {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'},
+    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常攻撃の初回命中後0.7秒で小爆発（3秒CD）'}
   ];
   const netDraftCardMap=new Map(NET_DRAFT_CARDS.map(c=>[c.id,c]));
   function netDraftNewMatch(){
