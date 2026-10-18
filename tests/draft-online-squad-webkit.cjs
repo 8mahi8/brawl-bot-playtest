@@ -101,18 +101,29 @@ async function run(){
     },i+1,{timeout:20000});
    }
    assert.equal(new Set(cardChosen).size,4);
-   await Promise.all(clients.map(c=>wait(c.page,'round_end')));
-   let finished=null;
-   const draftDeadline=Date.now()+12000;
+   // Round-end is a brief phase; a fast host may already start the next round.
+   // Verify stable, committed inventories rather than requiring all clients
+   // to be simultaneously inside that transient phase.
+   await Promise.all(clients.map(c=>c.page.waitForFunction(r=>{
+     const q=window.__brawlV3QA?.();
+     return q&&(q.game==='round_end'&&q.round===r||
+       q.game==='playing'&&q.round===r+1);
+   },round,{timeout:24000})));
+   let finished=null,observed=null;
+   const draftDeadline=Date.now()+14000;
    while(Date.now()<draftDeadline){
      const committed=await committedGame(code);
-     if(committed?.phase==='round_end'&&committed?.draft?.complete){
-       finished=committed.draft;break;
-     }
+     const done=committed?.round===round&&committed?.phase==='round_end'&&
+       committed?.draft?.complete===true;
+     const advanced=committed?.round===round+1&&committed?.phase==='playing';
+     if(done||advanced){finished=committed.draft;observed=committed;break;}
      await new Promise(resolve=>setTimeout(resolve,200));
    }
-   assert(finished?.complete,'all four draft selections must be committed on emulator, not just locally');
-   for(const seat of Object.keys(bySeat))assert.equal((finished.owned?.[seat]||[]).length,Math.min(3,round));
+   assert(finished,'last pick must reach committed round end or next round');
+   assert(observed.round===round+1||finished.complete===true,
+     'draft must finish before the next round');
+   for(const seat of Object.keys(bySeat))
+     assert.equal((finished.owned?.[seat]||[]).length,Math.min(3,round));
    await Promise.all(clients.map(c=>c.page.waitForFunction(r=>window.__brawlV3QA?.()?.game==='playing'&&window.__brawlV3QA?.()?.round===r,round+1,{timeout:20000})));
   }
   // Real accepted shot from seat blue1, rather than forcing a recoil position.
@@ -123,7 +134,7 @@ async function run(){
     await window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
       if(g?.phase!=='playing'||g.round!==5)return;
       const id=g.seats.blue1.id;
-      g.draft.owned.blue1=['recoil_shot','delayed_blast'];
+      g.draft.owned.blue1=['recoil_shot','split_round','delayed_blast'];
       g.stats[id].draftCards=[...g.draft.owned.blue1];
       return g;
     },undefined,false);
@@ -158,6 +169,15 @@ async function run(){
     'one recoil impulse moved blue1 backwards, clipped only by cover if necessary');
   assert(moved.seq>first.seq,'recoil belongs to accepted normal shot action');
   assert(moved.recoilUntil>0,'recoil cooldown stored in canonical combat state');
+
+  // A real Tank volley triggers exactly one center split in the host reducer.
+  await blue1.waitForFunction(async()=>{
+    const q=window.__brawlV3QA();if(!q?.roomId)return false;
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats/splits').once('value');
+    return (snap.val()||0)>=1;
+  },null,{timeout:12000,polling:300});
+  const splitAudit=await committedGame(code);
+  assert.equal(splitAudit.draftCardStats?.splits,1,'Tank five-pellet volley splits only its center exactly once');
 
   // Genuine 4-browser network regression: normal projectile contact schedules one
   // canonical delayed blast, resolves it on the host, and syncs enemy HP.

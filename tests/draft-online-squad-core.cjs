@@ -102,8 +102,40 @@ assert.equal(Object.keys(cleared.blastCooldown).length,0,'round reset clears coo
 assert(html.includes("until:t+700,damage:10,radius:55"),'blast delay/radius/damage numbers');
 assert(html.includes("hit(key+':'+victim,u.owner,victim,u.damage,{kind:'effect'})"),
  'secondary blast is effect damage and must NOT trigger another delayed explosion');
-assert(!src.includes("id:'split_round'")&&!src.includes("id:'ricochet'"),'other unimplemented shot modifiers are gated');
+assert(src.includes("id:'split_round'")&&!src.includes("id:'ricochet'"),'split implemented, ricochet gated');
 assert(html.includes("kind:u.normalAttack===true?'normal':'effect'"),'ULT does not receive recoil damage bonus');
+// Execute exact online-host split step in a pure VM: one central shot -> two 60%-damage children.
+const advStart=html.indexOf('  function draftAdvance(b,dt,g,targetHit,now){');
+const advEnd=html.indexOf('  function initialize(matchId,seats,mode,startAt){',advStart);
+assert(advStart>0&&advEnd>advStart,'exact host split physics must be embedded');
+const advance=vm.runInNewContext(
+ 'const W=1000,H=600,tankDamage=()=>10,wall=()=>false;'+
+ 'const BrawlProjectileV1={damage:b=>b.damage,advance:()=>true};'+
+ html.slice(advStart,advEnd)+'\n draftAdvance',
+ {},{timeout:1000});
+const splitGame={projectiles:{}},original={id:'volley:2',fireId:'volley',x:120,y:300,vx:600,vy:0,
+ dist:0,range:240,radius:6,damage:10,char:'gunner',splitCenter:true,blastEligible:true};
+assert.equal(advance(original,.25,splitGame,()=>false,1000),false,'center bullet replaced at halfway');
+const kids=Object.values(splitGame.projectiles);
+assert.equal(kids.length,2,'only two daughter projectiles');
+assert.deepEqual(kids.map(b=>b.damageScale),[.6,.6],'60% scale per child at final hit distance');
+assert(kids.every(b=>b.char==='gunner'&&b.damage===10),'split children retain original weapon damage rules');
+assert(html.includes('damage:BALANCE.bomberDamage*(half?.5:1)'),'Bomber mini-blasts must each do half damage');
+assert(html.includes('enhanced:!!s.armed&&(!half||i===0)'),'Bomber enhanced DOT may be applied only once');
+assert(html.includes('squadBlastAuthorize(draft,seat,actionId,t)'),'delayed blast must preserve one per original action');
+const singleVolley=squadNewMatch();
+singleVolley.owned.blue1=['followthrough'];
+const sameG={draft:singleVolley,seats:Object.fromEntries(seats.map(s=>[s,{id:s+'_id'}])),
+ stats:{red1_id:{char:'tank'}},hp:{red1_id:160}};
+const f1=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
+ kind:'normal',fireId:'volley-X'},8100);
+const f2=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
+ kind:'normal',fireId:'volley-X'},8200);
+const f3=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
+ kind:'normal',fireId:'volley-Y'},8300);
+assert.equal(f1.amount,10);
+assert.equal(f2.amount,10,'a second split child cannot trigger followthrough from the same original shot');
+assert.equal(f3.amount,13,'a separate new shot can trigger followthrough');
 assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
 assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
 assert.equal(squadReloadFactor({owned:{blue1:['moving_reload']}},'blue1',1,900,600),1);

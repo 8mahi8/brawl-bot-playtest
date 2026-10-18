@@ -524,6 +524,33 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
    return spread.map((d,i)=>({id:a.eventId+':'+i,owner:a.owner,ownerLife:s.life,team:team(seat),x:a.x+Math.cos(a.angle)*28,y:a.y+Math.sin(a.angle)*28,vx:Math.cos(a.angle+d)*BrawlWeaponV1.bulletSpeed,vy:Math.sin(a.angle+d)*BrawlWeaponV1.bulletSpeed,dist:0,range:chars[s.char].range,radius:s.char==='sniper'?5:6,damage:chars[s.char].damage,char:s.char}));
   }
  /* END SHARED RUNTIME COMBAT_ACTIONS */
+  // Online Tactical Draft projectile physics is part of the HOST reducer, not client prediction.
+  // Original bullets use the proven shared physics; only the central split bullet is handled here.
+  function draftAdvance(b,dt,g,targetHit,now){
+    if(!b.splitCenter)return BrawlProjectileV1.advance(b,dt,{width:W,height:H,rangeFirst:true,
+      wallHit:(x,y,r)=>wall(x,y,r),targetHit});
+    const speed=Math.hypot(b.vx,b.vy),distance=speed*dt,steps=Math.max(1,Math.ceil(distance/6));
+    const dx=b.vx*dt/steps,dy=b.vy*dt/steps,dd=distance/steps;
+    for(let i=0;i<steps;i++){
+      b.x+=dx;b.y+=dy;b.dist+=dd;
+      if(b.x<0||b.x>W||b.y<0||b.y>H||wall(b.x,b.y,b.radius)||b.dist>=b.range)return false;
+      if(targetHit(b))return false;
+      if(b.dist>=b.range*.5){
+        // Daughter IDs are stable under RTDB transaction retries and preserve one original action ID.
+        const a=Math.atan2(b.vy,b.vx);
+        for(const sign of [-1,1]){
+          const key=b.id+':child:'+sign,theta=a+sign*.21;
+          g.draftCardStats ||= {splits:0,blasts:0};
+          if(sign===-1)g.draftCardStats.splits++;
+          g.projectiles[key]={...b,id:key,splitCenter:false,splitChild:true,
+            damageScale:(b.damageScale||1)*.6,
+            vx:Math.cos(theta)*speed,vy:Math.sin(theta)*speed,spawnAt:now};
+        }
+        return false;
+      }
+    }
+    return true;
+  }
   function initialize(matchId,seats,mode,startAt){const hp={},stats={},motions={},combatAt={},battleStats={};
    for(const k of seatKeys){const p=seats[k];hp[p.id]=chars[p.char].hp;combatAt[p.id]=0;battleStats[p.id]={damage:0,kos:0,deaths:0};stats[p.id]={char:p.char,ammo:3,refillAt:0,ult:0,gadgets:mode==='area'?1:2,gadgetReadyAt:0,boostUntil:0,overdriveUntil:0,lastShotAt:0,lastActionSeq:0,life:0,armed:false,guardUntil:0,guardTargetId:'',guardTargetLife:-1,guardSaved:0};motions[p.id]={rev:0,...spawns[k]};}
    return {phase:'playing',mode,matchId,round:1,startAt,seats,hp,stats,motions,scores:{blue:0,red:0},clock:{t:0,wallAt:startAt},combatRev:0,hostToken:'',projectiles:{},scheduled:{},usedActions:{},usedHits:{},debuffs:{},respawns:{},protection:{},reveals:{},combatAt,battleStats,events:{},area:{blueMs:0,redMs:0,occupants:{blue:0,red:0},contested:false},gasNextAt:29000};
@@ -546,9 +573,23 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
       squadReloadFactor({owned:{[s.draftSeat]:s.draftCards||[]}},s.draftSeat,s.ammo,t,s.draftMotionSince||0);s.lastShotAt=a.at;
     if(char==='bomber'){
      const dst=landing(pos,a.angle,Math.min(a.reach||BALANCE.bomberRange,BALANCE.bomberRange)); // bombs may land beside/on walls, unlike jumps
-     g.scheduled[a.eventId]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key:a.eventId,x:dst.x,y:dst.y,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,damage:BALANCE.bomberDamage,radius:BALANCE.bomberRadius,enhanced:!!s.armed,normalAttack:true};s.armed=false;
+     const half=(s.draftCards||[]).includes('split_round');
+     const split=[-1,1],count=half?2:1;
+     for(let i=0;i<count;i++){
+       const key=half?a.eventId+':split:'+i:a.eventId,sign=half?split[i]:0;
+       const px=-Math.sin(a.angle)*30*sign,py=Math.cos(a.angle)*30*sign;
+       g.scheduled[key]={kind:'bomb',owner:a.owner,ownerLife:s.life,matchId:g.matchId,round:g.round,key,
+        fireId:a.eventId,blastEligible:(s.draftCards||[]).includes('delayed_blast'),
+        x:dst.x+px,y:dst.y+py,fromX:pos.x,fromY:pos.y,start:t,until:t+BALANCE.bomberFlightMs,
+        damage:BALANCE.bomberDamage*(half?.5:1),radius:BALANCE.bomberRadius*(half?.72:1),
+        enhanced:!!s.armed&&(!half||i===0),normalAttack:true};
+     }
+     s.armed=false;
     }else{const shots=burst({...a,x:pos.x,y:pos.y},s,g);
-       shots.forEach((b,i)=>{g.projectiles[b.id]={...b,spawnAt:t+(char==='gunner'?i*BrawlWeaponV1.gapMs(s.overdriveUntil>t):0)};});
+       shots.forEach((b,i)=>{g.projectiles[b.id]={...b,fireId:a.eventId,
+         splitCenter:(s.draftCards||[]).includes('split_round')&&i===Math.floor(shots.length/2),
+         blastEligible:(s.draftCards||[]).includes('delayed_blast'),
+         spawnAt:t+(char==='gunner'?i*BrawlWeaponV1.gapMs(s.overdriveUntil>t):0)};});
       }
     // Host-owned recoil motion; Tank 5 and Gunner 3 are ONE firing action.
     if((s.draftCards||[]).includes('recoil_shot')&&!(s.draftRecoilUntil>t)){
@@ -605,20 +646,16 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
    for(const [id,b]of Object.entries(g.projectiles)){
     if(b.spawnAt>t)continue;
     const activeMs=b.spawnAt>oldT?Math.max(0,t-b.spawnAt):dt;
-    const alive=BrawlProjectileV1.advance(b,activeMs/1000,{
-     width:W,height:H,rangeFirst:true,
-     wallHit:(x,y,r)=>wall(x,y,r),
-     targetHit:bullet=>{
+    const alive=draftAdvance(b,activeMs/1000,g,bullet=>{
       for(const k of seatKeys){
        const v=g.seats[k].id;if(team(k)===bullet.team||!canHit(v))continue;
        const p=targets[v];
        if(BrawlProjectileV1.hitCircle(bullet.x,bullet.y,p.x,p.y,R+bullet.radius)){
-        hit(bullet.id,bullet.owner,v,BrawlProjectileV1.damage(bullet,tankDamage),{kind:'normal'});return true;
+        hit(bullet.id,bullet.owner,v,BrawlProjectileV1.damage(bullet,tankDamage)*(bullet.damageScale||1),{kind:'normal',fireId:bullet.fireId});return true;
        }
       }
       return false;
-     }
-    });
+    },t);
     if(!alive)delete g.projectiles[id];
    }
    const due=Object.entries(g.scheduled).filter(([,u])=>u.until<=t);
@@ -643,7 +680,7 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
      if(u.kind==='laser'){const dx=Math.cos(u.angle)*900,dy=Math.sin(u.angle)*900,f=clamp(((p.x-u.x)*dx+(p.y-u.y)*dy)/(dx*dx+dy*dy),0,1);impact=Math.hypot(p.x-u.x-dx*f,p.y-u.y-dy*f)<=R+15;}
      else impact=Math.hypot(p.x-u.x,p.y-u.y)<(u.kind==='jump'?76:u.radius||65);
      if(impact)hit(key+':'+v,u.owner,v,u.kind==='jump'?42:u.kind==='laser'?60:u.damage,
-      {enhanced:!!u.enhanced,kind:u.normalAttack===true?'normal':'effect'});
+      {enhanced:!!u.enhanced,kind:u.normalAttack===true?'normal':'effect',fireId:u.fireId||null});
     }emit(u.kind==='bomb'?'bombImpact':u.kind,{owner:u.owner,x:u.x,y:u.y,angle:u.angle||0});
    }
    for(const [v,d]of Object.entries(g.debuffs)){
@@ -752,7 +789,8 @@ const BrawlProjectileV1=Object.freeze({
     {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
     {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
     {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'},
-    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常射撃の最初の命中から0.7秒後に10ダメージの小爆発（3秒CD）'}
+    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常射撃の最初の命中から0.7秒後に10ダメージの小爆発（3秒CD）'},
+    {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
@@ -854,7 +892,7 @@ function squadDamage(g,h,t){
     plus+=5;setCd(ownerSeat,'finisher',t+8000);
   }
   const prev=d.lastNormal[ownerSeat];
-  if(has(ownerSeat,'followthrough')&&prev?.victim===h.victim&&t-prev.at<=2500&&t>prev.at&&cd(ownerSeat,'followthrough')<=t){
+  if(has(ownerSeat,'followthrough')&&prev?.victim===h.victim&&t-prev.at<=2500&&t>prev.at&&(!h.fireId||prev.fireId!==h.fireId)&&cd(ownerSeat,'followthrough')<=t){
     plus+=3;setCd(ownerSeat,'followthrough',t+8000);
   }
   let amount=(h.amount+Math.min(7,plus))*(has(ownerSeat,'recoil_shot')?1.10:1);
@@ -864,7 +902,7 @@ function squadDamage(g,h,t){
   }
   amount=Math.max(0,Math.round(amount));
   if(amount>0){
-    d.lastNormal[ownerSeat]={at:t,victim:h.victim};
+    d.lastNormal[ownerSeat]={at:t,victim:h.victim,fireId:h.fireId||null};
     if(has(ownerSeat,'hit_stride')&&cd(ownerSeat,'hit_stride')<=t){
       d.strideUntil[ownerSeat]=t+1800;setCd(ownerSeat,'hit_stride',t+6000);
     }
