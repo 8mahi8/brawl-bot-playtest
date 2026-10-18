@@ -2543,6 +2543,17 @@ function drawArena(){
     ctx.beginPath();ctx.arc(cloud.x,cloud.y,cloud.radius,0,Math.PI*2);
     ctx.fill();ctx.stroke();ctx.restore();
   }
+  for(const beacon of Object.values(game?.gad2Beacons||{})){
+    if(beacon.kind!=='warp_beacon'||visualCombatNow()>=beacon.until)continue;
+    const allied=beacon.team===myTeam();
+    ctx.save();ctx.lineWidth=3;ctx.strokeStyle=allied?'#79f9d6':'#ff968d';
+    ctx.fillStyle=allied?'rgba(81,224,204,.18)':'rgba(255,123,108,.22)';
+    ctx.beginPath();ctx.arc(beacon.x,beacon.y,19,0,Math.PI*2);
+    ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.moveTo(beacon.x-6,beacon.y);ctx.lineTo(beacon.x,beacon.y-8);
+    ctx.lineTo(beacon.x+6,beacon.y);ctx.lineTo(beacon.x,beacon.y+8);
+    ctx.closePath();ctx.stroke();ctx.restore();
+  }
   // Mines are public when nearby, otherwise only teammates see their own traps.
   for(const mine of Object.values(game?.gad2Mines||{})){
     if(mine.kind!=='trap_mine'||visualCombatNow()>=mine.until)continue;
@@ -3005,10 +3016,12 @@ function squadGad2ButtonRefresh(){
  b.style.display=active?'block':'none';if(!active)return;
  const ready=game.draft?.gadget2ReadyAt?.[seat]||0,
    remaining=Math.max(0,ready-combatNow());
- b.disabled=remaining>0||!combatReady()||!alive(myId);
- const name=id==='smoke'?'煙幕':'地雷';
+ b.disabled=(remaining>0&&!activeBeacon)||!combatReady()||!alive(myId);
+ const beacon=id==='warp_beacon'&&game?.gad2Beacons?.[seat];
+ const activeBeacon=!!(beacon&&beacon.owner===myId&&beacon.until>combatNow());
+ const name=id==='smoke'?'煙幕':id==='warp_beacon'?(activeBeacon?'帰還':'ビーコン'):'地雷';
  b.textContent=remaining>0?name+'\n'+Math.ceil(remaining/1000)+'秒':'GAD2\n'+name;
- b.setAttribute('aria-label','GAD2 '+(id==='smoke'?'スモーク':'トラップマイン')+(remaining>0?' 再使用まで'+Math.ceil(remaining/1000)+'秒':''));
+ b.setAttribute('aria-label','GAD2 '+(id==='warp_beacon'?(activeBeacon?'ビーコンに帰還':'ワープビーコン'):id==='smoke'?'スモーク':'トラップマイン')+(remaining>0?' 再使用まで'+Math.ceil(remaining/1000)+'秒':''));
  squadGad2ButtonPosition();
 }
 function squadRender(){
@@ -3086,6 +3099,10 @@ window.__brawlDraftFireQA=(angle)=>{if(!Number.isFinite(angle)||!window.__brawlD
 window.__brawlDraftGad2QA=()=>({
  equipped:squadGad2Equipped(game?.draft,mySeat()),mineCount:Object.keys(game?.gad2Mines||{}).length,
  smokes:structuredClone(game?.gad2Smokes||{}),
+ beacons:structuredClone(game?.gad2Beacons||{}),
+ beaconPlaced:game?.draftCardStats?.gad2BeaconsPlaced||0,
+ warpReturned:game?.draftCardStats?.gad2WarpReturns||0,
+ beaconBroken:game?.draftCardStats?.gad2BeaconsBroken||0,
  smokePlaced:game?.draftCardStats?.gad2SmokesPlaced||0,
  mines:structuredClone(game?.gad2Mines||{}),
  placed:game?.draftCardStats?.gad2MinesPlaced||0,
