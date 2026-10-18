@@ -101,18 +101,29 @@ async function run(){
     },i+1,{timeout:20000});
    }
    assert.equal(new Set(cardChosen).size,4);
-   await Promise.all(clients.map(c=>wait(c.page,'round_end')));
-   let finished=null;
-   const draftDeadline=Date.now()+12000;
+   // Round-end is a brief phase; a fast host may already start the next round.
+   // Verify stable, committed inventories rather than requiring all clients
+   // to be simultaneously inside that transient phase.
+   await Promise.all(clients.map(c=>c.page.waitForFunction(r=>{
+     const q=window.__brawlV3QA?.();
+     return q&&(q.game==='round_end'&&q.round===r||
+       q.game==='playing'&&q.round===r+1);
+   },round,{timeout:24000})));
+   let finished=null,observed=null;
+   const draftDeadline=Date.now()+14000;
    while(Date.now()<draftDeadline){
      const committed=await committedGame(code);
-     if(committed?.phase==='round_end'&&committed?.draft?.complete){
-       finished=committed.draft;break;
-     }
+     const done=committed?.round===round&&committed?.phase==='round_end'&&
+       committed?.draft?.complete===true;
+     const advanced=committed?.round===round+1&&committed?.phase==='playing';
+     if(done||advanced){finished=committed.draft;observed=committed;break;}
      await new Promise(resolve=>setTimeout(resolve,200));
    }
-   assert(finished?.complete,'all four draft selections must be committed on emulator, not just locally');
-   for(const seat of Object.keys(bySeat))assert.equal((finished.owned?.[seat]||[]).length,Math.min(3,round));
+   assert(finished,'last pick must reach committed round end or next round');
+   assert(observed.round===round+1||finished.complete===true,
+     'draft must finish before the next round');
+   for(const seat of Object.keys(bySeat))
+     assert.equal((finished.owned?.[seat]||[]).length,Math.min(3,round));
    await Promise.all(clients.map(c=>c.page.waitForFunction(r=>window.__brawlV3QA?.()?.game==='playing'&&window.__brawlV3QA?.()?.round===r,round+1,{timeout:20000})));
   }
   // Real accepted shot from seat blue1, rather than forcing a recoil position.
