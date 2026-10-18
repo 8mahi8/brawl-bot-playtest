@@ -5,6 +5,7 @@ on:
       - 'draft/**'
       - 'tests/draft-mode-contract.cjs'
       - 'tests/draft-card-catalog.cjs'
+      - 'tests/draft-card-combat-sim.cjs'
       - 'sites/BRAWL_FRIENDS_1vs1.html'
       - 'sites/BRAWL_FRIENDS_2vs2.html'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
@@ -14,6 +15,7 @@ on:
       - 'draft/**'
       - 'tests/draft-mode-contract.cjs'
       - 'tests/draft-card-catalog.cjs'
+      - 'tests/draft-card-combat-sim.cjs'
       - 'sites/BRAWL_FRIENDS_1vs1.html'
       - 'sites/BRAWL_FRIENDS_2vs2.html'
       - 'network/emulator/ONLINE_E2E_TEST_ONLY.rules.json'
@@ -34,5 +36,7 @@ jobs:
         run: node tests/draft-mode-contract.cjs
       - name: Verify draft card pool, tactical counters and late-pick availability
         run: node tests/draft-card-catalog.cjs
+      - name: Verify deterministic card combat event engine, 18 effects and cooldowns
+        run: node tests/draft-card-combat-sim.cjs
       - name: Verify unchanged pinned public friend-online releases
         run: node tests/sites-friends-release-freeze.cjs
