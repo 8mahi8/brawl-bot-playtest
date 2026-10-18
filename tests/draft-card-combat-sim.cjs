@@ -124,6 +124,6 @@ s=t(s,{type:'round_start',round:2,at:4500});
 assert.equal(JSON.stringify(s.players.blue1.cooldowns),cooldown,'round transition preserves cooldowns');
 assert.equal(s.players.blue1.cards.length,3);
 assert.throws(()=>t(s,{type:'round_start',round:4,at:4600}),/next sequential round/);
-assert.throws(()=>begin({blue1:['duo_mark']},'1vs1.ko',roster1),/card not eligible/);
+assert.throws(()=>begin({host:['duo_mark']},'1vs1.ko',roster1),/card not eligible/);
 assert.throws(()=>t(begin(),{type:'respawn',seat:'host',at:1}),/KO cannot respawn/);
 console.log('PASS 18-card engine event tests: '+scenarios+' setups / '+events+' pure transitions; HP, caps, cooldowns, reveal, ally, KO, respawn, round continuity');
