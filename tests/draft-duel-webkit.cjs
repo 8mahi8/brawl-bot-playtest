@@ -84,7 +84,6 @@ const run=async()=>{
    assert.equal(beforeFinal.round,5);
    assert.equal(beforeFinal.owned.host.length,3,'no fourth slot may be added');
    assert.equal(beforeFinal.owned.guest.length,3,'BOT must replace instead of accumulating a fourth slot');
-   console.log('TRACE before final',JSON.stringify(beforeFinal));
    await forceKO('host');
    await f.locator('#appStage[data-scene="end"]').waitFor({timeout:8000});
    const finish=await qa();
