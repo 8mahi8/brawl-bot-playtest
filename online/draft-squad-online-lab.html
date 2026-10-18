@@ -2337,7 +2337,7 @@ function projectileStep(list,dt,authoritative){const hits=[];
   const activeSec=bullet.spawnAt>now-dt*1000?Math.max(0,(now-bullet.spawnAt)/1000):dt;
   const aliveBullet=BrawlProjectileV1.advance(bullet,activeSec,{
    width:W,height:H,rangeFirst:true,
-   wallHit:(x,y,r)=>WALLS.some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
+   wallHit:(x,y,r)=>[...WALLS,...draftVisibleWalls()].some(w=>x+r>w.x&&x-r<w.x+w.w&&y+r>w.y&&y-r<w.y+w.h),
    targetHit:b=>{
     if(!authoritative)return previewVisibleBulletCollision(b,b.x,b.y);
     for(const k of SEATS){
@@ -3134,7 +3134,7 @@ squadInit();applyFit();showScene('home');requestAnimationFrame(frame);
 window.__brawlDraftMoveQA=(x,y)=>{
   if(!combatReady()||!Number.isFinite(x)||!Number.isFinite(y)||
      x<R+4||x>W-R-4||y<R+4||y>H-R-4||
-     WALLS.some(w=>x>=w.x-R-3&&x<=w.x+w.w+R+3&&y>=w.y-R-3&&y<=w.y+w.h+R+3))return false;
+     [...WALLS,...draftVisibleWalls()].some(w=>x>=w.x-R-3&&x<=w.x+w.w+R+3&&y>=w.y-R-3&&y<=w.y+w.h+R+3))return false;
   local.x=x;local.y=y;sendPositionNow();return true;
 };
 // Read-only diagnostics used by the local mock test harness; no live-server controls.
