@@ -96,7 +96,7 @@ async function run(){
     await window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
       if(g?.phase!=='playing'||g.round!==5)return;
       const id=g.seats.blue1.id;
-      g.draft.owned.blue1=['recoil_shot',...(g.draft.owned.blue1||[]).filter(c=>c!=='recoil_shot').slice(0,2)];
+      g.draft.owned.blue1=['recoil_shot','delayed_blast'];
       g.stats[id].draftCards=[...g.draft.owned.blue1];
       return g;
     },undefined,false);
@@ -131,6 +131,58 @@ async function run(){
     'one recoil impulse moved blue1 backwards, clipped only by cover if necessary');
   assert(moved.seq>first.seq,'recoil belongs to accepted normal shot action');
   assert(moved.recoilUntil>0,'recoil cooldown stored in canonical combat state');
+
+  // Genuine 4-browser network regression: normal projectile contact schedules one
+  // canonical delayed blast, resolves it on the host, and syncs enemy HP.
+  const red1=bySeat.red1,redId=(await get(red1)).myId;
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftMoveQA(525,420)),true,
+    'blue attacker moves into a clear firing lane via the normal position sender');
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(640,420)),true,
+    'red enemy client moves into the same lane');
+  await blue1.waitForFunction(id=>{
+    const p=window.__brawlV3QA()?.positionValues?.[id];
+    return p&&Math.abs(p.x-640)<5&&Math.abs(p.y-420)<5;
+  },redId,{timeout:15000});
+  // Keep the target alive through Tank's full volley so blast resolution
+  // can be inspected before the KO round-ending transition cancels it.
+  await red1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(g?.phase!=='playing'||g.round!==5)return;
+      g.hp[q.myId]=500;return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(id=>window.__brawlV3QA()?.hp?.[id]===500,redId,{timeout:10000});
+  await blue1.waitForTimeout(1200);
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftFireQA(0)),true,
+    'real blue client sends a normal Tank shot toward the red client');
+  // Observe the committed effect hit from a NON-HOST browser, not speculative
+  // host transaction callbacks.
+  await red1.waitForFunction(async id=>{
+    const q=window.__brawlV3QA();
+    if(!q?.roomId)return false;
+    const s=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').once('value');
+    const g=s.val()||{},hits=Object.keys(g.usedHits||{});
+    return hits.some(k=>k.startsWith('draftBlast:')&&k.endsWith(':'+id));
+  },redId,{timeout:16000,polling:250});
+  const blastResult=await red1.evaluate(async id=>{
+    const q=window.__brawlV3QA();
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').once('value');
+    const g=snap.val();
+    return {hp:g.hp[id],phase:g.phase,used:Object.keys(g.draft?.blastUsed||{}),
+      applied:Object.keys(g.usedHits||{}).filter(k=>k.startsWith('draftBlast:')&&k.endsWith(':'+id)),
+      pending:Object.values(g.scheduled||{}).filter(u=>u.kind==='draftBlast').length};
+  },redId);
+  assert.equal(blastResult.phase,'playing','test target must remain alive until blast');
+  assert.equal(blastResult.used.length,1,'one blast authorization per firing action, not per pellet');
+  assert.equal(blastResult.applied.length,1,'delayed blast damages the red enemy exactly once');
+  assert.equal(blastResult.pending,0,'scheduled blast is consumed by host reducer');
+  assert(blastResult.hp<=490,'real enemy lost at least 10 HP from the delayed blast: '+JSON.stringify(blastResult));
+  for(const page of [host,...others]){
+    await page.waitForFunction(id=>(window.__brawlV3QA()?.hp?.[id]||Infinity)<=490,
+      redId,{timeout:13000});
+  }
+  console.log('PASS 2vs2 LIVE host blast: 1 original volley, 1 delayed effect, non-host RTDB HP and 4-client sync');
 
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
