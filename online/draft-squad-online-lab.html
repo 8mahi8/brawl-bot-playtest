@@ -550,6 +550,12 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
     }else{const shots=burst({...a,x:pos.x,y:pos.y},s,g);
        shots.forEach((b,i)=>{g.projectiles[b.id]={...b,spawnAt:t+(char==='gunner'?i*BrawlWeaponV1.gapMs(s.overdriveUntil>t):0)};});
       }
+    // Host-owned recoil motion; Tank 5 and Gunner 3 are ONE firing action.
+    if((s.draftCards||[]).includes('recoil_shot')&&!(s.draftRecoilUntil>t)){
+      const delta=move(pos,-Math.cos(a.angle)*60,-Math.sin(a.angle)*60);
+      if(Math.hypot(delta.x-pos.x,delta.y-pos.y)>.01)motion(g,a.owner,{...delta,a:a.angle});
+      s.draftRecoilUntil=t+1200;
+    }
    }else if(a.type==='gadget'){
     if(s.gadgets<1||char==='bomber'&&s.armed)return reject('gadget');
     s.gadgets--;if(g.mode==='area')s.gadgetReadyAt=t+(chars[char].gadgetRechargeMs||BALANCE.areaGadgetRechargeMs);
@@ -612,7 +618,8 @@ document.addEventListener('DOMContentLoaded',()=>window.BrawlOnlineConfig.prefil
     for(const k of seatKeys){const v=g.seats[k].id;if(team(k)===team(seatOf(g,u.owner))||!canHit(v))continue;const p=targets[v];let impact;
      if(u.kind==='laser'){const dx=Math.cos(u.angle)*900,dy=Math.sin(u.angle)*900,f=clamp(((p.x-u.x)*dx+(p.y-u.y)*dy)/(dx*dx+dy*dy),0,1);impact=Math.hypot(p.x-u.x-dx*f,p.y-u.y-dy*f)<=R+15;}
      else impact=Math.hypot(p.x-u.x,p.y-u.y)<(u.kind==='jump'?76:u.radius||65);
-     if(impact)hit(key+':'+v,u.owner,v,u.kind==='jump'?42:u.kind==='laser'?60:u.damage,{enhanced:!!u.enhanced});
+     if(impact)hit(key+':'+v,u.owner,v,u.kind==='jump'?42:u.kind==='laser'?60:u.damage,
+      {enhanced:!!u.enhanced,kind:u.kind==='bomb'?'normal':'effect'});
     }emit(u.kind==='bomb'?'bombImpact':u.kind,{owner:u.owner,x:u.x,y:u.y,angle:u.angle||0});
    }
    for(const [v,d]of Object.entries(g.debuffs)){
@@ -719,7 +726,8 @@ const BrawlProjectileV1=Object.freeze({
     {id:'hit_stride',name:'追撃歩法',family:'mobility',desc:'通常攻撃命中後1.8秒、移動+7%'},
     {id:'clutch_armor',name:'崖際装甲',family:'defense',desc:'HP35%以下で通常射撃-8%'},
     {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
-    {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'}
+    {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
@@ -812,7 +820,7 @@ function squadDamage(g,h,t){
   if(has(ownerSeat,'followthrough')&&prev?.victim===h.victim&&t-prev.at<=2500&&t>prev.at&&cd(ownerSeat,'followthrough')<=t){
     plus+=3;setCd(ownerSeat,'followthrough',t+8000);
   }
-  let amount=h.amount+Math.min(7,plus);
+  let amount=(h.amount+Math.min(7,plus))*(has(ownerSeat,'recoil_shot')?1.10:1);
   if(has(victimSeat,'clutch_armor')&&low)amount*=.92;
   if(has(victimSeat,'opening_guard')&&t-before>=6000&&cd(victimSeat,'opening_guard')<=t){
     amount-=7;setCd(victimSeat,'opening_guard',t+14000);
@@ -2045,7 +2053,7 @@ async function nextRoundIfDue(){if(roundBusy||!isAuthoritative()||game?.phase!==
   if(!cur||cur.matchId!==matchId||cur.phase!=='round_end'||cur.round!==oldRound)return;
   const n=engine(cur).initialize(matchId,resolveBotSeats(lobby.seats),'ko',now+1500);n.round=oldRound+1;n.scores=cur.scores;n.battleStats=cur.battleStats||n.battleStats;n.hostToken=myConnection;
    n.draft=squadNextRound(cur.draft);
-   for(const seat of SEATS){const id=n.seats[seat].id;n.stats[id].draftSeat=seat;n.stats[id].draftCards=squadHand(n.draft,seat);}
+   for(const seat of SEATS){const id=n.seats[seat].id;n.stats[id].draftSeat=seat;n.stats[id].draftCards=squadHand(n.draft,seat);n.stats[id].draftRecoilUntil=0;}
   for(const id of Object.keys(n.stats)){n.stats[id].ult=cur.stats[id].ult;n.stats[id].gadgets=cur.stats[id].gadgets;n.stats[id].life=cur.stats[id].life+1;}
   return n;
 
