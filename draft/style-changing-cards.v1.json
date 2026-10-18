@@ -68,11 +68,11 @@
       "id": "recoil_shot",
       "name": "反動射撃",
       "type": "shot_modifier",
-      "status": "adopted_approved_tuning_trial",
-      "preview": "通常射撃+10%威力。撃つと反対方向に小さく動く",
+      "status": "adopted_recoil_distance_60_in_bot_playtest",
+      "preview": "通常射撃+10%威力。撃つと反対方向へ60ゲーム座標分ノックバック（試遊版で増強）",
       "initialNumbers": {
         "normalFireDamageMultiplier": 1.1,
-        "recoilDistanceWorld": 22,
+        "recoilDistanceWorld": 60,
         "recoilCooldownMs": 1200
       },
       "safeguards": [
