@@ -69,7 +69,9 @@ async function run(){
   const clients=await Promise.all(Array.from({length:4},()=>open(browser,'squad')));all.push(...clients);
   const host=clients[0].page;
   await host.locator('#createBtn').click();
-  await host.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:17000});
+  try{await host.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:17000});}
+  catch(e){const diag=await host.evaluate(()=>({home:document.getElementById('homeStatus')?.textContent,qa:window.__brawlV3QA?.()?.roomId,db:window.BrawlOnlineConfig?.get?.()})).catch(z=>String(z));
+    throw Error('2vs2 beta Create Room diagnosis: '+JSON.stringify({diag,errors:clients[0].errors})+'; '+e.message);}
   const squad=(await host.evaluate(()=>window.__brawlV3QA())).roomId;
   for(const x of clients.slice(1)){
    await x.page.locator('#roomInput').fill(squad);
