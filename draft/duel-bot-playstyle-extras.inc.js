@@ -27,10 +27,18 @@
   function extraOther(side){return side==='host'?'guest':'host';}
   function extraGadget(side){
     if(!extraState)return null;
-    const available=extraGadIds.filter(id=>draftHas(side,id));
-    if(!available.length)return null;
-    if(!available.includes(extraState.gadgetEquipped[side]))extraState.gadgetEquipped[side]=available[0];
+    const available=(draftOwned[side]||[]).filter(id=>extraGadIds.includes(id));
+    if(!solo||!available.length)return null;
+    if(!available.includes(extraState.gadgetEquipped[side]))
+      extraState.gadgetEquipped[side]=available[available.length-1];
     return extraState.gadgetEquipped[side];
+  }
+  // The most recently acquired GAD2 card replaces the equipped GAD2, not the owned card slot.
+  function extraOnDraftPick(side,id){
+    if(!solo)return;
+    if(extraGadIds.includes(id))extraState.gadgetEquipped[side]=id;
+    else extraGadget(side); // Replacing a previously equipped card repairs the active slot.
+    extraButton();
   }
   function extraStartRound(){
     if(!solo)return;
@@ -79,15 +87,20 @@
     const b=document.createElement('button');b.id='extraGadgetBtn';
     b.type='button';b.className='action';b.textContent='GAD2';b.disabled=true;
     b.addEventListener('pointerdown',e=>{
+      if(startButtonDrag(e,'gadget2'))return;
       if(e.pointerType==='mouse'||b.disabled)return;
       e.preventDefault();e.stopPropagation();b.dataset.justTouched=String(performance.now());
       extraUseGadget('host');
     },{passive:false});
+    b.addEventListener('pointermove',moveButtonDrag);
+    b.addEventListener('pointerup',stopButtonDrag);
+    b.addEventListener('pointercancel',stopButtonDrag);
     b.addEventListener('click',e=>{
-      if(performance.now()-Number(b.dataset.justTouched||0)<650)return;
+      if(layoutEditing||performance.now()-Number(b.dataset.justTouched||0)<650)return;
       extraUseGadget('host');
     });
     document.getElementById('controls').prepend(b);
+    applyButtonLayout();
     window.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='f'&&!e.repeat)extraUseGadget('host');});
     extraButton();
   }
@@ -96,8 +109,8 @@
     const g=extraGadget('host'),remaining=Math.max(0,(extraState.gadgetCD.host||0)-time());
     const enabled=!!(g&&solo&&game?.phase==='playing'&&time()>=game.startAt&&!remaining);
     const name=g?draftById.get(g).name:'GAD2';
-    b.classList.toggle('hidden',!g||!solo||document.getElementById('appStage').dataset.scene!=='game');
-    b.disabled=!enabled;
+    b.classList.toggle('hidden',!layoutEditing&&(!g||!solo||document.getElementById('appStage').dataset.scene!=='game'));
+    b.disabled=layoutEditing?false:!enabled;
     const beacon=g==='warp_beacon'&&extraState.beacons.host;
     const txt=beacon?'RETURN':remaining>0?Math.ceil(remaining/1000)+'s':g?'GAD2':'GAD2';
     if(b.textContent!==txt)b.textContent=txt;
@@ -165,11 +178,11 @@
     const now=time();
     extraState.used['reveal:'+side]=now+700;
     if(solo&&draftHas(side,'recoil_shot')&&(extraState.recoilCD[side]||0)<=now){
-      const dx=-Math.cos(angle)*22,dy=-Math.sin(angle)*22;
-      // Reuse canonical player-wall collisions, moved in short non-tunneling steps.
-      for(let i=0;i<5;i++)moveWithWall(actor,dx/5,dy/5);
+      const dx=-Math.cos(angle)*60,dy=-Math.sin(angle)*60;
+      // Visible recoil: 60 world units, ten small safe steps; never bypass solid walls.
+      for(let i=0;i<10;i++)moveWithWall(actor,dx/10,dy/10);
       extraState.recoilCD[side]=now+1200;
-      fx.push({type:'dash',x:actor.x,y:actor.y,angle,ttl:.25,max:.25});
+      fx.push({type:'dash',x:actor.x,y:actor.y,angle,ttl:.36,max:.36});
     }
     return id;
   }
@@ -313,5 +326,10 @@
     gadget:extraGadget('host'),state:structuredClone(extraState),
     choose:(cards)=>{if(!Array.isArray(cards)||cards.length>3||cards.some(id=>!draftById.has(id)))return false;extraManualDeck=[...cards];return true;},
     useGadget:()=>extraUseGadget('host'),
+    setOffer:(ids)=>{
+      if(!solo||game?.phase!=='round_end'||!Array.isArray(ids)||ids.length!==4||
+         new Set(ids).size!==4||ids.some(id=>!draftById.has(id)))return false;
+      draftOffer=[...ids];draftOfferTaken=new Set();draftOverlayRender();return true;
+    },
     fire:(angle=0)=>{if(!solo||!isPlaying())return false;shoot(false,angle);return true;}
   });

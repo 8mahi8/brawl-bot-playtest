@@ -51,17 +51,70 @@ async function run(){
     assert.deepEqual(x.errors,[],'browser errors '+card);
     await x.page.close();
   }
+  // Test button placement and size in ONE editor while the player has not yet obtained GAD2.
+  const editor=await context.newPage(),editorErrors=[];
+  editor.on('pageerror',e=>editorErrors.push(e.message));
+  await editor.goto(pageFile);
+  await editor.waitForFunction(()=>typeof window.__brawlPlaystyleQA==='function');
+  await editor.locator('#soloBtn').click();
+  await editor.locator('#screenFitBtn').click();
+  await editor.locator('#editButtonLayout').click();
+  assert.equal(await editor.locator('#layoutOverlay').isVisible(),true);
+  assert.equal(await editor.locator('#extraGadgetBtn').isVisible(),true,'GAD2 must be draggable before acquiring any GAD2 card');
+  for(const id of ['gadgetSize','ultSize','gadget2Size'])
+    assert.equal(await editor.locator('#layoutOverlay #'+id).count(),1,'same panel slider '+id);
+  const startBox=await editor.locator('#extraGadgetBtn').boundingBox();
+  await editor.locator('#gadget2Size').evaluate(el=>{
+    el.value='82';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  const largeBox=await editor.locator('#extraGadgetBtn').boundingBox();
+  assert(largeBox.width-startBox.width>=20,'live GAD2 size update within layout editor');
+  await editor.mouse.move(largeBox.x+largeBox.width/2,largeBox.y+largeBox.height/2);
+  await editor.mouse.down();
+  await editor.mouse.move(largeBox.x+largeBox.width/2-90,largeBox.y+largeBox.height/2+35,{steps:4});
+  await editor.mouse.up();
+  const movedBox=await editor.locator('#extraGadgetBtn').boundingBox();
+  assert(movedBox.x<largeBox.x-40,'GAD2 must follow mouse/touch drag');
+  await editor.locator('#doneButtonLayout').click();
+  const saved=await editor.evaluate(()=>JSON.parse(localStorage.getItem('brawl_draft_bot_buttons_v2')||'null'));
+  assert.equal(saved?.gadget2?.size,82,'GAD2 size must persist');
+  assert(saved.gadget2.x<.8,'GAD2 position must persist');
+  await editor.reload();
+  await editor.waitForFunction(()=>typeof window.__brawlPlaystyleQA==='function');
+  await editor.locator('#soloBtn').click();
+  await editor.locator('#screenFitBtn').click();
+  await editor.locator('#editButtonLayout').click();
+  const reloadedBox=await editor.locator('#extraGadgetBtn').boundingBox();
+  assert(Math.abs(reloadedBox.x-movedBox.x)<=5,'GAD2 position restored after reload');
+  assert.equal(await editor.locator('#gadget2Size').inputValue(),'82');
+  assert.deepEqual(editorErrors,[]);
+  await editor.close();
+
+  // New draft gadget overwrites the EQUIPPED slot, keeping both owned cards.
+  const newer=await play(['portable_wall']);
+  assert.equal((await newer.page.evaluate(()=>window.__brawlPlaystyleQA().gadget)),'portable_wall');
+  assert.equal(await newer.page.evaluate(()=>window.__brawlDraftQA().forceKO('host')),true);
+  assert.equal(await newer.page.evaluate(()=>window.__brawlPlaystyleQA().setOffer(['trap_mine','smoke','hologram','warp_beacon'])),true);
+  await newer.page.locator('#draftOverlay button[data-draft-id="trap_mine"]').click();
+  const upgraded=await newer.page.evaluate(()=>window.__brawlPlaystyleQA());
+  assert.equal(upgraded.gadget,'trap_mine','latest acquired GAD2 must replace equipped GAD2');
+  assert(upgraded.owned.host.includes('portable_wall')&&upgraded.owned.host.includes('trap_mine'),'owned original GAD2 card retained');
+  await newer.page.waitForFunction(()=>window.__brawlDraftQA().round===2&&window.__brawlDraftQA().phase==='playing',null,{timeout:10000});
+  assert.equal((await newer.page.evaluate(()=>window.__brawlPlaystyleQA().gadget)),'trap_mine','new equipped GAD2 survives to next round');
+  assert.deepEqual(newer.errors,[]);
+  await newer.page.close();
+
   const gunner=await play(['split_round','recoil_shot','delayed_blast'],'gunner');
   assert.equal((await gunner.page.evaluate(()=>window.__brawlPlaystyleQA().owned.host)).length,3);
   // Fire a real Gunner volley: check one recoil impulse and actual split children.
   const before=await gunner.page.evaluate(()=>window.__brawlV29QA().local.x);
   assert.equal(await gunner.page.evaluate(()=>window.__brawlPlaystyleQA().fire(0)),true);
   const after=await gunner.page.evaluate(()=>window.__brawlV29QA().local.x);
-  assert(before-after>=17&&before-after<=25,'recoil must be one short backward move, not three impulses');
+  assert(before-after>=55&&before-after<=64,'stronger recoil must travel about 60 world units once per volley');
   await gunner.page.waitForFunction(()=>window.__brawlV29QA().shots.some(s=>s.splitChild),null,{timeout:3500});
   assert.deepEqual(gunner.errors,[]);
   await gunner.page.close();
-  console.log('PASS WebKit: solo match setup, 3-card selectable loadout, 5 different GAD2 effects, 7s hologram, 9-card registry, normal release isolation');
+  console.log('PASS WebKit: stronger 60-world recoil, 3-button live layout editing + persisted GAD2 drag/size, latest GAD2 draft pick overwrites equipment, solo effects, normal releases frozen');
  }finally{await context.close();await browser.close();}
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});

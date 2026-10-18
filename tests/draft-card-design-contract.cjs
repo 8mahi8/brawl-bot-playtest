@@ -14,7 +14,7 @@ assert(registry.rejected.some(x=>x.id==='tracking_marker'));
 assert.equal(registry.cards.filter(c=>c.type==='gadget2').length,5,'GAD2 candidates must share one on-screen slot');
 const find=id=>registry.cards.find(x=>x.id===id);
 assert.equal(find('recoil_shot').initialNumbers.normalFireDamageMultiplier,1.10);
-assert.equal(find('recoil_shot').initialNumbers.recoilDistanceWorld,22);
+assert.equal(find('recoil_shot').initialNumbers.recoilDistanceWorld,60);
 assert(find('recoil_shot').initialNumbers.recoilCooldownMs>=1000);
 assert.equal(find('split_round').initialNumbers.children,2);
 assert.equal(find('split_round').initialNumbers.splitsPerFireAction,1);

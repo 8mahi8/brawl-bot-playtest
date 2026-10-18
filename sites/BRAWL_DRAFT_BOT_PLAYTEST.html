@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>BRAWL | Tactical Draft BOT Playstyle Test — 17 Cards</title>
+  <title>BRAWL | Tactical Draft BOT Playstyle Test V0.2</title>
   <style>
     :root {color-scheme:dark;--accent:#54e7f2;--pink:#ff547e;--bg:#0c1520}
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
@@ -289,6 +289,19 @@
 .extraCardItem b,.extraCardItem small{display:block;font-size:11px;line-height:1.35}
 .extraCardItem small{color:#b6d1df}.extraCardItem input{flex-shrink:0}
 @media(max-width:540px){.extraCardGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Live position + size editor (GAD, ULT, GAD2). */
+#controls #extraGadgetBtn{width:var(--btn-size,56px);height:var(--btn-size,56px)}
+.layoutEditorHelp{width:min(590px,96%);padding:7px 11px}
+.layoutSizeGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;
+ padding:6px 0}
+.layoutSizeGrid label{display:flex;flex-direction:column;align-items:center;gap:2px;
+ background:#1c3b4e;border:1px solid #416e82;border-radius:7px;padding:4px;
+ font-size:11px;letter-spacing:0}
+.layoutSizeGrid input{width:100%;max-width:150px;height:22px;accent-color:#63dfea;touch-action:pan-x}
+@media(max-height:320px){.layoutEditorHelp{top:1px;padding:3px 8px}
+ .layoutEditorHelp small{margin:1px 0 2px}.layoutSizeGrid{padding:2px 0}
+ .layoutSizeGrid input{height:18px}}
 </style>
 </head>
 <body>
@@ -362,7 +375,20 @@
   </div>
   <div id="centerMsg"></div>
   <div id="controls" class="hidden"><button id="gadgetBtn" class="action" type="button" aria-label="ガジェット">GADGET (2)</button><button id="ultBtn" class="action" type="button" disabled aria-label="必殺技">ULT!</button></div>
-  <div id="layoutOverlay" class="hidden"><div class="layoutEditorHelp">BUTTON LAYOUT <small>ボタンをドラッグして位置を調整</small><button id="doneButtonLayout" type="button">配置を保存して戻る</button></div></div>
+  <div id="layoutOverlay" class="hidden">
+    <div class="layoutEditorHelp">BUTTON LAYOUT
+      <small>ボタンをドラッグで移動／下のスライダーでサイズ調整（すぐ反映）</small>
+      <div class="layoutSizeGrid">
+        <label for="gadgetSize">GAD <span id="gadgetSizeText">66px</span>
+          <input id="gadgetSize" type="range" min="44" max="100" step="2" value="66"></label>
+        <label for="ultSize">ULT <span id="ultSizeText">70px</span>
+          <input id="ultSize" type="range" min="44" max="100" step="2" value="70"></label>
+        <label for="gadget2Size">GAD2 <span id="gadget2SizeText">56px</span>
+          <input id="gadget2Size" type="range" min="44" max="100" step="2" value="56"></label>
+      </div>
+      <button id="doneButtonLayout" type="button">配置・サイズを保存して戻る</button>
+    </div>
+  </div>
   <div id="actionNotice" aria-live="polite"></div>
   <button id="botToolToggle" class="hidden" type="button">BOT設定 ⚙</button>
   <div id="botToolPanel" class="hidden">
@@ -389,12 +415,8 @@
     <p>Google Sitesで下側のボタンが切れるときは「縦幅」を小さくしてね。横幅はそのまま。対戦中も調整できるよ。</p>
     <label for="screenFitRange">縦幅 <span id="screenFitValue">70%</span></label>
     <input id="screenFitRange" type="range" min="40" max="100" step="5" value="70">
-    <p>ガジェットとウルトの大きさ・位置を個別に設定</p>
-    <label for="gadgetSize">ガジェット <span id="gadgetSizeText">66px</span></label>
-    <input id="gadgetSize" type="range" min="44" max="100" step="2" value="66">
-    <label for="ultSize">ウルト <span id="ultSizeText">70px</span></label>
-    <input id="ultSize" type="range" min="44" max="100" step="2" value="70">
-    <div class="fitActions"><button id="editButtonLayout" type="button">位置をドラッグで変更</button><button id="resetButtonLayout" type="button">配置を初期化</button></div>
+    <p>GAD・ULT・GAD2の位置と大きさは同じ編集画面で調整できるよ</p>
+    <div class="fitActions"><button id="editButtonLayout" type="button">ボタンの位置・サイズを調整</button><button id="resetButtonLayout" type="button">配置を初期化</button></div>
     <div class="fitActions"><button id="screenFitReset" type="button">縦幅 100%</button><button id="screenFitClose" type="button">閉じる</button></div>
   </div>
   </div>
@@ -2014,7 +2036,7 @@ const BrawlAbilityV1=Object.freeze({
     if(!game||!game.startAt)return 0;
     return clamp(((time()-game.startAt)/1000-GAS_DELAY)*GAS_SPEED,0,GAS_CAP);
   }
-  const BUTTON_LAYOUT_KEY='brawl_v28_buttons';
+  const BUTTON_LAYOUT_KEY='brawl_draft_bot_buttons_v2';
   let buttonLayout=null,layoutEditing=false,layoutDrag=null;
   function defaultButtonLayout(){
     const w=Math.max(180,$('appStage').clientWidth),h=Math.max(140,$('appStage').clientHeight);
@@ -2023,14 +2045,15 @@ const BrawlAbilityV1=Object.freeze({
     // Very short embeds reserve the upper zone for HUD and BOT/test controls.
     const gy=h<300?h-43:h-b-35;
     return {gadget:{x:clamp((w-r-117)/w,.08,.92),y:clamp(gy/h,.12,.90),size:66},
-      ult:{x:clamp((w-r-35)/w,.08,.92),y:clamp(gy/h,.12,.90),size:70}};
+      ult:{x:clamp((w-r-35)/w,.08,.92),y:clamp(gy/h,.12,.90),size:70},
+      gadget2:{x:clamp((w-r-117)/w,.08,.92),y:clamp((gy-92)/h,.12,.90),size:56}};
   }
   function ensureButtonLayout(){
     if(buttonLayout)return;
     buttonLayout=defaultButtonLayout();
     try{
       const saved=JSON.parse(localStorage.getItem(BUTTON_LAYOUT_KEY)||'null');
-      if(saved){for(const key of ['gadget','ult']){
+      if(saved){for(const key of ['gadget','ult','gadget2']){
         const p=saved[key];
         if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.size))
           buttonLayout[key]={x:clamp(p.x,0,1),y:clamp(p.y,0,1),size:clamp(p.size,44,100)};
@@ -2042,15 +2065,16 @@ const BrawlAbilityV1=Object.freeze({
     ensureButtonLayout();
     const w=$('appStage').clientWidth,h=$('appStage').clientHeight;
     if(w<1||h<1)return;
-    for(const key of ['gadget','ult']){
-      const p=buttonLayout[key],el=$(key==='gadget'?'gadgetBtn':'ultBtn');
+    for(const key of ['gadget','ult','gadget2']){
+      const p=buttonLayout[key],el=$(key==='gadget'?'gadgetBtn':key==='ult'?'ultBtn':'extraGadgetBtn');
+      if(!el)continue;
       const displaySize=Math.min(p.size,Math.max(40,h*.36),Math.max(40,w*.42));
       const x=clamp(p.x*w,displaySize/2+4,w-displaySize/2-4);
       const y=clamp(p.y*h,displaySize/2+4,h-displaySize/2-4);
       el.style.setProperty('--btn-size',displaySize+'px');
       el.style.left=(x-displaySize/2)+'px';el.style.top=(y-displaySize/2)+'px';
-      $(key==='gadget'?'gadgetSizeText':'ultSizeText').textContent=p.size+'px';
-      $(key==='gadget'?'gadgetSize':'ultSize').value=p.size;
+      $(key==='gadget'?'gadgetSizeText':key==='ult'?'ultSizeText':'gadget2SizeText').textContent=p.size+'px';
+      $(key==='gadget'?'gadgetSize':key==='ult'?'ultSize':'gadget2Size').value=p.size;
     }
   }
   function changeButtonSize(key,value){
@@ -2063,6 +2087,7 @@ const BrawlAbilityV1=Object.freeze({
     $('layoutOverlay').classList.remove('hidden');
     $('controls').classList.remove('hidden');$('controls').classList.add('editing');
     $('gadgetBtn').disabled=false;$('ultBtn').disabled=false;
+    extraButton(); // Show even a locked / not-yet-acquired GAD2 while arranging controls.
     applyButtonLayout();
   }
   function endButtonLayoutEdit(){
@@ -2070,7 +2095,7 @@ const BrawlAbilityV1=Object.freeze({
     layoutEditing=false;layoutDrag=null;saveButtonLayout();
     $('layoutOverlay').classList.add('hidden');$('controls').classList.remove('editing');
     $('controls').classList.toggle('hidden',$('appStage').dataset.scene!=='game');
-    updateHUD();
+    extraButton();updateHUD();
   }
   function startButtonDrag(e,key){
     if(!layoutEditing)return false;
@@ -2612,6 +2637,7 @@ const BrawlAbilityV1=Object.freeze({
       draftOwned[side]=draftOwned[side].filter(x=>x!==replaceId);
     }
     draftOwned[side].push(id);draftOfferTaken.add(id);draftTurn++;
+    extraOnDraftPick(side,id);
     draftHud();
     if(draftTurn>=draftQueue.length){
       const panel=document.getElementById('draftOverlay');
@@ -2773,10 +2799,18 @@ const BrawlAbilityV1=Object.freeze({
   function extraOther(side){return side==='host'?'guest':'host';}
   function extraGadget(side){
     if(!extraState)return null;
-    const available=extraGadIds.filter(id=>draftHas(side,id));
-    if(!available.length)return null;
-    if(!available.includes(extraState.gadgetEquipped[side]))extraState.gadgetEquipped[side]=available[0];
+    const available=(draftOwned[side]||[]).filter(id=>extraGadIds.includes(id));
+    if(!solo||!available.length)return null;
+    if(!available.includes(extraState.gadgetEquipped[side]))
+      extraState.gadgetEquipped[side]=available[available.length-1];
     return extraState.gadgetEquipped[side];
+  }
+  // The most recently acquired GAD2 card replaces the equipped GAD2, not the owned card slot.
+  function extraOnDraftPick(side,id){
+    if(!solo)return;
+    if(extraGadIds.includes(id))extraState.gadgetEquipped[side]=id;
+    else extraGadget(side); // Replacing a previously equipped card repairs the active slot.
+    extraButton();
   }
   function extraStartRound(){
     if(!solo)return;
@@ -2825,15 +2859,20 @@ const BrawlAbilityV1=Object.freeze({
     const b=document.createElement('button');b.id='extraGadgetBtn';
     b.type='button';b.className='action';b.textContent='GAD2';b.disabled=true;
     b.addEventListener('pointerdown',e=>{
+      if(startButtonDrag(e,'gadget2'))return;
       if(e.pointerType==='mouse'||b.disabled)return;
       e.preventDefault();e.stopPropagation();b.dataset.justTouched=String(performance.now());
       extraUseGadget('host');
     },{passive:false});
+    b.addEventListener('pointermove',moveButtonDrag);
+    b.addEventListener('pointerup',stopButtonDrag);
+    b.addEventListener('pointercancel',stopButtonDrag);
     b.addEventListener('click',e=>{
-      if(performance.now()-Number(b.dataset.justTouched||0)<650)return;
+      if(layoutEditing||performance.now()-Number(b.dataset.justTouched||0)<650)return;
       extraUseGadget('host');
     });
     document.getElementById('controls').prepend(b);
+    applyButtonLayout();
     window.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='f'&&!e.repeat)extraUseGadget('host');});
     extraButton();
   }
@@ -2842,8 +2881,8 @@ const BrawlAbilityV1=Object.freeze({
     const g=extraGadget('host'),remaining=Math.max(0,(extraState.gadgetCD.host||0)-time());
     const enabled=!!(g&&solo&&game?.phase==='playing'&&time()>=game.startAt&&!remaining);
     const name=g?draftById.get(g).name:'GAD2';
-    b.classList.toggle('hidden',!g||!solo||document.getElementById('appStage').dataset.scene!=='game');
-    b.disabled=!enabled;
+    b.classList.toggle('hidden',!layoutEditing&&(!g||!solo||document.getElementById('appStage').dataset.scene!=='game'));
+    b.disabled=layoutEditing?false:!enabled;
     const beacon=g==='warp_beacon'&&extraState.beacons.host;
     const txt=beacon?'RETURN':remaining>0?Math.ceil(remaining/1000)+'s':g?'GAD2':'GAD2';
     if(b.textContent!==txt)b.textContent=txt;
@@ -2911,11 +2950,11 @@ const BrawlAbilityV1=Object.freeze({
     const now=time();
     extraState.used['reveal:'+side]=now+700;
     if(solo&&draftHas(side,'recoil_shot')&&(extraState.recoilCD[side]||0)<=now){
-      const dx=-Math.cos(angle)*22,dy=-Math.sin(angle)*22;
-      // Reuse canonical player-wall collisions, moved in short non-tunneling steps.
-      for(let i=0;i<5;i++)moveWithWall(actor,dx/5,dy/5);
+      const dx=-Math.cos(angle)*60,dy=-Math.sin(angle)*60;
+      // Visible recoil: 60 world units, ten small safe steps; never bypass solid walls.
+      for(let i=0;i<10;i++)moveWithWall(actor,dx/10,dy/10);
       extraState.recoilCD[side]=now+1200;
-      fx.push({type:'dash',x:actor.x,y:actor.y,angle,ttl:.25,max:.25});
+      fx.push({type:'dash',x:actor.x,y:actor.y,angle,ttl:.36,max:.36});
     }
     return id;
   }
@@ -3059,6 +3098,11 @@ const BrawlAbilityV1=Object.freeze({
     gadget:extraGadget('host'),state:structuredClone(extraState),
     choose:(cards)=>{if(!Array.isArray(cards)||cards.length>3||cards.some(id=>!draftById.has(id)))return false;extraManualDeck=[...cards];return true;},
     useGadget:()=>extraUseGadget('host'),
+    setOffer:(ids)=>{
+      if(!solo||game?.phase!=='round_end'||!Array.isArray(ids)||ids.length!==4||
+         new Set(ids).size!==4||ids.some(id=>!draftById.has(id)))return false;
+      draftOffer=[...ids];draftOfferTaken=new Set();draftOverlayRender();return true;
+    },
     fire:(angle=0)=>{if(!solo||!isPlaying())return false;shoot(false,angle);return true;}
   });
 
@@ -3381,9 +3425,10 @@ const BrawlAbilityV1=Object.freeze({
     $('screenFitRange').addEventListener('input',e=>setScreenFit(e.target.value));
     $('gadgetSize').addEventListener('input',e=>changeButtonSize('gadget',e.target.value));
     $('ultSize').addEventListener('input',e=>changeButtonSize('ult',e.target.value));
+    $('gadget2Size').addEventListener('input',e=>changeButtonSize('gadget2',e.target.value));
     $('editButtonLayout').addEventListener('click',beginButtonLayoutEdit);
     $('doneButtonLayout').addEventListener('click',endButtonLayoutEdit);
-    $('resetButtonLayout').addEventListener('click',()=>{buttonLayout=defaultButtonLayout();applyButtonLayout();saveButtonLayout();});
+    $('resetButtonLayout').addEventListener('click',()=>{buttonLayout=defaultButtonLayout();applyButtonLayout();saveButtonLayout();extraButton();});
     $('screenFitReset').addEventListener('click',()=>setScreenFit(100));
     ensureButtonLayout();applyButtonLayout();
     $('screenFitClose').addEventListener('click',()=>toggleFitPanel(false));
