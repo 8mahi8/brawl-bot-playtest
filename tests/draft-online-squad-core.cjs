@@ -112,6 +112,19 @@ assert(html.includes("g.scheduled['blast:'+fireId]"),'one canonical blast slot p
 assert(html.includes("st.draftBlastReadyAt=t+3000"),'authoritative blast cooldown 3000ms');
 assert(html.includes("kind:'draft_blast'")&&html.includes("until:t+700"),'blast is a delayed authoritative effect');
 assert(html.includes("normalAttack:true"),'normal Bomber bombs use normal-hit modifiers');
+const singleVolley=squadNewMatch();
+singleVolley.owned.blue1=['followthrough'];
+const sameG={draft:singleVolley,seats:Object.fromEntries(seats.map(s=>[s,{id:s+'_id'}])),
+ stats:{red1_id:{char:'tank'}},hp:{red1_id:160}};
+const f1=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
+ kind:'normal',fireId:'volley-X'},8100);
+const f2=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
+ kind:'normal',fireId:'volley-X'},8200);
+const f3=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
+ kind:'normal',fireId:'volley-Y'},8300);
+assert.equal(f1.amount,10);
+assert.equal(f2.amount,10,'a second split child cannot trigger followthrough from the same original shot');
+assert.equal(f3.amount,13,'a separate new shot can trigger followthrough');
 assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
 assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
 assert.equal(squadReloadFactor({owned:{blue1:['moving_reload']}},'blue1',1,900,600),1);
