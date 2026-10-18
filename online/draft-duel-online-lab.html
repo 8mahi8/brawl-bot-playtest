@@ -1137,7 +1137,7 @@ const BrawlAbilityV1=Object.freeze({
     // Draft trial must never connect to real Firebase database.
     if(!['localhost','127.0.0.1'].includes(location.hostname))
       throw Error('開発用ドラフトはローカルエミュレーターでのみ動作します');
-    FIREBASE_DB_URL='https://brawl-draft-local-test-default-rtdb.firebaseio.com/';
+    FIREBASE_DB_URL='https://demo-brawl-draft-default-rtdb.firebaseio.com/';
     if(!window.firebase?.database){
       if(!onlineSdkPromise)onlineSdkPromise=(async()=>{
         for(const name of ['firebase-app-compat.js','firebase-database-compat.js']){
