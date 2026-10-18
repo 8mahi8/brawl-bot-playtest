@@ -9,7 +9,9 @@
     {id:'clutch_armor',name:'崖際装甲',family:'defense',desc:'HP35%以下で通常射撃-8%'},
     {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
     {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
-    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'}
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃威力+10%／反動で60後退（1.2秒CD）'},
+    {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'},
+    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常攻撃の初回命中後0.7秒で小爆発（3秒CD）'}
   ];
   const squadCardMap=new Map(SQUAD_DRAFT_CARDS.map(c=>[c.id,c]));
 
@@ -99,7 +101,8 @@ function squadDamage(g,h,t){
     plus+=5;setCd(ownerSeat,'finisher',t+8000);
   }
   const prev=d.lastNormal[ownerSeat];
-  if(has(ownerSeat,'followthrough')&&prev?.victim===h.victim&&t-prev.at<=2500&&t>prev.at&&cd(ownerSeat,'followthrough')<=t){
+  if(has(ownerSeat,'followthrough')&&prev?.victim===h.victim&&t-prev.at<=2500&&t>prev.at&&
+    (!h.fireId||prev.fireId!==h.fireId)&&cd(ownerSeat,'followthrough')<=t){
     plus+=3;setCd(ownerSeat,'followthrough',t+8000);
   }
   let amount=(h.amount+Math.min(7,plus))*(has(ownerSeat,'recoil_shot')?1.10:1);
@@ -109,7 +112,7 @@ function squadDamage(g,h,t){
   }
   amount=Math.max(0,Math.round(amount));
   if(amount>0){
-    d.lastNormal[ownerSeat]={at:t,victim:h.victim};
+    d.lastNormal[ownerSeat]={at:t,victim:h.victim,fireId:h.fireId||null};
     if(has(ownerSeat,'hit_stride')&&cd(ownerSeat,'hit_stride')<=t){
       d.strideUntil[ownerSeat]=t+1800;setCd(ownerSeat,'hit_stride',t+6000);
     }

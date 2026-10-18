@@ -77,6 +77,16 @@ assert.equal(recoilHit.amount,11,'host verified +10% applies to normal Gunner da
 const recoilULT=netDraftHit(recoil,{host:'gunner',guest:'gunner'},
   {host:100,guest:100},'guest',10,'host','effect',9000);
 assert.equal(recoilULT.amount,10,'recoil card cannot buff ULT or GAD damage');
+const noDouble=netDraftNewMatch();
+noDouble.owned.host=['followthrough'];
+const firstSplit=netDraftHit(noDouble,{host:'tank',guest:'tank'},{host:160,guest:160},
+  'guest',10,'host','normal',8000,'volley-A');
+const sameVolley=netDraftHit(firstSplit.draft,{host:'tank',guest:'tank'},{host:160,guest:150},
+  'guest',10,'host','normal',8150,'volley-A');
+assert.equal(sameVolley.amount,10,'split daughter in same fireActionId cannot earn followthrough bonus');
+const nextVolley=netDraftHit(sameVolley.draft,{host:'tank',guest:'tank'},{host:160,guest:140},
+  'guest',10,'host','normal',8500,'volley-B');
+assert.equal(nextVolley.amount,13,'new fireActionId may trigger followthrough');
 assert.equal(netDraftMotion(0,0,0,0,1/60,102,true),false);
 assert.equal(netDraftMotion(0,0,2,0,1/60,102,true),true);
 assert.equal(netDraftMotion(0,0,2,0,1/60,102,false),false);

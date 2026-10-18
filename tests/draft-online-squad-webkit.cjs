@@ -96,7 +96,7 @@ async function run(){
     await window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
       if(g?.phase!=='playing'||g.round!==5)return;
       const id=g.seats.blue1.id;
-      g.draft.owned.blue1=['recoil_shot',...(g.draft.owned.blue1||[]).filter(c=>c!=='recoil_shot').slice(0,2)];
+      g.draft.owned.blue1=['recoil_shot','split_round','delayed_blast'];
       g.stats[id].draftCards=[...g.draft.owned.blue1];
       return g;
     },undefined,false);
@@ -131,6 +131,66 @@ async function run(){
     'one recoil impulse moved blue1 backwards, clipped only by cover if necessary');
   assert(moved.seq>first.seq,'recoil belongs to accepted normal shot action');
   assert(moved.recoilUntil>0,'recoil cooldown stored in canonical combat state');
+
+  // A normal Tank/Gunner volley must split only the center bullet, twice total.
+  // The counter is incremented only from inside the HOST combat tick.
+  await blue1.waitForFunction(async()=>{
+    const s=window.__brawlV3QA();
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game/draftCardStats/splits').once('value');
+    return snap.val()>=1;
+  },null,{timeout:12000,polling:300});
+  const splitAudit=await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats').once('value');
+    return snap.val();
+  });
+  assert.equal(splitAudit.splits,1,'five-pellet Tank volley splits one center projectile exactly once');
+
+  // Move a genuine enemy CLIENT into range. The next volley must schedule
+  // exactly one delayed blast, even if several spread pellets connect.
+  const red1=bySeat.red1,redId=(await get(red1)).myId;
+  await red1.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:10000});
+  assert.equal(await red1.evaluate(()=>window.__brawlDraftMoveQA(640,420)),true,'test enemy moves to open shooting lane');
+  await blue1.waitForFunction(id=>{
+    const p=window.__brawlV3QA()?.positionValues?.[id];
+    return p&&Math.abs(p.x-640)<5&&Math.abs(p.y-420)<5;
+  },redId,{timeout:12000});
+  // Keep the target alive to observe the 700ms detonation. A Tank's five
+  // pellets can otherwise end KO immediately, rightly cancelling pending blasts.
+  await red1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
+      if(!g||g.phase!=='playing')return;
+      g.hp[q.myId]=500;return g;
+    },undefined,false);
+  });
+  await blue1.waitForFunction(id=>window.__brawlV3QA()?.hp?.[id]===500,
+    redId,{timeout:10000});
+  await blue1.waitForTimeout(1150);
+  assert.equal(await blue1.evaluate(()=>window.__brawlDraftFireQA(0)),true,'blue1 fires into actual online enemy');
+  await blue1.waitForFunction(async()=>{
+    const q=window.__brawlV3QA();
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats/blasts').once('value');
+    return (snap.val()||0)>=1;
+  },null,{timeout:15000,polling:350});
+  await blue1.waitForTimeout(450);
+  const result=await blue1.evaluate(async()=>{
+    const q=window.__brawlV3QA();
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').once('value');
+    return {audit:snap.val().draftCardStats,shotCount:Object.keys(snap.val().usedActions||{}).length};
+  });
+  assert.equal(result.audit.blasts,1,'one delayed blast per accepted fireActionId, not per pellet');
+  // IMPORTANT: read from RED1, a NON-HOST browser. The host's own Firebase
+  // transaction listener may see an uncommitted local speculative snapshot.
+  // waitForFunction only resolves for a truthy return. It is itself the assert:
+  // do not re-read a mutable Firebase snapshot after the wait has resolved.
+  await red1.waitForFunction(async()=>{
+    const q=window.__brawlV3QA();
+    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats/blastHits').once('value');
+    return (snap.val()||0)>=1;
+  },null,{timeout:14000,polling:350});
+  // Do not read the same transient hit a second time: a round-ending hit can
+  // replace the entire game state before another once(value) completes.
 
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();

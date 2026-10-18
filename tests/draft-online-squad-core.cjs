@@ -52,7 +52,7 @@ const occupied={blue1:['empty_sprint','moving_reload','last_shell'],blue2:['hit_
  red1:['opening_guard','clutch_armor','last_shell'],red2:['moving_reload','finisher','empty_sprint']};
 for(let round=5;round<12;round++){
  const order=squadOrder(round%2?'blue':'red',round-1),offer=squadOffer(occupied,'45678',round,order);
- assert(offer.length>=6&&offer.length<=9,'late-hand may expand offers safely across all nine cards');
+ assert(offer.length>=6&&offer.length<=11,'late-hand may expand offers safely across all nine cards');
  assert.equal(new Set(offer).size,offer.length);
  function walk(i,taken){
   if(i===4)return;
@@ -86,6 +86,45 @@ assert(html.includes("motion(g,a.owner,{...delta,a:a.angle})"),'recoil motion be
 assert(html.includes("s.draftRecoilUntil=t+1200"),'one movement per volley under 1.2 second cooldown');
 assert(html.includes("normalAttack:true"),'ordinary Bomber bombs distinguish from ultimate bomb fan');
 assert(html.includes("kind:u.normalAttack===true?'normal':'effect'"),'ULT does not receive recoil damage bonus');
+// Execute exact online-host split step in a pure VM: one central shot -> two 60%-damage children.
+const advStart=html.indexOf('  function draftAdvance(b,dt,g,targetHit,now){');
+const advEnd=html.indexOf('  function initialize(matchId,seats,mode,startAt){',advStart);
+assert(advStart>0&&advEnd>advStart,'exact host split physics must be embedded');
+const advance=vm.runInNewContext(
+ 'const W=1000,H=600,tankDamage=()=>10,wall=()=>false;'+
+ 'const BrawlProjectileV1={damage:b=>b.damage,advance:()=>true};'+
+ html.slice(advStart,advEnd)+'\n draftAdvance',
+ {},{timeout:1000});
+const splitGame={projectiles:{}},original={id:'volley:2',fireId:'volley',x:120,y:300,vx:600,vy:0,
+ dist:0,range:240,radius:6,damage:10,char:'gunner',splitCenter:true,blastEligible:true};
+assert.equal(advance(original,.25,splitGame,()=>false,1000),false,'center bullet replaced at halfway');
+const kids=Object.values(splitGame.projectiles);
+assert.equal(kids.length,2,'only two daughter projectiles');
+assert.deepEqual(kids.map(b=>b.damageScale),[.6,.6],'60% scale per child at final hit distance');
+assert(kids.every(b=>b.char==='gunner'&&b.damage===10),'split children retain original weapon damage rules');
+assert(html.includes('BrawlProjectileV1.damage(bullet,tankDamage)*(bullet.damageScale||1)'),
+  'Tank falloff and Sniper distance scaling must still be applied at impact');
+assert(kids.every(b=>b.fireId==='volley'&&!b.splitCenter&&b.splitChild&&b.range===240),
+ 'children inherit a common fireActionId and cannot split again');
+assert.equal(advance(kids[0],.05,splitGame,()=>false,1050),true,'daughter cannot divide again');
+assert.equal(Object.keys(splitGame.projectiles).length,2,'no exponential bullet growth');
+assert(html.includes("g.scheduled['blast:'+fireId]"),'one canonical blast slot per fire action');
+assert(html.includes("st.draftBlastReadyAt=t+3000"),'authoritative blast cooldown 3000ms');
+assert(html.includes("kind:'draft_blast'")&&html.includes("until:t+700"),'blast is a delayed authoritative effect');
+assert(html.includes("normalAttack:true"),'normal Bomber bombs use normal-hit modifiers');
+const singleVolley=squadNewMatch();
+singleVolley.owned.blue1=['followthrough'];
+const sameG={draft:singleVolley,seats:Object.fromEntries(seats.map(s=>[s,{id:s+'_id'}])),
+ stats:{red1_id:{char:'tank'}},hp:{red1_id:160}};
+const f1=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
+ kind:'normal',fireId:'volley-X'},8100);
+const f2=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
+ kind:'normal',fireId:'volley-X'},8200);
+const f3=squadDamage(sameG,{owner:'blue1_id',victim:'red1_id',amount:10,
+ kind:'normal',fireId:'volley-Y'},8300);
+assert.equal(f1.amount,10);
+assert.equal(f2.amount,10,'a second split child cannot trigger followthrough from the same original shot');
+assert.equal(f3.amount,13,'a separate new shot can trigger followthrough');
 assert.equal(squadMoveFactor(draft,'blue1',0,7500),1.07);
 assert.equal(squadReloadFactor({owned:{blue1:['last_shell','moving_reload']}},'blue1',0,1500,600),1.20);
 assert.equal(squadReloadFactor({owned:{blue1:['moving_reload']}},'blue1',1,900,600),1);

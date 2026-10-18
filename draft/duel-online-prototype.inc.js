@@ -10,12 +10,14 @@
     {id:'clutch_armor',name:'崖際装甲',family:'defense',desc:'HP35%以下で通常射撃-8%'},
     {id:'last_shell',name:'最後の装填',family:'reload',desc:'残弾0で装填+16%'},
     {id:'followthrough',name:'連続圧力',family:'pressure',desc:'同一敵に2.5秒以内に再命中で+3（8秒）'},
-    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃の威力+10%／一射撃で後方60移動（反動CD1.2秒）'}
+    {id:'recoil_shot',name:'反動射撃',family:'shot_mod',desc:'通常射撃の威力+10%／一射撃で後方60移動（反動CD1.2秒）'},
+    {id:'split_round',name:'分裂弾',family:'shot_mod',desc:'中心弾が射程半分で2分裂・子弾威力60%'},
+    {id:'delayed_blast',name:'遅延爆発',family:'shot_mod',desc:'通常攻撃の初回命中後0.7秒で小爆発（3秒CD）'}
   ];
   const netDraftCardMap=new Map(NET_DRAFT_CARDS.map(c=>[c.id,c]));
   function netDraftNewMatch(){
     return {owned:{host:[],guest:[]},cooldown:{host:{},guest:{}},
-      lastDamage:{host:0,guest:0},lastNormal:{host:-1,guest:-1},
+      lastDamage:{host:0,guest:0},lastNormal:{host:-1,guest:-1},lastFireId:{host:null,guest:null},
       hitStrideUntil:{host:0,guest:0},complete:false};
   }
   function netDraftOffer(owned,room,round){
@@ -63,15 +65,16 @@
   function netDraftNextRound(d,startAt){
     const old=d||netDraftNewMatch();
     return {...old,offered:[],taken:[],order:[],winner:null,turn:0,complete:false,
-      lastDamage:{host:startAt,guest:startAt},lastNormal:{host:-1,guest:-1},
+      lastDamage:{host:startAt,guest:startAt},lastNormal:{host:-1,guest:-1},lastFireId:{host:null,guest:null},
       hitStrideUntil:{host:0,guest:0}};
   }
-  function netDraftHit(d,chars,hp,victim,amount,owner,kind,now){
+  function netDraftHit(d,chars,hp,victim,amount,owner,kind,now,fireId=null){
     const updated=structuredClone(d||netDraftNewMatch());
     // RTDB omits empty arrays/objects: always normalize empty inventories and cooldown maps.
     updated.owned={host:[...(updated.owned?.host||[])],guest:[...(updated.owned?.guest||[])]};
     updated.cooldown={host:{...(updated.cooldown?.host||{})},guest:{...(updated.cooldown?.guest||{})}};
     updated.lastNormal={host:updated.lastNormal?.host??-1,guest:updated.lastNormal?.guest??-1};
+    updated.lastFireId={host:updated.lastFireId?.host??null,guest:updated.lastFireId?.guest??null};
     updated.lastDamage={host:updated.lastDamage?.host||0,guest:updated.lastDamage?.guest||0};
     updated.hitStrideUntil={host:updated.hitStrideUntil?.host||0,guest:updated.hitStrideUntil?.guest||0};
     const has=(side,id)=>updated.owned?.[side]?.includes(id);
@@ -87,7 +90,8 @@
       bonus+=5;updated.cooldown[attacker].finisher=now+8000;
     }
     if(has(attacker,'followthrough')&&updated.lastNormal[attacker]>=0&&
-      now>updated.lastNormal[attacker]&&now-updated.lastNormal[attacker]<=2500&&ready(attacker,'followthrough')){
+      now>updated.lastNormal[attacker]&&now-updated.lastNormal[attacker]<=2500&&
+      (!fireId||updated.lastFireId[attacker]!==fireId)&&ready(attacker,'followthrough')){
       bonus+=3;updated.cooldown[attacker].followthrough=now+8000;
     }
     const raw=(amount+Math.min(7,bonus))*(has(attacker,'recoil_shot')?1.10:1);
@@ -99,7 +103,7 @@
     const result=Math.max(0,Math.round(raw*(1-pct/100)-flat));
     updated.lastDamage[victim]=now;
     if(result>0){
-      updated.lastNormal[attacker]=now;
+      updated.lastNormal[attacker]=now;updated.lastFireId[attacker]=fireId;
       if(has(attacker,'hit_stride')&&ready(attacker,'hit_stride')){
         updated.hitStrideUntil[attacker]=now+1800;
         updated.cooldown[attacker].hit_stride=now+6000;
