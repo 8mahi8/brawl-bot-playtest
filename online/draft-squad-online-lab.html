@@ -1969,7 +1969,7 @@ function attachRoom(){unwatch();lastSnapshotAt=0;snapshotGap=0;lastSend=0;lastSe
  watch(room.child('lobby'),'value',snap=>{lobby=snap.val();lobbyReady=true;if(!lobby||!mySeat()){if(joined){status('席が無効になったため退出しました');setTimeout(()=>{if(room===thisRoom)leave(false)},1000)}return;}
   ingestPositions();renderLobby();reconcileRoomView();if(lobby.status==='waiting')tryStart();});
  watch(room.child('presence'),'value',snap=>{presence=snap.val()||{};presenceReady=true;ingestPositions();renderLobby();checkPaused();drainActions();tryStart();});
- watch(room.child('game'),'value',snap=>{const snapshotNow=performance.now();if(lastSnapshotAt)snapshotGap=snapshotNow-lastSnapshotAt;lastSnapshotAt=snapshotNow;const before=game;game=snap.val();reconcileHpPreviews(before,game);WALLS=game?.mode==='area'?AREA_WALLS:KO_WALLS;BUSHES=game?.mode==='area'?AREA_BUSHES:KO_BUSHES;gameReady=true;reconcileRoomView();squadRender();gadgetReceipts();if(roundResetKey===game?.matchId+':'+game?.round){syncMotion();renderCombatEvents();}
+ watch(room.child('game'),'value',snap=>{const snapshotNow=performance.now();if(lastSnapshotAt)snapshotGap=snapshotNow-lastSnapshotAt;lastSnapshotAt=snapshotNow;const before=game;game=snap.val();reconcileHpPreviews(before,game);WALLS=game?.mode==='area'?AREA_WALLS:KO_WALLS;BUSHES=game?.mode==='area'?AREA_BUSHES:KO_BUSHES;gameReady=true;reconcileRoomView();squadRender();gadgetReceipts();squadGad2Receipts();if(roundResetKey===game?.matchId+':'+game?.round){syncMotion();renderCombatEvents();}
  const cost=performance.now()-snapshotNow;workTiming.gameSnapshots++;workTiming.gameSnapshotTotalMs+=cost;workTiming.gameSnapshotMaxMs=Math.max(workTiming.gameSnapshotMaxMs,cost);});
  watch(room.child('positions'),'value',snap=>{const started=performance.now();presentationMetrics.positionSnapshots++;rawPositions=snap.val()||{};positionsReady=true;ingestPositions();reconcileRoomView('positions');workTiming.positionSnapshots++;workTiming.positionSnapshotTotalMs+=performance.now()-started;});
  watch(room.child('actions'),'child_added',snap=>{const a=snap.val();if(a&&snap.key)acceptAction({...a,eventId:snap.key});});
@@ -2164,6 +2164,43 @@ function gadgetReceipts(){
   if(char==='tank'&&receipt.status==='accepted')continue;const effects={tank:'味方とリンク！3.2秒間、自分と味方へのダメージを35%軽減',gunner:'ガンナー：弾を補充・3秒間加速！',sniper:'スナイパー：近距離の敵を吹き飛ばす！',bomber:'ボマー：次の弾を強化！'};
   $('skillToast').textContent=receipt.status==='accepted'?(effects[char]||'GAD発動！'):'GADを発動できませんでした';
   $('skillToast').classList.remove('hidden');gadgetToastExpiry=performance.now()+2200;
+ }
+}
+// Separate, bounded GAD2 receipt feedback. Failed placement was previously
+// silent on Safari even though the host wrote an explicit rejected receipt.
+const seenGad2Receipts=new Set();
+function squadGad2ReceiptMessage(receipt,card,beaconActive){
+ if(receipt.status==='accepted'){
+  if(card==='warp_beacon')return beaconActive?'ビーコンを設置！':'ビーコンに帰還！';
+  return {trap_mine:'地雷を設置！',smoke:'煙幕を展開！',
+   portable_wall:'壁を設置！',hologram:'分身を召喚！'}[card]||'GAD2発動！';
+ }
+ return {
+  gadget2_unavailable:'このGAD2は使用できません',
+  gadget2_cooldown:'GAD2はクールダウン中です',
+  gadget2_wall_placement:'ここには壁を設置できません',
+  gadget2_wall:'ここには地雷を置けません',
+  gadget2_occupied:'近くに人がいるため地雷を置けません',
+  gadget2_warp_blocked:'帰還地点がふさがっています',
+  gadget2_beacon_wall:'ここにはビーコンを設置できません',
+  origin:'通信ずれ：位置を確認してね',
+  inactive:'今はGAD2を使用できません',
+  scope:'ラウンド切替中は使用できません'
+ }[receipt.reason]||'GAD2を使用できませんでした';
+}
+function squadGad2Receipts(){
+ if(scene!=='game'||!game?.usedActions||!myId)return;
+ for(const [key,r] of Object.entries(game.usedActions)){
+  if(r?.owner!==myId||r?.type!=='gadget2'||seenGad2Receipts.has(key))continue;
+  seenGad2Receipts.add(key);
+  if(seenGad2Receipts.size>80)seenGad2Receipts.delete(seenGad2Receipts.values().next().value);
+  // On reconnect, do not replay old confirmations as fresh button actions.
+  if(!Number.isFinite(r.acceptedAt)||Math.abs(serverNow()-r.acceptedAt)>5000)continue;
+  const card=squadGad2Equipped(game.draft,mySeat());
+  const beacon=game.gad2Beacons?.[mySeat()];
+  $('skillToast').textContent=squadGad2ReceiptMessage(r,card,
+    !!(beacon&&beacon.owner===myId&&beacon.until>combatNow()));
+  $('skillToast').classList.remove('hidden');gadgetToastExpiry=performance.now()+1750;
  }
 }
 let hitConfirmUntil=0;
@@ -3267,6 +3304,8 @@ window.__brawlDraftFireReadyQA=()=>({
  });
 window.__brawlDraftFireQA=(angle)=>{if(!Number.isFinite(angle)||!window.__brawlDraftFireReadyQA().canShoot)return false;shootAngle(angle);return true;};
 window.__brawlDraftGad2QA=()=>({
+ lastToast:$('skillToast').textContent,
+ visibleToast:!$('skillToast').classList.contains('hidden'),
  equipped:squadGad2Equipped(game?.draft,mySeat()),mineCount:Object.keys(game?.gad2Mines||{}).length,
  smokes:structuredClone(game?.gad2Smokes||{}),
  beacons:structuredClone(game?.gad2Beacons||{}),
