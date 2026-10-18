@@ -3014,6 +3014,13 @@ window.__brawlDraftGad2QA=()=>({
  now:combatNow(),
  canUse:combatReady()&&!!squadGad2Equipped(game?.draft,mySeat())
 });
+window.__brawlDraftStealthQA=(targetId)=>({
+ ownState:ownStealthState(),
+ ownInSmoke:inDraftSmoke(local),
+ targetInSmoke:targetId?inDraftSmoke(targetPoint(targetId)):false,
+ canSeeTarget:targetId?canSeeEnemy(targetPoint(targetId),targetId):null,
+ now:combatNow()
+});
 window.__brawlDraftGad2FireQA=(angle)=>{
  if(!Number.isFinite(angle)||!window.__brawlDraftGad2QA().canUse)return false;
  sendAction('gadget2',angle);return true;
