@@ -83,7 +83,7 @@ async function realKORoundOne(bySeat,host,code){
   const q=window.__brawlV3QA();
   return window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game').transaction(g=>{
    if(g?.phase!=='playing'||g.round!==1)return;
-   for(const id of ids){g.hp[id]=1;g.combatAt[id]=g.clock.t;delete g.protection[id];}
+   for(const id of ids){g.hp[id]=1;g.combatAt[id]=g.clock.t;if(g.protection)delete g.protection[id];}
    return g; // *Never* write match outcomes or forced enemy deaths in this test.
   },undefined,false).then(r=>r.committed);
  },victimIds.map(q=>q.myId));
