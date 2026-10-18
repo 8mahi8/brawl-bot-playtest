@@ -1,0 +1,33 @@
+// Guard accepted card-design intent. This intentionally does not inject cards into runtime pools.
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const registry=JSON.parse(fs.readFileSync(path.join(root,'draft/style-changing-cards.v1.json'),'utf8'));
+assert.equal(registry.status,'approved_for_prototype_not_implemented');
+assert.equal(registry.cards.length,9);
+assert.equal(registry.newCardCount,9);
+const ids=registry.cards.map(c=>c.id);
+assert.equal(new Set(ids).size,9);
+assert(!ids.includes('tracking_marker'),'weak tracking-marker card must stay excluded');
+assert(registry.rejected.some(x=>x.id==='tracking_marker'));
+assert.equal(registry.cards.filter(c=>c.type==='gadget2').length,5,'GAD2 candidates must share one on-screen slot');
+const find=id=>registry.cards.find(x=>x.id===id);
+assert.equal(find('recoil_shot').initialNumbers.normalFireDamageMultiplier,1.10);
+assert.equal(find('recoil_shot').initialNumbers.recoilDistanceWorld,22);
+assert(find('recoil_shot').initialNumbers.recoilCooldownMs>=1000);
+assert.equal(find('delayed_blast').initialNumbers.blastPerFireAction,1);
+assert.equal(find('delayed_blast').initialNumbers.delayMs,700);
+assert(find('delayed_blast').safeguards.some(x=>x.includes('Tank5')));
+assert(find('delayed_blast').safeguards.some(x=>x.includes('Gunner3')));
+assert(registry.constraints.sameVolley.includes('fireActionId'));
+assert.equal(registry.constraints.noChangeToNormalMode,true);
+assert.equal(registry.constraints.showPrototypeCardsOnlyAfterEffectsImplemented,true);
+assert.equal(registry.constraints.inventoryLimit,3);
+const online1=fs.readFileSync(path.join(root,'draft/duel-online-prototype.inc.js'),'utf8');
+const online2=fs.readFileSync(path.join(root,'draft/squad-online-prototype.inc.js'),'utf8');
+for(const item of registry.cards) {
+ assert(!online1.includes("id:'"+item.id+"'"),'card must not appear in 1vs1 offering without behavior: '+item.id);
+ assert(!online2.includes("id:'"+item.id+"'"),'card must not appear in 2vs2 offering without behavior: '+item.id);
+}
+console.log('PASS 9 approved draft card ideas; tracking marker excluded; recoil +10%; delayed explosion 1/volley; gadget2 rules; no unimplemented offer injection');
