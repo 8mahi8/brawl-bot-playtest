@@ -24,6 +24,7 @@ assert.deepEqual(modifiers(s,'host',{at:1000}),{
 });
 let out=step(s,{type:'reload',seat:'host',dtMs:200,at:1000});s=out.state;
 assert.equal(out.result.modifiers.reloadSpeedPct,20);
+assert.throws(()=>step(s,{type:'reload',seat:'host',dtMs:200,at:1000}),/overlapping reload interval/);
 assert.equal(s.players.host.reloadProgress,200*1.2/contract.common.characters.gunner.reloadMs);
 s=t(s,{type:'move',seat:'host',moving:false,at:1010});
 assert.equal(modifiers(s,'host').reloadSpeedPct,16);
@@ -48,6 +49,8 @@ out=step(s,{type:'hit',attacker:'host',victim:'guest',kind:'normal',baseDamage:1
 trigger(out,'finisher');trigger(out,'followthrough');
 assert.equal(out.result.bonusDamage,7,'5+3 bonus capped at +7, not +8');
 assert.equal(out.result.damage,17);assert.equal(out.state.players.guest.hp,3);
+assert.equal(out.result.overkillDamage,0);
+assert.equal(out.result.preventedDamage,0);
 s=begin(owned([],['opening_guard']));
 out=step(s,{type:'hit',attacker:'host',victim:'guest',kind:'normal',baseDamage:20,at:6000});
 trigger(out,'opening_guard');assert.equal(out.result.damage,13);
