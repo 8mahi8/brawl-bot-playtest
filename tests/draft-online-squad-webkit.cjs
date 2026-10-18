@@ -182,16 +182,15 @@ async function run(){
   assert.equal(result.audit.blasts,1,'one delayed blast per accepted fireActionId, not per pellet');
   // IMPORTANT: read from RED1, a NON-HOST browser. The host's own Firebase
   // transaction listener may see an uncommitted local speculative snapshot.
-  await red1.waitForFunction(async()=>{
+  const confirmedHit=await red1.waitForFunction(async()=>{
     const q=window.__brawlV3QA();
     const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats/blastHits').once('value');
-    return (snap.val()||0)>=1;
+    return (snap.val()||0)>=1?snap.val():false;
   },null,{timeout:14000,polling:350});
-  assert((await red1.evaluate(async()=>{
-    const q=window.__brawlV3QA();
-    const snap=await window.firebase.database().ref('roomsDraft2v2/'+q.roomId+'/game/draftCardStats/blastHits').once('value');
-    return snap.val()||0;
-  }))>=1,'non-host peer confirms delayed explosion impact after RTDB commit');
+  assert((await confirmedHit.jsonValue())>=1,
+    'non-host peer has observed host-confirmed delayed explosion impact');
+  // Do not read the same transient hit a second time: a round-ending hit can
+  // replace the entire game state before another once(value) completes.
 
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
