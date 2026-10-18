@@ -6,9 +6,9 @@ const html=fs.readFileSync(path.join(root,'online/draft-squad-online-lab.html'),
 assert(html.includes(src),'Standalone squad HTML inlines pure draft reducer verbatim');
 for(const [i,m] of [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].entries())
  if(m[1].trim())new vm.Script(m[1],{filename:'draft-squad-lab#'+i});
-const names=['squadNewMatch','squadHand','squadOrder','squadOffer','squadBegin','squadPick','squadNextRound','squadDamage','squadMoveFactor','squadReloadFactor'];
+const names=['squadNewMatch','squadHand','squadOrder','squadOffer','squadBegin','squadPick','squadNextRound','squadDamage','squadMoveFactor','squadReloadFactor','squadBlastAuthorize'];
 const api=vm.runInNewContext(src+'\n({'+names.join(',')+'})',{},{timeout:2000});
-const {squadNewMatch,squadHand,squadOrder,squadOffer,squadBegin,squadPick,squadNextRound,squadDamage,squadMoveFactor,squadReloadFactor}=api;
+const {squadNewMatch,squadHand,squadOrder,squadOffer,squadBegin,squadPick,squadNextRound,squadDamage,squadMoveFactor,squadReloadFactor,squadBlastAuthorize}=api;
 const seats=['blue1','blue2','red1','red2'];
 assert.deepEqual(Array.from(squadOrder('blue',0)),['blue1','red1','red2','blue2']);
 assert.deepEqual(Array.from(squadOrder('blue',1)),['blue2','red2','red1','blue1']);
@@ -86,8 +86,19 @@ assert(html.includes("motion(g,a.owner,{...delta,a:a.angle})"),'recoil motion be
 assert(html.includes("s.draftRecoilUntil=t+1200"),'one movement per volley under 1.2 second cooldown');
 assert(html.includes("normalAttack:true"),'ordinary Bomber bombs distinguish from ultimate bomb fan');
 assert(src.includes("id:'delayed_blast'"),'delayed blast available to squad after host-side implementation');
-assert(html.includes("draft.blastUsed[actionId]"),'delayed blast one per original fireActionId');
-assert(html.includes("draft.blastCooldown[seat]=t+3000"),'ability has 3-second per-seat cooldown');
+assert(html.includes("squadBlastAuthorize(draft,seat,actionId,t)"),'authoritative hit invokes shared blast gate');
+const blast=squadNewMatch();blast.owned.blue1=['delayed_blast'];
+assert.equal(squadBlastAuthorize(blast,'blue1','fire100',1000),true,'first normal volley triggers blast');
+assert.equal(squadBlastAuthorize(blast,'blue1','fire100',1001),false,'five pellets of same volley do not duplicate');
+assert.equal(squadBlastAuthorize(blast,'blue1','fire101',1500),false,'three-second cooldown enforced');
+assert.equal(squadBlastAuthorize(blast,'blue1','fire102',4000),true,'next volley after cooldown triggers');
+assert.equal(squadBlastAuthorize(blast,'blue2','fire103',4000),false,'unowned card cannot be used');
+assert.equal(squadBlastAuthorize(blast,'missing','fire104',4000),false,'invalid seat cannot trigger');
+for(let i=0;i<110;i++)squadBlastAuthorize(blast,'blue1','fireLong'+i,7500+3100*i);
+assert(Object.keys(blast.blastUsed).length<=80,'used volley IDs must not grow unbounded');
+const cleared=squadNextRound(blast);
+assert.equal(Object.keys(cleared.blastUsed).length,0,'round reset clears dedupe');
+assert.equal(Object.keys(cleared.blastCooldown).length,0,'round reset clears cooldown');
 assert(html.includes("until:t+700,damage:10,radius:55"),'blast delay/radius/damage numbers');
 assert(html.includes("hit(key+':'+victim,u.owner,victim,u.damage,{kind:'effect'})"),
  'secondary blast is effect damage and must NOT trigger another delayed explosion');
