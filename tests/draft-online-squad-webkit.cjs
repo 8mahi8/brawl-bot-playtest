@@ -60,6 +60,10 @@ async function realKORoundOne(bySeat,host,code){
  const shooters=[bySeat.blue1,bySeat.blue2],victims=[bySeat.red1,bySeat.red2];
  const attackerIds=await Promise.all(shooters.map(get));
  const victimIds=await Promise.all(victims.map(get));
+ // Round phase changes before the startAt countdown; never drive players
+ // while combatReady intentionally rejects input before match start.
+ await Promise.all([...shooters,...victims].map(p=>p.waitForFunction(()=>
+  window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:15000})));
  for(let i=0;i<2;i++){
   const y=i===0?420:700;
   assert.equal(await shooters[i].evaluate(y=>window.__brawlDraftMoveQA(525,y),y),true,
