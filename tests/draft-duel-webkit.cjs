@@ -26,6 +26,7 @@ const run=async()=>{
    },html);
    const f=page.frameLocator('iframe'),qa=()=>f.locator('body').evaluate(()=>window.__brawlDraftQA());
    await f.locator('#soloBtn').waitFor({timeout:15000});
+   console.log('DEBUG offline CSS:',await f.locator('#createBtn').evaluate(el=>({display:getComputedStyle(el).display,style:el.getAttribute('style'),css:document.querySelector('style')?.textContent.slice(-1100)})));
    assert(await f.locator('#createBtn').isHidden(),'offline lab must not expose an online room');
    assert(await f.locator('#openJoinPanel').isHidden(),'offline lab must not expose online join');
    await f.locator('#soloBtn').tap();
