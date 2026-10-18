@@ -891,6 +891,60 @@ async function run(){
   },null,{timeout:12000})));
   console.log('PASS LIVE GAD2 hologram: 4 WebKit, autonomous movement, fake bullets zero HP/ULT, ally-only mark, enemy volley one-hit dissolve');
 
+  // Genuine connection teardown/resume: use RTDB goOffline() to trigger the
+  // SDK's onDisconnect presence cleanup, then reload the SAME Safari tab,
+  // preserving sessionStorage identity. No direct fixture deletion of presence.
+  const red2=bySeat.red2;
+  const red2Before=await get(red2);
+  assert.equal(red2Before.seat,'red2','choose nonhost for reconnect trial');
+  const beforeDisconnect=await committedGame(code);
+  assert.equal(beforeDisconnect.phase,'playing');
+  const formerConnection=red2Before.connectionId;
+  assert(formerConnection,'participant must have an active Firebase presence token');
+  await red2.evaluate(()=>window.firebase.database().goOffline());
+  await host.waitForFunction(()=>window.__brawlV3QA?.()?.online===3,
+    null,{timeout:12000});
+  await host.waitForFunction(()=>window.__brawlV3QA?.()?.game==='paused',
+    null,{timeout:12000});
+  const stopped=await committedGame(code);
+  assert.equal(stopped.phase,'paused','server must pause actual combat when one device leaves');
+  assert.equal(stopped.pausedFrom,'playing','pause remembers combat phase');
+  const freezeClock=stopped.clock.t;
+  await new Promise(resolve=>setTimeout(resolve,250));
+  const frozen=await committedGame(code);
+  assert.equal(frozen.clock.t,freezeClock,'combat clock cannot advance in paused phase');
+  await red2.reload({waitUntil:'domcontentloaded'});
+  await red2.waitForFunction(()=>typeof window.__brawlV3QA==='function',
+    null,{timeout:12000});
+  await red2.locator('#roomInput').fill(code);
+  await red2.locator('#joinBtn').click();
+  await red2.waitForFunction(({id,room})=>{
+    const q=window.__brawlV3QA?.();
+    return q?.myId===id&&q.seat==='red2'&&q.roomId===room&&
+      !!q.connectionId;
+  },{id:red2Before.myId,room:code},{timeout:17000});
+  await host.waitForFunction(()=>{const q=window.__brawlV3QA?.();
+    return q?.online===4&&q?.game==='playing'&&q?.round===5&&
+      !q.paused&&q.hostAuthorized;},null,{timeout:22000});
+  const resumed=await committedGame(code);
+  assert.equal(resumed.phase,'playing');
+  assert.equal(resumed.round,5);
+  assert.equal(resumed.scores.blue,beforeDisconnect.scores.blue);
+  assert.equal(resumed.scores.red,beforeDisconnect.scores.red);
+  assert.equal(resumed.seats.red2.id,red2Before.myId,
+    'reconnect MUST resume the old seat, not replace it with a fifth player');
+  const red2After=await get(red2);
+  assert.notEqual(red2After.connectionId,formerConnection,
+    'reconnected WebKit client owns a fresh connection token');
+  assert.deepEqual(red2After.draft.owned.red2,beforeDisconnect.draft.owned.red2,
+    'draft loadout remains unchanged through genuine WebKit socket drop');
+  await Promise.all(clients.map(c=>c.page.waitForFunction(()=>{
+    const q=window.__brawlV3QA?.();
+    return q?.online===4&&q?.game==='playing'&&q?.round===5;
+  },null,{timeout:16000})));
+  console.log('PASS LIVE disconnect/resume: RTDB onDisconnect, shared pause frozen clock, same seat and cards, four-WebKit match resume');
+
+
   await host.evaluate(()=>{
    const s=window.__brawlV3QA();
    return window.firebase.database().ref('roomsDraft2v2/'+s.roomId+'/game').transaction(g=>{
