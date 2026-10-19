@@ -18,6 +18,7 @@
 | **2vs2通常・ドラフト共通の受信・ホスト通信経路**：接続時のpresence登録・位置受信、発射イベントの処理、受領確認と再送制御、ホスト側の戦闘書込 | `shared/runtime/friends-2v2-presence-positions.inc.js`, `shared/runtime/friends-2v2-action-stream.inc.js`, `shared/runtime/friends-2v2-host-actions.inc.js` |
 | 上記ネットワーク処理の互換テスト・両モードへの反映防止 | `tests/friends-2v2-network-foundation.cjs` |
 | **V3.2 通常2vs2・ドラフト2vs2の共通戦闘/描画関数6件**：ホスト戦闘tick、位置書込、遠隔表示予測、HPプレビュー補正、自分の命中予測、戦闘FX再生 | `shared/runtime/friends-2v2-combat-presentation.inc.js`, `tests/friends-2v2-combat-presentation.cjs` |
+| **V3.3 共通入力**：1vs1と2vs2のPC照準を別々に共通化。2vs2の入力遅延計測・壁衝突つき移動も共有 | `shared/runtime/friends-duel-pointer-aim.inc.js`, `shared/runtime/friends-squad-pointer-aim.inc.js`, `shared/runtime/friends-squad-input-timing.inc.js`, `shared/runtime/friends-squad-collision-movement.inc.js`, `tests/friends-input-controls-v33.cjs` |
 | **通常2vs2／ドラフト2vs2共通の位置送信判定**：移動80ms・静止500msの既存周期を保持 | `shared/runtime/friends-2v2-position-publish.inc.js`, `tests/friends-2v2-position-cadence.cjs` |
 | 全4モードに共通のGAD/ULT（ドラフト2vs2のみGAD2）ボタン座標・サイズ・保存データ読み取り | `shared/runtime/friends-control-layout.inc.js` |
 | 2vs2通常・ドラフト共通の「相手弾先行表示＋ボマーの飛行」の唯一の編集元 | `shared/runtime/friends-2v2-early-shots.inc.js` |
@@ -36,6 +37,7 @@ node tests/friends-online-build.cjs
 node tests/friends-control-layout.cjs
 node tests/friends-2v2-network-foundation.cjs
 node tests/friends-2v2-combat-presentation.cjs
+node tests/friends-input-controls-v33.cjs
 node tests/friends-2v2-position-cadence.cjs
 
 # 新しい4モード単体HTMLを artifacts/friends-online/ のみに生成
@@ -86,3 +88,11 @@ node scripts/build-friends-online.cjs --sync
 旧PR #94の競合と抽出テスト失敗を避け、**すでに統合済みのV3通信処理を再抽出しない**。元の通常/ドラフト2vs2候補HTMLから文字列完全一致が証明できた6関数のみを共通ソースとして使う。元HTML・本番Firebase・現在のGoogle Sitesは一切変更せず、共通ソースを`--emit`の開発用HTMLへ組み込む。自動テストは関数重複の排除、4モード間の分離、両2vs2への伝播、旧入力HTMLの固定検査、ローカルFirebase＋WebKitでの実対戦を確認する。
 
 **共通化は保守性の改善であり、学校iPadの通信遅延が軽減したことの証拠ではない。** 実機測定が終わるまで、新ビルドのGoogle Sites公開は本人が明示的に決める。
+
+## V3.3: 既存の入力最適化を保った共通ソース（2026-10-20）
+
+通常／ドラフトの両1vs1で完全一致したPCポインタ照準処理3関数を duelPointerAim、通常／ドラフトの両2vs2で完全一致したPCポインタ照準処理3関数を squadPointerAim として、**通信・表示仕様を混ぜずに別モジュール化**する。さらに2vs2専用のイベントキュー遅延計測と、壁貫通を防ぐ移動サブステップも、既存コードと完全一致したブロックのみ共通ソース化。
+
+4モードのステージングHTML生成時、従来と**まったく同じ関数位置**でソースを入れ替える。古いHTML／Google Sites／本番Firebaseは変更しない。テストではソースの一致、1vs1と2vs2の分離、通常とドラフトへの単一編集伝播、PC照準・移動・入力タイムスタンプの各種境界値を確認する。既存の画面タッチハンドラや攻撃通信方式の全面再設計は行わない。
+
+この変更は保守性の改善であり、学校での2vs2弾ラグを実測で改善したと主張しない。
