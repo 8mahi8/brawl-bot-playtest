@@ -158,7 +158,12 @@ const FRIEND_INPUT_SPANS={
  duelPointerAim:{start:'  function pcPointer(e){',end:'\n\n\n  function alertStatus(',modes:['normal.1vs1','draft.1vs1']},
  squadPointerAim:{start:'function pcPointer(e){',end:'let pcShot=null;',modes:['normal.2vs2','draft.2vs2']},
  squadInputTiming:{start:'function inputEventQueueDelay(e,enteredAt=performance.now()){',end:'let inputTiming=',modes:['normal.2vs2','draft.2vs2']},
- squadCollisionMovement:{start:'function moveWithWall(dx,dy){',end:'// Only active motion needs the 80ms network cadence.',modes:['normal.2vs2','draft.2vs2']}
+ squadCollisionMovement:{start:'function moveWithWall(dx,dy){',end:'// Only active motion needs the 80ms network cadence.',modes:['normal.2vs2','draft.2vs2']},
+ duelTouchHandlers:{start:'  function pointerDown(e) {',end:'  function bindUltimateButton(){',modes:['normal.1vs1','draft.1vs1']},
+ duelActionButtons:{start:'  function bindUltimateButton(){',end:'  function soloDebug(',modes:['normal.1vs1','draft.1vs1']},
+ squadTouchHandlers:{start:"canvas.addEventListener('pointerdown'",end:'// Touch/pen triggers on pointerdown:',modes:['normal.2vs2','draft.2vs2']},
+ squadCombatAim:{start:'function enemyCandidate(){',end:'function boundedRemember(set,id){',modes:['normal.2vs2','draft.2vs2']},
+ squadTouchPaint:{start:'function recordFirstTouchCanvasPaint(paintedAt){',end:'let drawTiming=',modes:['normal.2vs2','draft.2vs2']}
 };
 // Preserve the original duel vs. squad input profiles. Replace their identical
 // function spans IN PLACE in staged HTML; unlike older shared presentation work,
