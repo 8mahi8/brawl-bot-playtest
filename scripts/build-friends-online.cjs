@@ -90,6 +90,8 @@ function patchControlLayout(html,source,modeName){
 // Extract only byte-identical 2v2 functions. Keep draft's specialized reducer,
 // skills, KO/round and UI outside this module. No common network traffic added.
 function patchSquadNetworkCombat(html,source,modeName){
+ assert(!html.includes('BEGIN GENERATED SHARED SQUAD NETWORK COMBAT'),
+   'duplicate shared squad runtime insertion: '+modeName);
  const re=/\/\* BEGIN SHARED SQUAD ([A-Za-z][A-Za-z0-9]*) \*\/\n([\s\S]*?)\n\/\* END SHARED SQUAD \1 \*\//g;
  const matched=[...source.matchAll(re)];
  assert.equal(matched.length,13,'shared squad network function count');
