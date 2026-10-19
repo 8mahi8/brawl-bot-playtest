@@ -23,6 +23,70 @@ function patchEarlyShots(html,canonical){
  const x=uniqueSpan(html,ACTION_BEGIN,ACTION_END,'squad early-shot visuals');
  return html.slice(0,x.begin)+canonical+html.slice(x.stop);
 }
+
+function replaceOnce(source,oldText,replacement,label){
+ const count=source.split(oldText).length-1;
+ assert.equal(count,1,'control layout anchor drift '+label+' ('+count+')');
+ return source.replace(oldText,replacement);
+}
+// Build-only transformation. The existing player-facing candidate HTML remains
+// byte-for-byte untouched until promotion is separately approved.
+function patchControlLayout(html,source,modeName){
+ assert(source.includes('const BrawlControlLayoutV1='),'layout module missing');
+ assert(!html.includes('BrawlControlLayoutV1'),'legacy source already contains injected layout module: '+modeName);
+ const isDuel=modeName.endsWith('1vs1');
+ const mark=isDuel?"  const BUTTON_LAYOUT_KEY='brawl_v28_buttons';":'const layoutDefault={gad:';
+ if(isDuel)html=replaceOnce(html,mark,source+'\n'+mark,modeName+' insert module');
+ else html=replaceOnce(html,mark,source+'\n'+mark,modeName+' insert module');
+ if(isDuel){
+  html=replaceOnce(html,
+   'buttonLayout[key]={x:clamp(p.x,0,1),y:clamp(p.y,0,1),size:clamp(p.size,44,100)};',
+   "buttonLayout[key]=BrawlControlLayoutV1.restorePoint(p,buttonLayout[key],'duel');",modeName+' saved settings');
+  html=replaceOnce(html,
+   'const displaySize=Math.min(p.size,Math.max(40,h*.36),Math.max(40,w*.42));',
+   "const displaySize=BrawlControlLayoutV1.displaySize(p,w,h,'duel');",modeName+' render size');
+  html=replaceOnce(html,
+   'const x=clamp(p.x*w,displaySize/2+4,w-displaySize/2-4);\n      const y=clamp(p.y*h,displaySize/2+4,h-displaySize/2-4);',
+   'const {x,y}=BrawlControlLayoutV1.center(p,w,h,displaySize);',modeName+' render center');
+  html=replaceOnce(html,
+   'const size=Math.min(p.size,Math.max(40,rect.height*.36),Math.max(40,rect.width*.42));',
+   "const size=BrawlControlLayoutV1.displaySize(p,rect.width,rect.height,'duel');",modeName+' drag size');
+  html=replaceOnce(html,
+   'p.x=clamp((e.clientX-rect.left)/rect.width,(size/2+4)/rect.width,1-(size/2+4)/rect.width);\n    p.y=clamp((e.clientY-rect.top)/rect.height,(size/2+4)/rect.height,1-(size/2+4)/rect.height);',
+   'Object.assign(p,BrawlControlLayoutV1.dragPoint(e,rect,size));',modeName+' drag coordinate');
+ }else{
+  html=replaceOnce(html,
+   'layout[k]={x:clamp(Number(v[k].x)||layoutDefault[k].x,.07,.93),y:clamp(Number(v[k].y)||layoutDefault[k].y,.12,.91),size:clamp(Number(v[k].size)||layoutDefault[k].size,44,100)}',
+   "layout[k]=BrawlControlLayoutV1.restorePoint(v[k],layoutDefault[k],'squad')",modeName+' squad saved settings');
+  if(modeName==='draft.2vs2')html=replaceOnce(html,
+   'layout.gad2={x:clamp(saved.x,.07,.93),y:clamp(saved.y,.12,.91),size:clamp(saved.size,44,100)};',
+   "layout.gad2=BrawlControlLayoutV1.restorePoint(saved,layoutDefault.gad2,'squad-gad2');",modeName+' gad2 settings');
+  html=replaceOnce(html,
+   "const size=Math.min(p.size,Math.max(30,Math.min(sw,sh)*.30));el.style.width=size+'px';el.style.height=size+'px';el.style.left=clamp(p.x*sw,size/2+4,sw-size/2-4)+'px';el.style.top=clamp(p.y*sh,size/2+4,sh-size/2-4)+'px';",
+   "const size=BrawlControlLayoutV1.displaySize(p,sw,sh,'squad'),{x,y}=BrawlControlLayoutV1.center(p,sw,sh,size);el.style.width=size+'px';el.style.height=size+'px';el.style.left=x+'px';el.style.top=y+'px';",
+   modeName+' mock action positions');
+  html=replaceOnce(html,
+   "sz=Math.min(p.size,Math.max(30,Math.min(sw,sh)*.30));e.style.width=sz+'px';e.style.height=sz+'px';e.style.left=clamp(p.x*sw,sz/2+4,sw-sz/2-4)+'px';e.style.top=clamp(p.y*sh,sz/2+4,sh-sz/2-4)+'px';",
+   "sz=BrawlControlLayoutV1.displaySize(p,sw,sh,'squad'),{x,y}=BrawlControlLayoutV1.center(p,sw,sh,sz);e.style.width=sz+'px';e.style.height=sz+'px';e.style.left=x+'px';e.style.top=y+'px';",
+   modeName+' live action positions');
+  html=replaceOnce(html,
+   'layout[k].x=clamp((ev.clientX-stage.left)/stage.width,(sz/2+4)/stage.width,1-(sz/2+4)/stage.width);\n layout[k].y=clamp((ev.clientY-stage.top)/stage.height,(sz/2+4)/stage.height,1-(sz/2+4)/stage.height);applyLayout();',
+   'Object.assign(layout[k],BrawlControlLayoutV1.dragPoint(ev,stage,sz));applyLayout();',
+   modeName+' mock drag positions');
+  if(modeName==='draft.2vs2'){
+   html=replaceOnce(html,
+    "const size=Math.min(p.size,Math.max(30,Math.min(sw,sh)*.30));\n b.style.width=size+'px';b.style.height=size+'px';",
+    "const size=BrawlControlLayoutV1.displaySize(p,sw,sh,'squad');\n  b.style.width=size+'px';b.style.height=size+'px';",
+    modeName+' gad2 size');
+   html=replaceOnce(html,
+    "b.style.left=clamp(p.x*sw,size/2+4,sw-size/2-4)+'px';\n b.style.top=clamp(p.y*sh,size/2+4,sh-size/2-4)+'px';",
+    "const {x,y}=BrawlControlLayoutV1.center(p,sw,sh,size);\n  b.style.left=x+'px';\n  b.style.top=y+'px';",
+    modeName+' gad2 position');
+  }
+ }
+ return html;
+}
+
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -48,10 +112,12 @@ function makeAll(moduleOverride=null){
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  assert(canonical.startsWith(ACTION_BEGIN)&&canonical.endsWith('\n'),'bad shared early-shot source');
  assert(!canonical.includes(ACTION_END),'source must not contain marker after block');
+ const layoutSource=read(spec.modules.controlLayout);
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
   if(mode.modules.includes('squadEarlyShots'))html=patchEarlyShots(html,canonical);
+  if(mode.modules.includes('controlLayout'))html=patchControlLayout(html,layoutSource,name);
   validate(html,name,mode);
   outputs[name]={mode,html,hash:crypto.createHash('sha256').update(html).digest('hex')};
  }
@@ -76,7 +142,12 @@ function main(flag){
  for(const [name,data] of Object.entries(output)){
   const {mode,html,hash}=data,original=read(mode.source);
   if(flag==='--check'){
-   assert.equal(original,html,'stale '+name+' standalone HTML; regenerate via --sync after shared edit');
+   const gitBlob=crypto.createHash('sha1').update('blob '+Buffer.byteLength(original)+'\0'+original).digest('hex');
+   assert.equal(gitBlob,mode.sourceGitBlob,'unreviewed candidate source drift: '+name+'; update manifest snapshot after review');
+   if(mode.modules.includes('squadEarlyShots'))
+    assert.equal(patchEarlyShots(original,read(spec.modules.squadEarlyShots)),original,
+      '2v2 candidate source has stale early-shot runtime: '+name);
+   assert(html.includes('BrawlControlLayoutV1'),'control module must be inlined for '+name);
    console.log('PASS '+name+' canonical source and standalone ('+hash.slice(0,12)+')');
   }else if(flag==='--emit'){
    const dest=safeTarget(mode.output);fs.mkdirSync(path.dirname(dest),{recursive:true});
@@ -86,12 +157,13 @@ function main(flag){
    if(!mode.modules.includes('squadEarlyShots'))continue;
    assert(mode.source.endsWith('_LATENCY_CANDIDATE.html'),'sync may update only two latency candidates');
    assert(!spec.forbiddenWritePrefixes.includes(mode.source),'public release blocked');
-   fs.writeFileSync(path.join(root,mode.source),html);
-   console.log('SYNC shared early-shot runtime -> '+mode.source+' sha256='+hash);
+   const sourceSynced=patchEarlyShots(original,read(spec.modules.squadEarlyShots));
+   fs.writeFileSync(path.join(root,mode.source),sourceSynced);
+   console.log('SYNC shared early-shot only (no UI migration) -> '+mode.source);
   }
  }
  if(flag==='--check')console.log('PASS four-mode reproducible standalone friends foundation, no public writes');
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchControlLayout,sharedSection,safeTarget,main};

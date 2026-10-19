@@ -9,7 +9,9 @@ const normal=makeAll();
 assert.deepEqual(Object.keys(normal),['normal.1vs1','normal.2vs2','draft.1vs1','draft.2vs2']);
 const seenProtocols=new Set();
 for(const [name,{mode,html}] of Object.entries(normal)){
- assert.equal(html,load(mode.source),'build must retain byte-identical behavior initially: '+name);
+ assert.notEqual(html,load(mode.source),'staging UI must use shared control runtime: '+name);
+ assert(html.includes('const BrawlControlLayoutV1='),'control runtime inlined into '+name);
+ assert(html.includes('BrawlControlLayoutV1.displaySize('),'shared geometry is invoked: '+name);
  validate(html,name,mode);
  assert(!seenProtocols.has(mode.protocol),'each mode has distinct protocol: '+name);
  seenProtocols.add(mode.protocol);
@@ -35,5 +37,5 @@ for(const name of ['normal.1vs1','draft.1vs1'])
 assert.throws(()=>patchEarlyShots('empty',original),/missing block/);
 for(const malformed of ['../sites/public.html','artifacts/friends-online/../../sites/public.html','sites/BRAWL_FRIENDS_2vs2.html'])
  assert.throws(()=>safeTarget(malformed),/staging|unsafe|escaped/);
-assert.equal(load(spec.modes['normal.1vs1'].source),normal['normal.1vs1'].html,'read-only test no mutations');
-console.log('PASS four standalone friends builds reproducible; one shared 2vs2 source change reaches both and cannot change 1vs1/public releases');
+assert(!load(spec.modes['normal.1vs1'].source).includes('BrawlControlLayoutV1'),'published/source HTML retained unchanged');
+console.log('PASS four shared-control friend builds; early-shot update reaches both 2vs2; legacy source and published pages unchanged');
