@@ -87,6 +87,27 @@ function patchControlLayout(html,source,modeName){
  return html;
 }
 
+// Extract only byte-identical 2v2 functions. Keep draft's specialized reducer,
+// skills, KO/round and UI outside this module. No common network traffic added.
+function patchSquadNetworkCombat(html,source,modeName){
+ const re=/\/\* BEGIN SHARED SQUAD ([A-Za-z][A-Za-z0-9]*) \*\/\n([\s\S]*?)\n\/\* END SHARED SQUAD \1 \*\//g;
+ const matched=[...source.matchAll(re)];
+ assert.equal(matched.length,13,'shared squad network function count');
+ const names=new Set();
+ for(const match of matched){
+  const name=match[1],body=match[2];
+  assert(!names.has(name),'duplicate network function '+name);names.add(name);
+  assert(new RegExp('(?:async\\s+)?function\\s+'+name+'\\s*\\(').test(body),
+    'invalid shared function definition '+name);
+  html=replaceOnce(html,body,'',modeName+' remove legacy duplicate '+name);
+ }
+ html=replaceOnce(html,'const layoutDefault={gad:',
+   '/* BEGIN GENERATED SHARED SQUAD NETWORK COMBAT */\n'+source.trimEnd()+
+   '\n/* END GENERATED SHARED SQUAD NETWORK COMBAT */\nconst layoutDefault={gad:',
+   modeName+' insert shared squad runtime');
+ return html;
+}
+
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -107,16 +128,18 @@ function validate(html,modeName,mode){
  assert(html.includes('window.__brawlV3QA')||html.includes('window.__brawlV29QA'),'QA hook '+modeName);
  return true;
 }
-function makeAll(moduleOverride=null){
+function makeAll(moduleOverride=null,squadNetworkOverride=null){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  assert(canonical.startsWith(ACTION_BEGIN)&&canonical.endsWith('\n'),'bad shared early-shot source');
  assert(!canonical.includes(ACTION_END),'source must not contain marker after block');
+ const squadNetworkSource=squadNetworkOverride===null?read(spec.modules.squadNetworkCombat):squadNetworkOverride;
  const layoutSource=read(spec.modules.controlLayout);
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
   if(mode.modules.includes('squadEarlyShots'))html=patchEarlyShots(html,canonical);
+  if(mode.modules.includes('squadNetworkCombat'))html=patchSquadNetworkCombat(html,squadNetworkSource,name);
   if(mode.modules.includes('controlLayout'))html=patchControlLayout(html,layoutSource,name);
   validate(html,name,mode);
   outputs[name]={mode,html,hash:crypto.createHash('sha256').update(html).digest('hex')};
@@ -166,4 +189,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchControlLayout,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchControlLayout,patchSquadNetworkCombat,sharedSection,safeTarget,main};
