@@ -20,6 +20,11 @@ on:
       - 'shared/runtime/friends-2v2-action-stream.inc.js'
       - 'shared/runtime/friends-2v2-host-actions.inc.js'
       - 'shared/runtime/friends-2v2-combat-presentation.inc.js'
+      - 'shared/runtime/friends-duel-pointer-aim.inc.js'
+      - 'shared/runtime/friends-squad-pointer-aim.inc.js'
+      - 'shared/runtime/friends-squad-input-timing.inc.js'
+      - 'shared/runtime/friends-squad-collision-movement.inc.js'
+      - 'tests/friends-input-controls-v33.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -51,6 +56,11 @@ on:
       - 'shared/runtime/friends-2v2-action-stream.inc.js'
       - 'shared/runtime/friends-2v2-host-actions.inc.js'
       - 'shared/runtime/friends-2v2-combat-presentation.inc.js'
+      - 'shared/runtime/friends-duel-pointer-aim.inc.js'
+      - 'shared/runtime/friends-squad-pointer-aim.inc.js'
+      - 'shared/runtime/friends-squad-input-timing.inc.js'
+      - 'shared/runtime/friends-squad-collision-movement.inc.js'
+      - 'tests/friends-input-controls-v33.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -88,6 +98,7 @@ jobs:
           node tests/friends-2v2-position-cadence.cjs
           node tests/friends-2v2-network-foundation.cjs
           node tests/friends-2v2-combat-presentation.cjs
+          node tests/friends-input-controls-v33.cjs
           node tests/friends-2v2-latency-visual.cjs
           node --check tests/draft-friends-beta-webkit.cjs
           node --check tests/friends-2v2-normal-latency-webkit.cjs
