@@ -3,7 +3,8 @@
   "purpose": "Stage four standalone online variants with shared source injected at build time; pin input snapshots; do not touch live Google Sites or public HTML.",
   "modules": {
     "squadEarlyShots": "shared/runtime/friends-2v2-early-shots.inc.js",
-    "controlLayout": "shared/runtime/friends-control-layout.inc.js"
+    "controlLayout": "shared/runtime/friends-control-layout.inc.js",
+    "squadNetworkCombat": "shared/runtime/friends-squad-network-combat.inc.js"
   },
   "modes": {
     "normal.1vs1": {
@@ -23,7 +24,8 @@
       "protocol": 3012,
       "modules": [
         "squadEarlyShots",
-        "controlLayout"
+        "controlLayout",
+        "squadNetworkCombat"
       ],
       "sourceGitBlob": "e5c2c5b6a3c02b15fc02731b87ed83dc7d337106"
     },
@@ -44,7 +46,8 @@
       "protocol": 13012,
       "modules": [
         "squadEarlyShots",
-        "controlLayout"
+        "controlLayout",
+        "squadNetworkCombat"
       ],
       "sourceGitBlob": "350ffa778bf4249bbe096e3e2bc1d8aaa60c9ca7"
     }
