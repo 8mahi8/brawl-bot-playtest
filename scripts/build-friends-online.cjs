@@ -11,6 +11,8 @@ const spec=JSON.parse(fs.readFileSync(path.join(root,'shared/friends-online-mode
 const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const ACTION_BEGIN='// Never feed early remote visuals into host collision, hit preview or RTDB.';
 const ACTION_END='\n function visualCombatNow()';
+const POSITION_BEGIN='// Only active motion needs the 80ms network cadence.';
+const POSITION_END='function update(dt,movementDt=dt)';
 const safeOutputPrefix='artifacts/friends-online/';
 function uniqueSpan(html,start,end,label){
  const begin=html.indexOf(start),stop=html.indexOf(end,begin+start.length);
@@ -24,6 +26,11 @@ function patchEarlyShots(html,canonical){
  return html.slice(0,x.begin)+canonical+html.slice(x.stop);
 }
 
+// Build-only position cadence extraction; game HTML inputs remain immutable.
+function patchPositionPublish(html,canonical){
+ const x=uniqueSpan(html,POSITION_BEGIN,POSITION_END,'2vs2 position publish policy');
+ return html.slice(0,x.begin)+canonical+html.slice(x.stop);
+}
 function replaceOnce(source,oldText,replacement,label){
  const count=source.split(oldText).length-1;
  assert.equal(count,1,'control layout anchor drift '+label+' ('+count+')');
@@ -124,17 +131,22 @@ function validate(html,modeName,mode){
  assert(html.includes('window.__brawlV3QA')||html.includes('window.__brawlV29QA'),'QA hook '+modeName);
  return true;
 }
-function makeAll(moduleOverride=null){
+function makeAll(moduleOverride=null,positionOverride=null){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  assert(canonical.startsWith(ACTION_BEGIN)&&canonical.endsWith('\n'),'bad shared early-shot source');
  assert(!canonical.includes(ACTION_END),'source must not contain marker after block');
  const layoutSource=read(spec.modules.controlLayout);
+ const positionSource=positionOverride===null?read(spec.modules.squadPositionPublish):positionOverride;
+ assert(positionSource.startsWith(POSITION_BEGIN)&&positionSource.endsWith('\n'),
+   'invalid 2v2 position policy source');
+ assert(!positionSource.includes(POSITION_END),'position policy overlaps next function');
  const squadNetwork=Object.fromEntries(SQUAD_NETWORK_PARTS.map(([key])=>[key,read(spec.modules[key])]));
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
   if(mode.modules.includes('squadEarlyShots'))html=patchEarlyShots(html,canonical);
+  if(mode.modules.includes('squadPositionPublish'))html=patchPositionPublish(html,positionSource);
   if(mode.modules.includes('controlLayout'))html=patchControlLayout(html,layoutSource,name);
   if(mode.modules.includes('squadActionStream')){
    assert(SQUAD_NETWORK_PARTS.every(([key])=>mode.modules.includes(key)),'incomplete network module set '+name);
@@ -179,6 +191,9 @@ function main(flag){
      assert.equal(legacyBlob,spec.legacySquadNetworkBlobs[key],
       'original 2v2 network baseline modified '+name+' / '+key);
     }
+   if(mode.modules.includes('squadPositionPublish'))
+    assert.equal(patchPositionPublish(original,read(spec.modules.squadPositionPublish)),original,
+      '2v2 candidate has stale position policy: '+name);
    assert(html.includes('BrawlControlLayoutV1'),'control module must be inlined for '+name);
    console.log('PASS '+name+' canonical source and standalone ('+hash.slice(0,12)+')');
   }else if(flag==='--emit'){
@@ -198,4 +213,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,sharedSection,safeTarget,main};
