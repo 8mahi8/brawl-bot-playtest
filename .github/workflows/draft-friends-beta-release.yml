@@ -6,6 +6,7 @@ on:
       - 'tests/draft-friends-beta-*.cjs'
       - 'tests/friends-four-mode-readiness.cjs'
       - 'tests/friends-online-build.cjs'
+      - 'tests/friends-online-emit.cjs'
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
@@ -24,6 +25,7 @@ on:
       - 'tests/draft-friends-beta-*.cjs'
       - 'tests/friends-four-mode-readiness.cjs'
       - 'tests/friends-online-build.cjs'
+      - 'tests/friends-online-emit.cjs'
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
@@ -61,6 +63,17 @@ jobs:
           node tests/friends-2v2-latency-visual.cjs
           node --check tests/draft-friends-beta-webkit.cjs
           node --check tests/friends-2v2-normal-latency-webkit.cjs
+      - name: Generate the four friend modes from checked shared source (staging only)
+        run: |
+          node scripts/build-friends-online.cjs --emit
+          node tests/friends-online-emit.cjs
+      - name: Keep the standalone four-mode HTMLs available for manual review
+        uses: actions/upload-artifact@v4
+        with:
+          name: brawl-friends-four-mode-staging-html
+          path: artifacts/friends-online/*.html
+          retention-days: 7
+          if-no-files-found: error
       - name: Install Firebase local emulator and Safari-like WebKit
         run: |
           npm install --no-save --package-lock=false firebase-tools@14.24.0 playwright-core@1.56.1
