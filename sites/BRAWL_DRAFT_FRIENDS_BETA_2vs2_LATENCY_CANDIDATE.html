@@ -2840,11 +2840,24 @@ function observeShotAction(a,localPrediction){
  earlyShotStats.incoming++;if(char==='bomber')earlyShotStats.bomber++;
 }
 function renderEarlyShots(now){
+ // Bomber visual handoff must not leak state after the host removes an impact.
+ for(const key of earlyBombSmoothing.keys())if(!game?.scheduled?.[key])earlyBombSmoothing.delete(key);
  for(const [id,p] of earlyShots){
   const a=p.a,age=p.initial+now-p.created,receipt=game?.usedActions?.[id];
   if(!game||game.phase!=='playing'||paused||!connected||
     a.matchId!==game.matchId||a.round!==game.round||receipt?.status==='rejected'||age>950){
    earlyShots.delete(id);continue;
+  }
+  // Once host has committed and ticked past the accepted action, an absent
+  // projectile/schedule means it already hit a wall, player, or ground.
+  // Never keep a client-only ghost projectile alive after that final snapshot.
+  if(receipt?.status==='accepted'&&Number.isFinite(receipt.acceptedAt)&&
+     (game.clock?.wallAt||0)>=receipt.acceptedAt+80){
+   const stillActive=p.char==='bomber'?
+    Object.values(game.scheduled||{}).some(u=>u.kind==='bomb'&&
+     (u.key===id||u.fireId===id||u.key?.startsWith(id+':'))):
+    Object.keys(game.projectiles||{}).some(key=>key.startsWith(id+':'));
+   if(!stillActive){earlyShots.delete(id);continue;}
   }
   if(p.char==='bomber'){
    const official=Object.values(game.scheduled||{}).filter(u=>u.kind==='bomb'&&

@@ -18,6 +18,11 @@ for(let i=0;i<2;i++){
  assert(html.includes('renderEarlyShots(performance.now())'),names[i]+' preview drawn each rendered game frame');
  assert(html.includes('earlyShots.clear();earlyBombSmoothing.clear();'),names[i]+' stale animation cleared on restart/pause');
  assert(html.includes("receipt?.status==='rejected'"),names[i]+' denied action has no continuing fake shot');
+ assert(html.includes("receipt?.status==='accepted'")&&html.includes("game.clock?.wallAt||0")&&html.includes("if(!stillActive){earlyShots.delete(id);continue;}"),
+  names[i]+' host-committed and already-impacted bullets cannot linger as local ghost visuals');
+ assert(html.includes('earlyBombSmoothing.keys()')&&html.includes('earlyBombSmoothing.delete(key)'),
+  names[i]+' impact-cleared bombs cannot leak visual handoff state');
+
  assert(html.includes('bomberSmoothPoint(u,f,dt)'),names[i]+' bomb smoothly hands off to host');
  assert(html.includes('window.__brawlEarlyShotsQA'),names[i]+' read-only in-browser telemetry');
 }
