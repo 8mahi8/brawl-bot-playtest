@@ -7,7 +7,10 @@ if(!/^(127\.0\.0\.1|localhost):9000$/.test(process.env.FIREBASE_DATABASE_EMULATO
  throw Error('Requires 127.0.0.1 Firebase emulator');
 const dir=path.resolve(__dirname,'..'),sdk=path.join(dir,'artifacts/firebase-sdk');
 const fakeUrl='https://demo-brawl-draft-beta-default-rtdb.firebaseio.com/';
-let src=fs.readFileSync(path.join(dir,'sites/BRAWL_FRIENDS_2vs2_LATENCY_CANDIDATE.html'),'utf8');
+const normalSource=process.env.BRAWL_NORMAL_2V2_STAGING==='1'
+ ?'artifacts/friends-online/normal-2vs2.html'
+ :'sites/BRAWL_FRIENDS_2vs2_LATENCY_CANDIDATE.html';
+let src=fs.readFileSync(path.join(dir,normalSource),'utf8');
 const before=' db=firebase.database();';
 assert.equal(src.split(before).length-1,1,'unique SDK hook: fail closed');
 src=src.replace(before,before+" db.useEmulator('127.0.0.1',9000);");
