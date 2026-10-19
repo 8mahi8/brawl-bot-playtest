@@ -131,8 +131,17 @@ function squadPresentationBlocks(source){
 function patchSquadPresentation(html,source,modeName){
  assert(!html.includes('BEGIN GENERATED SHARED 2V2 PRESENTATION'),'already injected: '+modeName);
  const parts=squadPresentationBlocks(source);
- for(const part of parts)
+ for(const part of parts){
+  if(!html.includes(part.body)){
+   const start=html.indexOf((part.name==='processCombatTick'?'async ':'')+'function '+part.name+'(');
+   const sample=start<0?'':html.slice(start,start+part.body.length);
+   let at=0;while(at<sample.length&&sample[at]===part.body[at])at++;
+   throw Error('V3.2 shared function drift '+modeName+'/'+part.name+
+    ' at='+at+' originalPos='+start+' expected='+JSON.stringify(part.body.slice(Math.max(0,at-55),at+95))+
+    ' actual='+JSON.stringify(sample.slice(Math.max(0,at-55),at+95)));
+  }
   html=replaceOnce(html,part.body,'',modeName+' remove legacy '+part.name);
+ }
  const marker='const layoutDefault={gad:';
  return replaceOnce(html,marker,
   '/* BEGIN GENERATED SHARED 2V2 PRESENTATION */\n'+source.trimEnd()+
