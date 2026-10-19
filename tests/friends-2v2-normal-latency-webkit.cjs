@@ -63,6 +63,12 @@ async function run(){
   },null,{timeout:24000})));
   await Promise.all([lookup.blue1,lookup.red2].map(page=>page.waitForFunction(
     ()=>window.__brawlV3QA?.()?.combatReadyNow,null,{timeout:18000})));
+  if(process.env.BRAWL_STAGE_2V2==='1'){
+   for(const page of [lookup.red1,lookup.blue2]){
+    const r=await page.evaluate(()=>window.__brawlLatencyV35QA?.start(250));
+    assert(r?.running&&r.localOnly,'staged browser exposes optional read-only sampler');
+   }
+  }
   const beforeHP=await host.evaluate(()=>window.__brawlV3QA().hp);
   assert.equal(await lookup.blue1.evaluate(()=>window.__testFireNormal2v2(0)),true);
   // An immediately committed host shot may replace the transient early
@@ -86,6 +92,16 @@ async function run(){
      seats[seats.findIndex(q=>q.seat==='red2')].myId],{timeout:16000});
   console.log('NORMAL 2vs2 latency QA: action preview '+JSON.stringify(d.map(x=>x.stats))+
     ' (host-fast path may bypass transient animation)');
+  if(process.env.BRAWL_STAGE_2V2==='1'){
+   for(const page of [lookup.red1,lookup.blue2]){
+    const result=await page.evaluate(()=>{const p=window.__brawlLatencyV35QA;p.capture();return p.stop();});
+    assert.equal(result.version,'V3.5');
+    assert(result.projectile.receivedActionCount>=1,'real peer action counted by the local sampler');
+    assert(!('pingMs' in result.traffic),'callback count must not be misreported as RTT');
+    assert(!JSON.stringify(result).includes(roomId),'do not export room IDs');
+   }
+   console.log('PASS V3.5 NORMAL staged-only read-only sampler captured peer shot/Bomber with no identifiers');
+  }
   const afterHP=await host.evaluate(()=>window.__brawlV3QA().hp);
   assert.deepEqual(afterHP,beforeHP,'remote visual-only preview never changes HP across long map');
   for(const c of all)assert.deepEqual(c.errors,[],'no Safari/WebKit page errors');

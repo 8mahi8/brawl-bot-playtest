@@ -17,7 +17,8 @@
     "duelActionButtons": "shared/runtime/friends-duel-action-buttons.inc.js",
     "squadTouchHandlers": "shared/runtime/friends-squad-touch-handlers.inc.js",
     "squadCombatAim": "shared/runtime/friends-squad-combat-aim.inc.js",
-    "squadTouchPaint": "shared/runtime/friends-squad-touch-paint.inc.js"
+    "squadTouchPaint": "shared/runtime/friends-squad-touch-paint.inc.js",
+    "squadLatencyProbe": "shared/runtime/friends-2v2-latency-probe.inc.js"
   },
   "modes": {
     "normal.1vs1": {
@@ -51,7 +52,8 @@
         "squadCollisionMovement",
         "squadTouchHandlers",
         "squadCombatAim",
-        "squadTouchPaint"
+        "squadTouchPaint",
+        "squadLatencyProbe"
       ],
       "sourceGitBlob": "e5c2c5b6a3c02b15fc02731b87ed83dc7d337106"
     },
@@ -86,7 +88,8 @@
         "squadCollisionMovement",
         "squadTouchHandlers",
         "squadCombatAim",
-        "squadTouchPaint"
+        "squadTouchPaint",
+        "squadLatencyProbe"
       ],
       "sourceGitBlob": "350ffa778bf4249bbe096e3e2bc1d8aaa60c9ca7"
     }

@@ -184,6 +184,17 @@ function patchFriendInputs(html,modeName,overrides=null){
  return html;
 }
 
+// Opt-in read-only probe is appended after all game state declarations, just
+// before the existing QA hooks. No timers are armed unless start() is called.
+function patchSquadLatencyProbe(html,source,modeName){
+ assert(source.includes('window.__brawlLatencyV35QA=Object.freeze('),
+   'latency probe API missing');
+ assert(!source.includes('</script>'),'probe must remain in the existing script');
+ assert(!html.includes('window.__brawlLatencyV35QA'),'probe already inserted '+modeName);
+ return replaceOnce(html,'window.__brawlEarlyShotsQA=()=>',
+   source.trimEnd()+'\nwindow.__brawlEarlyShotsQA=()=>',
+   modeName+' insert optional V3.5 instrumentation');
+}
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -204,7 +215,7 @@ function validate(html,modeName,mode){
  assert(html.includes('window.__brawlV3QA')||html.includes('window.__brawlV29QA'),'QA hook '+modeName);
  return true;
 }
-function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null){
+function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  assert(canonical.startsWith(ACTION_BEGIN)&&canonical.endsWith('\n'),'bad shared early-shot source');
@@ -216,6 +227,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
  assert(!positionSource.includes(POSITION_END),'position policy overlaps next function');
  const squadNetwork=Object.fromEntries(SQUAD_NETWORK_PARTS.map(([key])=>[key,read(spec.modules[key])]));
  const presentationSource=presentationOverride===null?read(spec.modules.squadCombatPresentation):presentationOverride;
+ const latencyProbeSource=latencyProbeOverride===null?read(spec.modules.squadLatencyProbe):latencyProbeOverride;
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
@@ -231,6 +243,10 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
    html=patchSquadPresentation(html,presentationSource,name);
   }
   html=patchFriendInputs(html,name,friendInputOverrides);
+  if(mode.modules.includes('squadLatencyProbe')){
+   assert(mode.roomRoot==='rooms2v2','no 1v1 probe leak '+name);
+   html=patchSquadLatencyProbe(html,latencyProbeSource,name);
+  }
   validate(html,name,mode);
   outputs[name]={mode,html,hash:crypto.createHash('sha256').update(html).digest('hex')};
  }
@@ -295,4 +311,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,sharedSection,safeTarget,main};
