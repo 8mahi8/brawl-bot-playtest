@@ -198,10 +198,28 @@ async function run(){
   assert.equal(await bomberClient.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true,
     'real Bomber launches one projectile using the action stream');
   const blueClient=clients[first.findIndex(q=>q.seat==='blue2')].page;
-  await blueClient.waitForFunction(()=>{
-    const s=window.__brawlEarlyShotsQA?.()?.stats;
-    return !!s&&s.bomber>=1&&s.shown>0;
-  },null,{timeout:17000});
+  try{
+    await blueClient.waitForFunction(()=>{
+      const s=window.__brawlEarlyShotsQA?.()?.stats;
+      return !!s&&s.bomber>=1&&s.shown>0;
+    },null,{timeout:17000});
+  }catch(e){
+    // Keep the failure strict; capture per-seat and local RTDB evidence before
+    // making changes to gameplay logic or weakening the Bomber assertion.
+    const describe=async client=>client.page.evaluate(async()=>{
+      const q=window.__brawlV3QA?.()||{},early=window.__brawlEarlyShotsQA?.();
+      const roomId=q.roomId;
+      const actions=roomId?(await window.firebase.database().ref('rooms2v2/'+roomId+'/actions').once('value')).val():null;
+      return {seat:q.seat,myId:q.myId,game:q.game,round:q.round,online:q.online,
+        positions:q.positionValues,early,actions:Object.values(actions||{}).map(a=>({
+          owner:a.owner,type:a.type,round:a.round,at:a.at,connectionId:a.connectionId
+        })).slice(-12)};
+    }).catch(err=>({evaluationError:String(err)}));
+    const [blueDiag,bomberDiag]=await Promise.all([describe(clients[first.findIndex(q=>q.seat==='blue2')]),describe(red2Client)]);
+    throw Error('2vs2 Bomber action arrival diagnosis: '+JSON.stringify({blueDiag,bomberDiag,
+      blueErrors:clients[first.findIndex(q=>q.seat==='blue2')].errors,
+      bomberErrors:red2Client.errors})+'; '+e.message);
+  }
   const bombSeen=await blueClient.evaluate(()=>window.__brawlEarlyShotsQA());
   assert(bombSeen.stats.bomber>=1&&bombSeen.stats.shown>0);
   console.log('PASS 2vs2 early peer-action prediction: blue sees red Bomber flight; red sees blue bullets, without changing HP');
