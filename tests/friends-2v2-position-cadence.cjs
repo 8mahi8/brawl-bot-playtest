@@ -6,7 +6,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {spec,makeAll,patchPositionPublish}=require('../scripts/build-friends-online.cjs');
 const root=path.resolve(__dirname,'..'),read=x=>fs.readFileSync(path.join(root,x),'utf8');
 const shared=read(spec.modules.squadPositionPublish);
-const begin='// Only active motion needs the 80ms network cadence.',end='\nfunction update(dt,movementDt=dt)';
+const begin='// Only active motion needs the 80ms network cadence.',end='function update(dt,movementDt=dt)';
 function part(s){
  const a=s.indexOf(begin),b=s.indexOf(end,a);
  assert(a>=0&&b>a,'position policy absent');
