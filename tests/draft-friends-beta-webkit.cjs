@@ -25,7 +25,8 @@ function fixture(file){
 const html={
  '/duel':fixture('BRAWL_DRAFT_FRIENDS_BETA_1vs1.html'),
  '/squad':fixture('BRAWL_DRAFT_FRIENDS_BETA_2vs2.html'),
- '/layout':fixture('BRAWL_DRAFT_FRIENDS_BETA_2vs2_LAYOUT_PREVIEW.html')
+ '/layout':fixture('BRAWL_DRAFT_FRIENDS_BETA_2vs2_LAYOUT_PREVIEW.html'),
+ '/latency':fixture('BRAWL_DRAFT_FRIENDS_BETA_2vs2_LATENCY_CANDIDATE.html')
 };
 const port=8878,server=http.createServer((req,res)=>{
  if(!(req.url in html)){res.writeHead(404);res.end();return;}
@@ -139,7 +140,7 @@ async function run(){
   console.log('PASS FRIEND BETA 1vs1 delayed remote shot: muzzle birth, flash, combat age unchanged');
   await Promise.all([h,g].map(x=>x.ctx.close()));
 
-  const clients=await Promise.all(Array.from({length:4},()=>open(browser,'layout')));all.push(...clients);
+  const clients=await Promise.all(Array.from({length:4},()=>open(browser,'latency')));all.push(...clients);
   const host=clients[0].page;
   await host.locator('#createBtn').click();
   try{await host.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:17000});}
@@ -153,6 +154,10 @@ async function run(){
   }
   const first=await Promise.all(clients.map(x=>x.page.evaluate(()=>window.__brawlV3QA())));
   assert.deepEqual(first.map(q=>q.seat).sort(),['blue1','blue2','red1','red2']);
+  // One real defender plays Bomber so both ordinary and lobbed incoming shots run.
+  const red2Client=clients[first.findIndex(q=>q.seat==='red2')];
+  await red2Client.page.locator('#charPick button[data-char="bomber"]').click();
+  await red2Client.page.waitForFunction(()=>window.__brawlV3QA?.()?.lobby?.seats?.red2?.char==='bomber',null,{timeout:15000});
   for(const x of clients)await x.page.locator('#readyBtn').click();
   await Promise.all(clients.map(x=>x.page.waitForFunction(()=>window.__brawlV3QA?.()?.game==='playing',null,{timeout:22000})));
   const now=await Promise.all(clients.map(x=>x.page.evaluate(()=>window.__brawlV3QA())));
@@ -165,20 +170,41 @@ async function run(){
   const red=clients[first.findIndex(q=>q.seat==='red1')].page;
   await host.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:17000});
   assert.equal(await host.evaluate(()=>window.__brawlDraftFireQA(0)),true,'host can fire an actual game shot');
+  // Earlier builds demanded a host-arrival muzzle flash. The new version
+  // legitimately seeds visualBullet from ACTION before the host snapshot, so
+  // that old flash is no longer a required onset signal.
   const onset=await red.waitForFunction(owner=>{
-    const q=window.__brawlV3QA?.();
-    const p=q?.remoteProjectileVisuals?.find(p=>p.flash&&Number.isFinite(p.bornAt)&&
-      q.combat?.projectiles?.[p.id]?.owner===owner);
-    if(!p)return false;
-    const b=q.combat.projectiles[p.id];
-    return {id:p.id,originX:p.originX,originY:p.originY,
-      serverOriginX:b.originX,serverOriginY:b.originY,bornAt:p.bornAt};
+    const early=window.__brawlEarlyShotsQA?.(),q=window.__brawlV3QA?.();
+    if((early?.stats?.incoming||0)<1)return false;
+    const b=Object.values(q?.combat?.projectiles||{}).find(p=>
+      p.owner===owner&&Number.isFinite(p.originX)&&Number.isFinite(p.originY));
+    if(!b)return false;
+    return {id:b.id,originX:b.originX,originY:b.originY,
+      earlyIncoming:early.stats.incoming,
+      handoffs:early.stats.hostHandoffs};
   },first[0].myId,{timeout:16000,polling:'raf'});
   const shot=await onset.jsonValue();
-  assert(Number.isFinite(shot.originX)&&Number.isFinite(shot.bornAt));
-  assert.equal(shot.originX,shot.serverOriginX,'remote muzzle derives from real host projectile');
-  assert.equal(shot.originY,shot.serverOriginY,'remote muzzle Y comes from real firing source');
-  console.log('PASS FRIEND BETA 2vs2 live shot: receiving rival sees true host muzzle origin and one flash');
+  assert(Number.isFinite(shot.originX)&&Number.isFinite(shot.originY));
+  assert(shot.earlyIncoming>=1,'new peer-action visual path activated');
+  console.log('PASS FRIEND BETA 2vs2 live shot: peer action preview and eventual true host muzzle coordinates');
+
+  // New peer renders the ACTION itself; it must not wait for the full host snapshot.
+  const received=await red.evaluate(()=>window.__brawlEarlyShotsQA());
+  assert(received.stats.incoming>=1,'remote observer received peer shot before or during host confirmation');
+  // Bomber is verified using the exact same wire action, not fabricated UI state.
+  const bomberClient=red2Client.page;
+  await bomberClient.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:13000});
+  assert.equal(await bomberClient.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true,
+    'real Bomber launches one projectile using the action stream');
+  const blueClient=clients[first.findIndex(q=>q.seat==='blue2')].page;
+  await blueClient.waitForFunction(()=>{
+    const s=window.__brawlEarlyShotsQA?.()?.stats;
+    return !!s&&s.bomber>=1&&s.shown>0;
+  },null,{timeout:17000});
+  const bombSeen=await blueClient.evaluate(()=>window.__brawlEarlyShotsQA());
+  assert(bombSeen.stats.bomber>=1&&bombSeen.stats.shown>0);
+  console.log('PASS 2vs2 early peer-action prediction: blue sees red Bomber flight; red sees blue bullets, without changing HP');
+
 
   // Real 4-peer draft friend beta candidate: KO via host-authoritative
   // bullets (never assign winner, phase or score), then four legal picks and

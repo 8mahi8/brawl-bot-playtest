@@ -5,7 +5,9 @@ on:
       - 'sites/BRAWL_DRAFT_FRIENDS_BETA_*.html'
       - 'tests/draft-friends-beta-*.cjs'
       - 'tests/friends-four-mode-readiness.cjs'
+      - 'tests/friends-2v2-latency-visual.cjs'
       - 'sites/BRAWL_FRIENDS_*_QA_CANDIDATE.html'
+      - 'sites/BRAWL_FRIENDS_*_LATENCY_CANDIDATE.html'
       - 'online/ipad-duel-v2-lab.html'
       - 'online/ipad-squad-v2-lab.html'
       - 'firebase.draft-friends-beta-e2e.json'
@@ -16,7 +18,9 @@ on:
       - 'sites/BRAWL_DRAFT_FRIENDS_BETA_*.html'
       - 'tests/draft-friends-beta-*.cjs'
       - 'tests/friends-four-mode-readiness.cjs'
+      - 'tests/friends-2v2-latency-visual.cjs'
       - 'sites/BRAWL_FRIENDS_*_QA_CANDIDATE.html'
+      - 'sites/BRAWL_FRIENDS_*_LATENCY_CANDIDATE.html'
       - 'online/ipad-duel-v2-lab.html'
       - 'online/ipad-squad-v2-lab.html'
       - 'firebase.draft-friends-beta-e2e.json'
@@ -42,6 +46,7 @@ jobs:
         run: |
           node tests/draft-friends-beta-release.cjs
           node tests/friends-four-mode-readiness.cjs
+          node tests/friends-2v2-latency-visual.cjs
           node --check tests/draft-friends-beta-webkit.cjs
       - name: Install Firebase local emulator and Safari-like WebKit
         run: |
