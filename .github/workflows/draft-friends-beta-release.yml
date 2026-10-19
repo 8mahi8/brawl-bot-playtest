@@ -7,6 +7,7 @@ on:
       - 'tests/friends-four-mode-readiness.cjs'
       - 'tests/friends-online-build.cjs'
       - 'tests/friends-control-layout.cjs'
+      - 'tests/friends-control-layout-webkit.cjs'
       - 'shared/runtime/friends-control-layout.inc.js'
       - 'tests/friends-online-emit.cjs'
       - 'scripts/build-friends-online.cjs'
@@ -28,6 +29,7 @@ on:
       - 'tests/friends-four-mode-readiness.cjs'
       - 'tests/friends-online-build.cjs'
       - 'tests/friends-control-layout.cjs'
+      - 'tests/friends-control-layout-webkit.cjs'
       - 'shared/runtime/friends-control-layout.inc.js'
       - 'tests/friends-online-emit.cjs'
       - 'scripts/build-friends-online.cjs'
@@ -83,6 +85,8 @@ jobs:
         run: |
           npm install --no-save --package-lock=false firebase-tools@14.24.0 playwright-core@1.56.1
           npx playwright-core install --with-deps webkit
+      - name: Compare generated four-mode control UIs against old saved layouts in WebKit
+        run: node tests/friends-control-layout-webkit.cjs
       - name: Pin compatible Firebase browser SDK locally for emulator
         run: |
           mkdir -p artifacts/firebase-sdk
