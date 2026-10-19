@@ -154,6 +154,31 @@ function patchSquadPresentation(html,source,modeName){
   modeName+' inject 2v2 presentation');
 }
 
+const FRIEND_INPUT_SPANS={
+ duelPointerAim:{start:'  function pcPointer(e){',end:'\n\n\n  function alertStatus(',modes:['normal.1vs1','draft.1vs1']},
+ squadPointerAim:{start:'function pcPointer(e){',end:'let pcShot=null;',modes:['normal.2vs2','draft.2vs2']},
+ squadInputTiming:{start:'function inputEventQueueDelay(e,enteredAt=performance.now()){',end:'let inputTiming=',modes:['normal.2vs2','draft.2vs2']},
+ squadCollisionMovement:{start:'function moveWithWall(dx,dy){',end:'// Only active motion needs the 80ms network cadence.',modes:['normal.2vs2','draft.2vs2']}
+};
+// Preserve the original duel vs. squad input profiles. Replace their identical
+// function spans IN PLACE in staged HTML; unlike older shared presentation work,
+// no function is hoisted across script/lexical scopes or event registration.
+function patchFriendInputs(html,modeName,overrides=null){
+ const mode=spec.modes[modeName];
+ assert(mode,'unknown friend input mode: '+modeName);
+ for(const [key,rule] of Object.entries(FRIEND_INPUT_SPANS)){
+  const enabled=mode.modules.includes(key);
+  assert.equal(enabled,rule.modes.includes(modeName),'wrong input mode '+modeName+'/'+key);
+  if(!enabled)continue;
+  const canonical=overrides?.[key]??read(spec.modules[key]);
+  assert(canonical.startsWith(rule.start),'friend input source beginning drift '+key);
+  assert(!canonical.includes(rule.end),'friend input source overlaps next block '+key);
+  const span=uniqueSpan(html,rule.start,rule.end,modeName+'/'+key);
+  html=html.slice(0,span.begin)+canonical+html.slice(span.stop);
+ }
+ return html;
+}
+
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -174,7 +199,7 @@ function validate(html,modeName,mode){
  assert(html.includes('window.__brawlV3QA')||html.includes('window.__brawlV29QA'),'QA hook '+modeName);
  return true;
 }
-function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null){
+function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  assert(canonical.startsWith(ACTION_BEGIN)&&canonical.endsWith('\n'),'bad shared early-shot source');
@@ -200,6 +225,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
    assert(mode.modules.includes('squadHostActions'),'presentation only after V3 2v2 network: '+name);
    html=patchSquadPresentation(html,presentationSource,name);
   }
+  html=patchFriendInputs(html,name,friendInputOverrides);
   validate(html,name,mode);
   outputs[name]={mode,html,hash:crypto.createHash('sha256').update(html).digest('hex')};
  }
@@ -264,4 +290,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,sharedSection,safeTarget,main};

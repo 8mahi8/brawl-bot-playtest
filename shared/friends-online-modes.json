@@ -8,7 +8,11 @@
     "squadActionStream": "shared/runtime/friends-2v2-action-stream.inc.js",
     "squadHostActions": "shared/runtime/friends-2v2-host-actions.inc.js",
     "squadPositionPublish": "shared/runtime/friends-2v2-position-publish.inc.js",
-    "squadCombatPresentation": "shared/runtime/friends-2v2-combat-presentation.inc.js"
+    "squadCombatPresentation": "shared/runtime/friends-2v2-combat-presentation.inc.js",
+    "duelPointerAim": "shared/runtime/friends-duel-pointer-aim.inc.js",
+    "squadPointerAim": "shared/runtime/friends-squad-pointer-aim.inc.js",
+    "squadInputTiming": "shared/runtime/friends-squad-input-timing.inc.js",
+    "squadCollisionMovement": "shared/runtime/friends-squad-collision-movement.inc.js"
   },
   "modes": {
     "normal.1vs1": {
@@ -17,7 +21,8 @@
       "roomRoot": "rooms",
       "protocol": 31,
       "modules": [
-        "controlLayout"
+        "controlLayout",
+        "duelPointerAim"
       ],
       "sourceGitBlob": "7a7a09acaf83bd3856de53cf91b183781c1cc9e2"
     },
@@ -33,7 +38,10 @@
         "squadPresencePositions",
         "squadActionStream",
         "squadHostActions",
-        "squadCombatPresentation"
+        "squadCombatPresentation",
+        "squadPointerAim",
+        "squadInputTiming",
+        "squadCollisionMovement"
       ],
       "sourceGitBlob": "e5c2c5b6a3c02b15fc02731b87ed83dc7d337106"
     },
@@ -43,7 +51,8 @@
       "roomRoot": "rooms",
       "protocol": 1031,
       "modules": [
-        "controlLayout"
+        "controlLayout",
+        "duelPointerAim"
       ],
       "sourceGitBlob": "9e1acf5e0e81cb3b52b634b849cfdc90895db2bb"
     },
@@ -59,7 +68,10 @@
         "squadPresencePositions",
         "squadActionStream",
         "squadHostActions",
-        "squadCombatPresentation"
+        "squadCombatPresentation",
+        "squadPointerAim",
+        "squadInputTiming",
+        "squadCollisionMovement"
       ],
       "sourceGitBlob": "350ffa778bf4249bbe096e3e2bc1d8aaa60c9ca7"
     }
