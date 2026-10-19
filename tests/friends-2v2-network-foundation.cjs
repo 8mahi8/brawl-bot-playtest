@@ -17,8 +17,10 @@ for(const [key,start,end]of SQUAD_NETWORK_PARTS){
   assert(built[name].html.includes(text),'module emitted into '+name+' '+key);
   assert.equal(built[name].html.split(start).length-1,1,'module emitted exactly once '+name+' '+key);
  }
- assert(!built['normal.1vs1'].html.includes(start),'1v1 kept separate '+key);
- assert(!built['draft.1vs1'].html.includes(start),'draft 1v1 kept separate '+key);
+ // 1vs1 has its own function named registerPresence; compare the whole
+ // 2vs2 implementation, not merely a coincidentally shared function name.
+ assert(!built['normal.1vs1'].html.includes(text),'1v1 kept separate '+key);
+ assert(!built['draft.1vs1'].html.includes(text),'draft 1v1 kept separate '+key);
 }
 assert.deepEqual(Object.keys(sources),['squadPresencePositions','squadActionStream','squadHostActions']);
 assert(sources.squadActionStream.includes('pendingActions.set(')&&
