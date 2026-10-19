@@ -25,7 +25,7 @@ async function open(browser){
  page.on('pageerror',e=>errors.push('JS '+e.message));
  page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text().slice(0,170));});
  await page.route('https://www.gstatic.com/firebasejs/10.8.0/*',async route=>{
-  const name=route.request().url.split('/').pop();
+  const name=route.request().url().split('/').pop();
   if(!['firebase-app-compat.js','firebase-database-compat.js'].includes(name))return route.abort();
   return route.fulfill({status:200,contentType:'application/javascript',body:fs.readFileSync(path.join(sdk,name))});
  });
