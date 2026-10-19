@@ -12,7 +12,7 @@ const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const ACTION_BEGIN='// Never feed early remote visuals into host collision, hit preview or RTDB.';
 const ACTION_END='\n function visualCombatNow()';
 const POSITION_BEGIN='// Only active motion needs the 80ms network cadence.';
-const POSITION_END='\nfunction update(dt,movementDt=dt)';
+const POSITION_END='function update(dt,movementDt=dt)';
 const safeOutputPrefix='artifacts/friends-online/';
 function uniqueSpan(html,start,end,label){
  const begin=html.indexOf(start),stop=html.indexOf(end,begin+start.length);
