@@ -111,6 +111,35 @@ function patchSquadNetwork(html,parts){
  return html;
 }
 
+const SQUAD_PRESENTATION_NAMES=[
+ 'processCombatTick','sendPositionNow','remotePresentationTarget',
+ 'reconcileHpPreviews','previewOwnBulletHit','renderCombatEvents'
+];
+// Move only 6 exact legacy function definitions, never the V3 network blocks.
+// All mutations are to generated staging HTML; canonical candidate inputs
+// and production URLs/rules stay byte-for-byte unchanged.
+function squadPresentationBlocks(source){
+ const rx=/\\/\\* BEGIN SHARED PRESENTATION ([A-Za-z][A-Za-z0-9]*) \\*\\/\\n([\\s\\S]*?)\\n\\/\\* END SHARED PRESENTATION \\1 \\*\\//g;
+ const matches=[...source.matchAll(rx)];
+ assert.deepEqual(matches.map(m=>m[1]),SQUAD_PRESENTATION_NAMES,'exactly six named shared presentation functions');
+ return matches.map(m=>{
+  const name=m[1],body=m[2];
+  assert(new RegExp('(?:async\\\\s+)?function\\\\s+'+name+'\\\\s*\\\\(').test(body),'invalid shared function '+name);
+  return {name,body};
+ });
+}
+function patchSquadPresentation(html,source,modeName){
+ assert(!html.includes('BEGIN GENERATED SHARED 2V2 PRESENTATION'),'already injected: '+modeName);
+ const parts=squadPresentationBlocks(source);
+ for(const part of parts)
+  html=replaceOnce(html,part.body,'',modeName+' remove legacy '+part.name);
+ const marker='const layoutDefault={gad:';
+ return replaceOnce(html,marker,
+  '/* BEGIN GENERATED SHARED 2V2 PRESENTATION */\\n'+source.trimEnd()+
+  '\\n/* END GENERATED SHARED 2V2 PRESENTATION */\\n'+marker,
+  modeName+' inject 2v2 presentation');
+}
+
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -131,7 +160,7 @@ function validate(html,modeName,mode){
  assert(html.includes('window.__brawlV3QA')||html.includes('window.__brawlV29QA'),'QA hook '+modeName);
  return true;
 }
-function makeAll(moduleOverride=null,positionOverride=null){
+function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  assert(canonical.startsWith(ACTION_BEGIN)&&canonical.endsWith('\n'),'bad shared early-shot source');
@@ -142,6 +171,7 @@ function makeAll(moduleOverride=null,positionOverride=null){
    'invalid 2v2 position policy source');
  assert(!positionSource.includes(POSITION_END),'position policy overlaps next function');
  const squadNetwork=Object.fromEntries(SQUAD_NETWORK_PARTS.map(([key])=>[key,read(spec.modules[key])]));
+ const presentationSource=presentationOverride===null?read(spec.modules.squadCombatPresentation):presentationOverride;
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
@@ -151,6 +181,10 @@ function makeAll(moduleOverride=null,positionOverride=null){
   if(mode.modules.includes('squadActionStream')){
    assert(SQUAD_NETWORK_PARTS.every(([key])=>mode.modules.includes(key)),'incomplete network module set '+name);
    html=patchSquadNetwork(html,squadNetwork);
+  }
+  if(mode.modules.includes('squadCombatPresentation')){
+   assert(mode.modules.includes('squadHostActions'),'presentation only after V3 2v2 network: '+name);
+   html=patchSquadPresentation(html,presentationSource,name);
   }
   validate(html,name,mode);
   outputs[name]={mode,html,hash:crypto.createHash('sha256').update(html).digest('hex')};
@@ -194,6 +228,9 @@ function main(flag){
    if(mode.modules.includes('squadPositionPublish'))
     assert.equal(patchPositionPublish(original,read(spec.modules.squadPositionPublish)),original,
       '2v2 candidate has stale position policy: '+name);
+   if(mode.modules.includes('squadCombatPresentation'))
+    for(const {name:fn,body} of squadPresentationBlocks(presentationSource))
+     assert.equal(original.split(body).length-1,1,'unchanged legacy function '+name+'/'+fn);
    assert(html.includes('BrawlControlLayoutV1'),'control module must be inlined for '+name);
    console.log('PASS '+name+' canonical source and standalone ('+hash.slice(0,12)+')');
   }else if(flag==='--emit'){
@@ -213,4 +250,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,sharedSection,safeTarget,main};
