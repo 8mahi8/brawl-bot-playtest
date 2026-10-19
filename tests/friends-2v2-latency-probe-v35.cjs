@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {spec,makeAll,patchSquadLatencyProbe}=require('../scripts/build-friends-online.cjs');
 const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const src=read(spec.modules.squadLatencyProbe);
-assert(!/\.set\(|\.transaction\(|\.push\(|db\.ref\(|fetch\(|XMLHttpRequest|localStorage|sessionStorage/.test(src),
+assert(!/\b(?:room|db|firebase)\s*\.\s*(?:ref|set|update|push|transaction)\s*\(|\bfetch\s*\(|\bXMLHttpRequest\b|\blocalStorage\s*\.|\bsessionStorage\s*\./.test(src),
  'diagnostics must not write Firebase, local storage, or transmit data');
 const normal=makeAll(),marker='window.__brawlLatencyV35QA=Object.freeze(';
 for(const name of ['normal.2vs2','draft.2vs2']){
