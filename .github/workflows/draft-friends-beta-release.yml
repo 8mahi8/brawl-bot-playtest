@@ -33,6 +33,8 @@ on:
       - 'tests/friends-touch-combat-v34.cjs'
       - 'shared/runtime/friends-2v2-latency-probe.inc.js'
       - 'tests/friends-2v2-latency-probe-v35.cjs'
+      - 'tests/friends-2v2-lag-stress-v36.cjs'
+      - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -77,6 +79,8 @@ on:
       - 'tests/friends-touch-combat-v34.cjs'
       - 'shared/runtime/friends-2v2-latency-probe.inc.js'
       - 'tests/friends-2v2-latency-probe-v35.cjs'
+      - 'tests/friends-2v2-lag-stress-v36.cjs'
+      - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -117,6 +121,9 @@ jobs:
           node tests/friends-input-controls-v33.cjs
           node tests/friends-touch-combat-v34.cjs
           node tests/friends-2v2-latency-probe-v35.cjs
+          mkdir -p artifacts/qa
+          node tests/friends-2v2-lag-stress-v36.cjs > artifacts/qa/v36-synthetic-scenarios.json
+          node --check tests/friends-2v2-lag-delivery-webkit-v36.cjs
           node tests/friends-2v2-latency-visual.cjs
           node --check tests/draft-friends-beta-webkit.cjs
           node --check tests/friends-2v2-normal-latency-webkit.cjs
@@ -145,4 +152,12 @@ jobs:
           test -s artifacts/firebase-sdk/firebase-app-compat.js
           test -s artifacts/firebase-sdk/firebase-database-compat.js
       - name: Run 2-client and 4-client beta HTML on LOCAL RTDB emulator only
-        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-draft-beta --config firebase.draft-friends-beta-e2e.json "node tests/draft-friends-beta-webkit.cjs && node tests/friends-2v2-normal-latency-webkit.cjs && BRAWL_STAGE_2V2=1 node tests/draft-friends-beta-webkit.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-normal-latency-webkit.cjs"
+        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-draft-beta --config firebase.draft-friends-beta-e2e.json "node tests/draft-friends-beta-webkit.cjs && node tests/friends-2v2-normal-latency-webkit.cjs && BRAWL_STAGE_2V2=1 node tests/draft-friends-beta-webkit.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-normal-latency-webkit.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-lag-delivery-webkit-v36.cjs"
+      - name: Publish synthetic and four-peer delivery-lag evidence (no room IDs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brawl-v36-lag-stress-results
+          path: artifacts/qa/v36-*.json
+          retention-days: 7
+          if-no-files-found: warn
