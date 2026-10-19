@@ -106,3 +106,15 @@ node scripts/build-friends-online.cjs --sync
 テスト：前段V3.3の4モード不変チェック＋5モジュールのソース一致・二重登録防止・モード隔離、タッチ開始/移動/解除/キャンセル、射撃アクション、first-paint時間、WebKit 4人対戦（Firebaseローカルエミュレータ）を回帰させる。**Google Sites、本番Firebaseと公開HTMLは変更しない。** 本変更は保守基盤の改善で、学校iPadの実測ラグ低減を証明するものではない。
 
 Node実行：`node tests/friends-touch-combat-v34.cjs`。開発用HTML：`node scripts/build-friends-online.cjs --emit`（stagingのみ）。
+
+## V3.5：2vs2 弾ラグの切り分け用・ローカル診断（2026-10-20）
+
+既存の早期弾描画とホスト描画へのhandoff、Firebase listener callback数、フレーム落ち・Canvas描画時間、タッチイベント処理時間を区別する**任意起動・ローカル専用**の計測APIを、通常/ドラフト2vs2の生成済みstaging HTMLに挿入する。元HTML・Google Sites・本番Firebase・通信ルールは変えない。1vs1には挿入しない。
+
+WebKit開発用コンソールで、対戦が `playing` に入ったら `window.__brawlLatencyV35QA.start(250)`、観測後に `window.__brawlLatencyV35QA.stop()` または `window.__brawlLatencyV35QA.report()` を呼ぶ。これらはJSON互換の集計値を返す。`reset()`で記録を消せる。100～1000msの計測間隔だけ許可し、最大480測定点をメモリに保持。デフォルトではintervalなし、Firebaseにも外部にも一切送信しない。マッチ/ラウンドが切り替わったら記録を自動クリアし、ルームID・ユーザーIDなどはレポートしない。
+
+比較項目：`projectile.receivedActionCount`, `previewDrawOperations`, `hostVisualHandoffCount`、`traffic.gameSnapshotsPerSecond`, `positionCallbacksPerSecond`、`presentation.framesPerSecond`, `frameGapOver100msPercent`, `averageCanvasDrawMs`, `averageNonDrawWorkMs`、`input.latestHandlerToCanvasSubmissionMs`。
+
+**重要**：callback頻度はping/往復時間ではない。`previewDrawOperations`は弾ごとの件数ではなく描画の反復回数。Canvas送信までの時間は液晶表示までの時間ではない。sessionMaxは計測窓だけでなくセッション全体の最大値。実機iPadの遅延改善を示す測定値が揃うまでは「直った」と判断しない。
+
+自動回帰：`node tests/friends-2v2-latency-probe-v35.cjs`、4人WebKit＋Firebase **ローカル**エミュレータ上の通常/ドラフト生成版で実弾を観測。学校へ貼る公開HTMLの変更は本人承認の別工程。
