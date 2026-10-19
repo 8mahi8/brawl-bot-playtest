@@ -12,7 +12,8 @@ const remote='https://mygame-df915-default-rtdb.firebaseio.com/';
 const csp='connect-src https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://www.googleapis.com https://*.googleapis.com';
 const emulatorCsp='connect-src http://127.0.0.1:9000 ws://127.0.0.1:9000 http://localhost:9000 ws://localhost:9000';
 function fixture(file){
- let s=fs.readFileSync(path.join(dir,'sites',file),'utf8');
+ const selected=process.env.BRAWL_STAGE_2V2==='1'&&file==='BRAWL_DRAFT_FRIENDS_BETA_2vs2_LATENCY_CANDIDATE.html'?'artifacts/friends-online/draft-2vs2.html':'sites/'+file;
+ let s=fs.readFileSync(path.join(dir,selected),'utf8');
  assert(s.includes(remote)&&s.includes(csp));
  s=s.replaceAll(remote,demoUrl).replace(csp,emulatorCsp);
  const needle=file.includes('1vs1')?'    db=firebase.database();':' db=firebase.database(); // Friends beta uses selected cloud RTDB.';
