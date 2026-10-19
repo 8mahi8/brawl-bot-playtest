@@ -163,6 +163,13 @@ async function run(){
   await Promise.all(clients.map(x=>x.page.waitForFunction(()=>window.__brawlV3QA?.()?.game==='playing',null,{timeout:22000})));
   const now=await Promise.all(clients.map(x=>x.page.evaluate(()=>window.__brawlV3QA())));
   assert(now.every(q=>q.protocol===13012&&q.round===1&&q.online===4));
+  if(process.env.BRAWL_STAGE_2V2==='1'){
+   for(const seat of ['red1','blue2']){
+    const page=clients[first.findIndex(q=>q.seat===seat)].page;
+    const on=await page.evaluate(()=>window.__brawlLatencyV35QA?.start(250));
+    assert(on?.running&&on.localOnly,'draft staged sampler must be opt-in and local');
+   }
+  }
   const squadDb=await host.evaluate(async code=>(await window.firebase.database().ref('rooms2v2/'+code+'/v').once('value')).val(),squad);
   assert.equal(squadDb,13012,'squad beta uses existing 2v2 root, no normal v3012 collision');
   // A real player fires through the same RTDB action queue and HOST reducer
@@ -230,6 +237,16 @@ async function run(){
     bombSeen.stats.hostHandoffs>beforeBomber.hostHandoffs,
     'Bomber must render an early flight or hand off to authoritative scheduled flight');
   console.log('PASS 2vs2 early peer-action prediction: blue sees red Bomber flight; red sees blue bullets, without changing HP');
+  if(process.env.BRAWL_STAGE_2V2==='1'){
+   for(const seat of ['red1','blue2']){
+    const page=clients[first.findIndex(q=>q.seat===seat)].page;
+    const result=await page.evaluate(()=>{const p=window.__brawlLatencyV35QA;p.capture();return p.stop();});
+    assert(result.projectile.receivedActionCount>=1,'draft observer records real received peer shot');
+    assert(!('pingMs' in result.traffic),'never claim Firebase callback frequency is ping');
+    assert(!JSON.stringify(result).includes(squad),'private room ID never appears in telemetry');
+   }
+   console.log('PASS V3.5 DRAFT staged-only local lag probe observed real 4-player RTDB actions');
+  }
 
 
   // Real 4-peer draft friend beta candidate: KO via host-authoritative
