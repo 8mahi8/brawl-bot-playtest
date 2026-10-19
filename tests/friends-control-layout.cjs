@@ -2,8 +2,8 @@
 // pixel positions; no player saved control positions should unexpectedly move.
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const root=path.resolve(__dirname,'..'),module=fs.readFileSync(path.join(root,'shared/runtime/friends-control-layout.inc.js'),'utf8');
-const layout=vm.runInNewContext(module+'\nBrawlControlLayoutV1');
+const root=path.resolve(__dirname,'..'),layoutSource=fs.readFileSync(path.join(root,'shared/runtime/friends-control-layout.inc.js'),'utf8');
+const layout=vm.runInNewContext(layoutSource+'\nBrawlControlLayoutV1');
 const {makeAll}=require('../scripts/build-friends-online.cjs');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 for(const profile of ['duel','squad']){
