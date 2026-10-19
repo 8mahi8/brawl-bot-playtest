@@ -16,7 +16,10 @@ for(const [name,{mode,html}] of Object.entries(normal)){
  assert(!mode.source.endsWith('BRAWL_FRIENDS_1vs1.html'),'no frozen public 1vs1 as template');
  assert(!mode.source.endsWith('BRAWL_FRIENDS_2vs2.html'),'no frozen public 2vs2 as template');
  assert(mode.output.startsWith('artifacts/friends-online/'),'isolated staging only');
- assert(!spec.forbiddenWritePrefixes.includes(mode.source),'forbidden target '+name);
+ if(mode.modules.includes('squadEarlyShots'))
+  assert(!spec.forbiddenWritePrefixes.includes(mode.source),'generated sync target must never be public: '+name);
+ else
+  assert(mode.output.startsWith('artifacts/friends-online/'),'read-only public and 1v1 candidates are staged only: '+name);
 }
 const original=load(spec.modules.squadEarlyShots);
 assert(original.includes('receipt?.status===')&&original.includes('bomberSmoothPoint'),'source is complete early-shot and Bomber runtime');
