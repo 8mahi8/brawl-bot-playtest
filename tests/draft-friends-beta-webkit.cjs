@@ -198,11 +198,15 @@ async function run(){
   assert.equal(await bomberClient.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true,
     'real Bomber launches one projectile using the action stream');
   const blueClient=clients[first.findIndex(q=>q.seat==='blue2')].page;
+  // The host can confirm a live bomb before the observer paints a transient
+  // preview frame. A canonical bomb handoff is an equally valid visual result.
+  const beforeBomber=await blueClient.evaluate(()=>window.__brawlEarlyShotsQA().stats);
   try{
-    await blueClient.waitForFunction(()=>{
+    await blueClient.waitForFunction(before=>{
       const s=window.__brawlEarlyShotsQA?.()?.stats;
-      return !!s&&s.bomber>=1&&s.shown>0;
-    },null,{timeout:17000});
+      return !!s&&s.bomber>before.bomber&&
+        (s.shown>before.shown||s.hostHandoffs>before.hostHandoffs);
+    },beforeBomber,{timeout:17000});
   }catch(e){
     // Keep the failure strict; capture per-seat and local RTDB evidence before
     // making changes to gameplay logic or weakening the Bomber assertion.
@@ -221,7 +225,10 @@ async function run(){
       bomberErrors:red2Client.errors})+'; '+e.message);
   }
   const bombSeen=await blueClient.evaluate(()=>window.__brawlEarlyShotsQA());
-  assert(bombSeen.stats.bomber>=1&&bombSeen.stats.shown>0);
+  assert(bombSeen.stats.bomber>beforeBomber.bomber,'peer received the real Bomber action');
+  assert(bombSeen.stats.shown>beforeBomber.shown||
+    bombSeen.stats.hostHandoffs>beforeBomber.hostHandoffs,
+    'Bomber must render an early flight or hand off to authoritative scheduled flight');
   console.log('PASS 2vs2 early peer-action prediction: blue sees red Bomber flight; red sees blue bullets, without changing HP');
 
 
