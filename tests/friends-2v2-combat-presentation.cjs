@@ -37,5 +37,5 @@ for(const name of ['normal.2vs2','draft.2vs2']){
 }
 for(const name of ['normal.1vs1','draft.1vs1'])
  assert.equal(updated[name].html,baseline[name].html,'1v1 unchanged after 2v2 shared edit');
-assert.throws(()=>patchSquadPresentation('not a candidate',moduleSource,'normal.2vs2'),/anchor drift/);
+assert.throws(()=>patchSquadPresentation('not a candidate',moduleSource,'normal.2vs2'),/anchor drift|shared function drift/);
 console.log('PASS V3.2 six exact shared 2v2 combat/presentation functions, one definition each, staging-only, 1v1 isolation, future change reaches both 2v2 modes');
