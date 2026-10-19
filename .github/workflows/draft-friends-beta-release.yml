@@ -31,6 +31,8 @@ on:
       - 'shared/runtime/friends-squad-combat-aim.inc.js'
       - 'shared/runtime/friends-squad-touch-paint.inc.js'
       - 'tests/friends-touch-combat-v34.cjs'
+      - 'shared/runtime/friends-2v2-latency-probe.inc.js'
+      - 'tests/friends-2v2-latency-probe-v35.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -73,6 +75,8 @@ on:
       - 'shared/runtime/friends-squad-combat-aim.inc.js'
       - 'shared/runtime/friends-squad-touch-paint.inc.js'
       - 'tests/friends-touch-combat-v34.cjs'
+      - 'shared/runtime/friends-2v2-latency-probe.inc.js'
+      - 'tests/friends-2v2-latency-probe-v35.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -112,6 +116,7 @@ jobs:
           node tests/friends-2v2-combat-presentation.cjs
           node tests/friends-input-controls-v33.cjs
           node tests/friends-touch-combat-v34.cjs
+          node tests/friends-2v2-latency-probe-v35.cjs
           node tests/friends-2v2-latency-visual.cjs
           node --check tests/draft-friends-beta-webkit.cjs
           node --check tests/friends-2v2-normal-latency-webkit.cjs
