@@ -70,7 +70,7 @@ function patchControlLayout(html,source,modeName){
    "sz=BrawlControlLayoutV1.displaySize(p,sw,sh,'squad'),{x,y}=BrawlControlLayoutV1.center(p,sw,sh,sz);e.style.width=sz+'px';e.style.height=sz+'px';e.style.left=x+'px';e.style.top=y+'px';",
    modeName+' live action positions');
   html=replaceOnce(html,
-   'layout[k].x=clamp((ev.clientX-stage.left)/stage.width,(sz/2+4)/stage.width,1-(sz/2+4)/stage.width);\n  layout[k].y=clamp((ev.clientY-stage.top)/stage.height,(sz/2+4)/stage.height,1-(sz/2+4)/stage.height);applyLayout();',
+   'layout[k].x=clamp((ev.clientX-stage.left)/stage.width,(sz/2+4)/stage.width,1-(sz/2+4)/stage.width);\n layout[k].y=clamp((ev.clientY-stage.top)/stage.height,(sz/2+4)/stage.height,1-(sz/2+4)/stage.height);applyLayout();',
    'Object.assign(layout[k],BrawlControlLayoutV1.dragPoint(ev,stage,sz));applyLayout();',
    modeName+' mock drag positions');
   if(modeName==='draft.2vs2'){
