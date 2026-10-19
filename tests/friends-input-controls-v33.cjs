@@ -6,7 +6,10 @@ const {spec,makeAll,patchFriendInputs,FRIEND_INPUT_SPANS,validate}=require('../s
 const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const modeNames=['normal.1vs1','draft.1vs1','normal.2vs2','draft.2vs2'];
 const active=makeAll(),keys=Object.keys(FRIEND_INPUT_SPANS);
-assert.deepEqual(keys,['duelPointerAim','squadPointerAim','squadInputTiming','squadCollisionMovement']);
+assert.deepEqual(keys.slice(0,4),['duelPointerAim','squadPointerAim','squadInputTiming','squadCollisionMovement'],
+ 'V3.3 input profiles must remain unchanged');
+assert.deepEqual(keys.slice(4),['duelTouchHandlers','duelActionButtons','squadTouchHandlers','squadCombatAim','squadTouchPaint'],
+ 'V3.4 adds only the five audited touch and combat blocks');
 for(const [key,rule] of Object.entries(FRIEND_INPUT_SPANS)){
  const originalSpans=[];
  const canonical=read(spec.modules[key]);
