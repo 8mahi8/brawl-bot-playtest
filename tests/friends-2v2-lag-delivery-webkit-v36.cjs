@@ -39,7 +39,8 @@ function stressedHtml(delayMs){
    }
    acceptAction({...a,eventId:snap.key});
   };
-  if(remote&&${delayMs}>0)setTimeout(deliver,${delayMs});
+  const waitMs=window.__v36ActionDeliveryQA.configuredDelayMs;
+  if(remote&&waitMs>0)setTimeout(deliver,waitMs);
   else deliver();
  });`;
  return src.replace(actionHook,handler);
@@ -72,7 +73,7 @@ async function run(){
  let browser,all=[];
  try{
   browser=await webkit.launch({headless:true});
-  all=await Promise.all([0,350,180,0].map(ms=>open(browser,ms)));
+  all=await Promise.all([0,0,0,0].map(ms=>open(browser,ms)));
   const host=all[0].page;
   await host.locator('#createBtn').click();
   await host.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:18000});
@@ -85,9 +86,19 @@ async function run(){
   const seats=await Promise.all(all.map(c=>c.page.evaluate(()=>window.__brawlV3QA())));
   assert.deepEqual(seats.map(q=>q.seat).sort(),['blue1','blue2','red1','red2']);
   const lookup=Object.fromEntries(seats.map((q,i)=>[q.seat,all[i].page]));
-  assert.equal(all[seats.findIndex(x=>x.seat==='red1')].deliveryLag,180,'red1 delayed peer');
-  assert.equal(all[seats.findIndex(x=>x.seat==='blue2')].deliveryLag,350,'blue2 delayed peer');
-  assert.equal(all[seats.findIndex(x=>x.seat==='red2')].deliveryLag,0,'red2 baseline peer');
+  // Seat assignment order differs from join order. Bind delays only AFTER
+  // joining and resolving each player seat, never by client-array position.
+  for(const [seat,delay]of [['red1',180],['blue2',350]]){
+   const c=all[seats.findIndex(q=>q.seat===seat)];
+   await c.page.waitForFunction(()=>!!window.__v36ActionDeliveryQA,null,{timeout:10000});
+   const confirmed=await c.page.evaluate(ms=>{
+    window.__v36ActionDeliveryQA.configuredDelayMs=ms;
+    return window.__v36ActionDeliveryQA.configuredDelayMs;
+   },delay);
+   assert.equal(confirmed,delay,'injected delay selected by actual seat '+seat);
+   c.deliveryLag=delay;
+  }
+  assert.equal(all[seats.findIndex(q=>q.seat==='red2')].deliveryLag,0,'baseline red2 unaffected');
   // A real player chooses Bomber. This specifically targets the school issue.
   await lookup.red2.locator('#charPick button[data-char="bomber"]').click();
   await lookup.red2.waitForFunction(()=>window.__brawlV3QA?.()?.lobby?.seats?.red2?.char==='bomber',null,{timeout:12000});
