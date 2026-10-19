@@ -130,7 +130,12 @@ function squadPresentationBlocks(source){
 }
 function patchSquadPresentation(html,source,modeName){
  assert(!html.includes('BEGIN GENERATED SHARED 2V2 PRESENTATION'),'already injected: '+modeName);
- const parts=squadPresentationBlocks(source);
+ const incoming=squadPresentationBlocks(source);
+ // Always remove the pinned ORIGINAL functions, not their future edited form.
+ // This permits a canonical code change to affect both generated 2v2 outputs
+ // without modifying or repinning the preserved friend candidate HTML files.
+ const parts=squadPresentationBlocks(read(spec.modules.squadCombatPresentation));
+ assert.deepEqual(incoming.map(x=>x.name),parts.map(x=>x.name),'six unchanged function identities');
  for(const part of parts){
   if(!html.includes(part.body)){
    const start=html.indexOf((part.name==='processCombatTick'?'async ':'')+'function '+part.name+'(');
