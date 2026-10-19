@@ -2,7 +2,7 @@
 // staged output contains the identical reducer pipeline, and one edit reaches
 // normal + draft without affecting duel/production outputs.
 'use strict';
-const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),vm=require('node:vm');
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict'),vm=require('node:vm');
 const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const {makeAll,spec,SQUAD_NETWORK_PARTS,patchSquadNetwork,validate}=require('../scripts/build-friends-online.cjs');
 const built=makeAll(),sources={};
@@ -13,7 +13,16 @@ for(const [key,start,end]of SQUAD_NETWORK_PARTS){
   const legacy=read(spec.modes[name].source);
   const first=legacy.indexOf(start),last=legacy.indexOf(end,first+start.length);
   assert(first>=0&&last>first,key+' source anchor '+name);
-  assert.equal(legacy.slice(first,last),text,'squad original source parity '+name+' '+key);
+  const previous=legacy.slice(first,last);
+  const gitBlob=crypto.createHash('sha1').update('blob '+Buffer.byteLength(previous)+'\0'+previous).digest('hex');
+  assert.equal(gitBlob,spec.legacySquadNetworkBlobs[key],
+    'original source baseline unchanged '+name+' '+key);
+  // After future changes to the *canonical* module, the old HTML must remain
+  // untouched; only the stage build should evolve. At first migration, the
+  // legacy and canonical code are required to match byte-for-byte.
+  const canonicalBlob=crypto.createHash('sha1').update('blob '+Buffer.byteLength(text)+'\0'+text).digest('hex');
+  if(canonicalBlob===spec.legacySquadNetworkBlobs[key])
+   assert.equal(previous,text,'initial exact extraction '+name+' '+key);
   assert(built[name].html.includes(text),'module emitted into '+name+' '+key);
   assert.equal(built[name].html.split(start).length-1,1,'module emitted exactly once '+name+' '+key);
  }
@@ -65,4 +74,4 @@ for(const mode of ['normal.2vs2','draft.2vs2']){
 for(const m of ['normal.1vs1','draft.1vs1'])
  assert(!built[m].html.includes('/* test marker */'),'no shared squad code in '+m);
 assert.throws(()=>patchSquadNetwork('',sources),/missing block/);
-console.log('PASS 2vs2 shared network: exact normal/draft canonical presence + action dispatch + host batches, monotonic motion, replay-safe receipts, source edits propagate only to both 2v2');
+console.log('PASS 2vs2 network modules: immutable legacy snapshots, 2v2 stage-only common action/presence/host, monotonic motion, replay-safe receipts, future one-source changes supported');
