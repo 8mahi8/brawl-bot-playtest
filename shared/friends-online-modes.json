@@ -7,7 +7,8 @@
     "squadPresencePositions": "shared/runtime/friends-2v2-presence-positions.inc.js",
     "squadActionStream": "shared/runtime/friends-2v2-action-stream.inc.js",
     "squadHostActions": "shared/runtime/friends-2v2-host-actions.inc.js",
-    "squadPositionPublish": "shared/runtime/friends-2v2-position-publish.inc.js"
+    "squadPositionPublish": "shared/runtime/friends-2v2-position-publish.inc.js",
+    "squadCombatPresentation": "shared/runtime/friends-2v2-combat-presentation.inc.js"
   },
   "modes": {
     "normal.1vs1": {
@@ -31,7 +32,8 @@
         "controlLayout",
         "squadPresencePositions",
         "squadActionStream",
-        "squadHostActions"
+        "squadHostActions",
+        "squadCombatPresentation"
       ],
       "sourceGitBlob": "e5c2c5b6a3c02b15fc02731b87ed83dc7d337106"
     },
@@ -56,7 +58,8 @@
         "controlLayout",
         "squadPresencePositions",
         "squadActionStream",
-        "squadHostActions"
+        "squadHostActions",
+        "squadCombatPresentation"
       ],
       "sourceGitBlob": "350ffa778bf4249bbe096e3e2bc1d8aaa60c9ca7"
     }
