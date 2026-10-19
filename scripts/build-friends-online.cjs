@@ -46,7 +46,7 @@ function patchControlLayout(html,source,modeName){
    'const displaySize=Math.min(p.size,Math.max(40,h*.36),Math.max(40,w*.42));',
    "const displaySize=BrawlControlLayoutV1.displaySize(p,w,h,'duel');",modeName+' render size');
   html=replaceOnce(html,
-   'const x=clamp(p.x*w,displaySize/2+4,w-displaySize/2-4);\n       const y=clamp(p.y*h,displaySize/2+4,h-displaySize/2-4);',
+   'const x=clamp(p.x*w,displaySize/2+4,w-displaySize/2-4);\n      const y=clamp(p.y*h,displaySize/2+4,h-displaySize/2-4);',
    'const {x,y}=BrawlControlLayoutV1.center(p,w,h,displaySize);',modeName+' render center');
   html=replaceOnce(html,
    'const size=Math.min(p.size,Math.max(40,rect.height*.36),Math.max(40,rect.width*.42));',
