@@ -90,7 +90,7 @@ const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
   touchingWall:(x,y)=>x>160};
  vm.createContext(env);vm.runInContext(read(spec.modules.squadCollisionMovement),env);
  vm.runInContext('moveWithWallSubsteps(50,0)',env);
- assert.equal(env.local.x,150,'small foreground movement applies');
+ assert(Math.abs(env.local.x-150)<1e-9,'small foreground movement applies within floating-point tolerance');
  vm.runInContext('moveWithWallSubsteps(100,40)',env);
  assert(env.local.x<=160,'substeps cannot jump through a wall');
  assert(env.local.y>100,'sliding along wall remains allowed');
