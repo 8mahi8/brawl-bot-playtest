@@ -17,6 +17,7 @@
 | 4モードのコード元／5桁ルームのルートと通信プロトコル | `shared/friends-online-modes.json` |
 | **2vs2通常・ドラフト共通の受信・ホスト通信経路**：接続時のpresence登録・位置受信、発射イベントの処理、受領確認と再送制御、ホスト側の戦闘書込 | `shared/runtime/friends-2v2-presence-positions.inc.js`, `shared/runtime/friends-2v2-action-stream.inc.js`, `shared/runtime/friends-2v2-host-actions.inc.js` |
 | 上記ネットワーク処理の互換テスト・両モードへの反映防止 | `tests/friends-2v2-network-foundation.cjs` |
+| **通常2vs2／ドラフト2vs2共通の位置送信判定**：移動80ms・静止500msの既存周期を保持 | `shared/runtime/friends-2v2-position-publish.inc.js`, `tests/friends-2v2-position-cadence.cjs` |
 | 全4モードに共通のGAD/ULT（ドラフト2vs2のみGAD2）ボタン座標・サイズ・保存データ読み取り | `shared/runtime/friends-control-layout.inc.js` |
 | 2vs2通常・ドラフト共通の「相手弾先行表示＋ボマーの飛行」の唯一の編集元 | `shared/runtime/friends-2v2-early-shots.inc.js` |
 | 4つのGoogle Sites貼り付け用HTMLを安全に生成・整合性検証 | `scripts/build-friends-online.cjs` |
@@ -33,6 +34,7 @@ node scripts/build-friends-online.cjs --check
 node tests/friends-online-build.cjs
 node tests/friends-control-layout.cjs
 node tests/friends-2v2-network-foundation.cjs
+node tests/friends-2v2-position-cadence.cjs
 
 # 新しい4モード単体HTMLを artifacts/friends-online/ のみに生成
 node scripts/build-friends-online.cjs --emit
