@@ -69,10 +69,9 @@ function simulate(input,frameMs=16,totalMs=2000){
  }
  return {count,lastTimes};
 }
-const idle=simulate(()=>({})),moving=simulate(()=>({vx:42,x:300+42*performanceLikeX()}));
-function performanceLikeX(){return 0;} // p.vx is sufficient to trigger active send
+const idle=simulate(()=>({})),moving=simulate(()=>({vx:42}));
 assert(idle.count>=4&&idle.count<=5,'idle sends only heartbeats '+idle.count);
-assert(moving.count>=20&&moving.count<=24,'moving sends around 80ms cadence '+moving.count);
+assert(moving.count>=25&&moving.count<=27,'moving sends around 80ms cadence '+moving.count);
 assert(moving.count>idle.count*4,'active and idle remain distinct cadence');
 for(const fakeLatencyMs of [0,150,300,600]){
  // The same cadence decisions apply regardless of receipt latency; no test
