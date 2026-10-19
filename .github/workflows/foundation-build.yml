@@ -15,6 +15,8 @@ on:
       - 'scripts/build-ipad-safari.cjs'
       - 'foundation/2v2-ipad-safari.html'
       - 'tests/foundation-*.cjs'
+      - 'tests/friends-2v2-lag-stress-v36.cjs'
+      - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
       - '.github/workflows/foundation-build.yml'
   pull_request:
     paths:
@@ -25,6 +27,8 @@ on:
       - 'foundation/**'
       - 'scripts/build-brawl.cjs'
       - 'tests/foundation-*.cjs'
+      - 'tests/friends-2v2-lag-stress-v36.cjs'
+      - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
       - '.github/workflows/foundation-build.yml'
   workflow_dispatch:
 permissions:
@@ -38,6 +42,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: V3.6 synthetic frame-lag model remains deterministic (not live RTT)
+        run: node tests/friends-2v2-lag-stress-v36.cjs > /dev/null
       - name: Both generated pages must exactly match single shared contract and source templates
         run: node scripts/build-brawl.cjs --check
       - name: Independent wide-map build must exactly match foundation baseline
