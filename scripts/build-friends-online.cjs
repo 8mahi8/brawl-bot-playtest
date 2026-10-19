@@ -229,7 +229,7 @@ function main(flag){
     assert.equal(patchPositionPublish(original,read(spec.modules.squadPositionPublish)),original,
       '2v2 candidate has stale position policy: '+name);
    if(mode.modules.includes('squadCombatPresentation'))
-    for(const {name:fn,body} of squadPresentationBlocks(presentationSource))
+    for(const {name:fn,body} of squadPresentationBlocks(read(spec.modules.squadCombatPresentation)))
      assert.equal(original.split(body).length-1,1,'unchanged legacy function '+name+'/'+fn);
    assert(html.includes('BrawlControlLayoutV1'),'control module must be inlined for '+name);
    console.log('PASS '+name+' canonical source and standalone ('+hash.slice(0,12)+')');
