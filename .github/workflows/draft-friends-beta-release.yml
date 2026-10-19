@@ -5,6 +5,10 @@ on:
       - 'sites/BRAWL_DRAFT_FRIENDS_BETA_*.html'
       - 'tests/draft-friends-beta-*.cjs'
       - 'tests/friends-four-mode-readiness.cjs'
+      - 'tests/friends-online-build.cjs'
+      - 'scripts/build-friends-online.cjs'
+      - 'shared/friends-online-modes.json'
+      - 'shared/runtime/friends-2v2-early-shots.inc.js'
       - 'tests/friends-2v2-latency-visual.cjs'
       - 'tests/friends-2v2-normal-latency-webkit.cjs'
       - 'sites/BRAWL_FRIENDS_*_QA_CANDIDATE.html'
@@ -19,6 +23,10 @@ on:
       - 'sites/BRAWL_DRAFT_FRIENDS_BETA_*.html'
       - 'tests/draft-friends-beta-*.cjs'
       - 'tests/friends-four-mode-readiness.cjs'
+      - 'tests/friends-online-build.cjs'
+      - 'scripts/build-friends-online.cjs'
+      - 'shared/friends-online-modes.json'
+      - 'shared/runtime/friends-2v2-early-shots.inc.js'
       - 'tests/friends-2v2-latency-visual.cjs'
       - 'tests/friends-2v2-normal-latency-webkit.cjs'
       - 'sites/BRAWL_FRIENDS_*_QA_CANDIDATE.html'
@@ -48,6 +56,8 @@ jobs:
         run: |
           node tests/draft-friends-beta-release.cjs
           node tests/friends-four-mode-readiness.cjs
+          node scripts/build-friends-online.cjs --check
+          node tests/friends-online-build.cjs
           node tests/friends-2v2-latency-visual.cjs
           node --check tests/draft-friends-beta-webkit.cjs
           node --check tests/friends-2v2-normal-latency-webkit.cjs
