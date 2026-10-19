@@ -172,8 +172,12 @@ function main(flag){
    if(mode.modules.includes('squadActionStream'))
     for(const [key,start,end] of SQUAD_NETWORK_PARTS){
      const p=uniqueSpan(original,start,end,key);
-     assert.equal(original.slice(p.begin,p.stop),squadNetwork[key],
-      'original 2v2 network pipeline drift '+name+' / '+key+' (review before updating canonical source)');
+     // The immutable input HTML is pinned separately. Future fixes change only
+     // shared/runtime, and are automatically emitted into BOTH 2v2 builds.
+     const legacy=original.slice(p.begin,p.stop);
+     const legacyBlob=crypto.createHash('sha1').update('blob '+Buffer.byteLength(legacy)+'\0'+legacy).digest('hex');
+     assert.equal(legacyBlob,spec.legacySquadNetworkBlobs[key],
+      'original 2v2 network baseline modified '+name+' / '+key);
     }
    assert(html.includes('BrawlControlLayoutV1'),'control module must be inlined for '+name);
    console.log('PASS '+name+' canonical source and standalone ('+hash.slice(0,12)+')');
