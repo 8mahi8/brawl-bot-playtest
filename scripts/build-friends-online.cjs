@@ -119,12 +119,12 @@ const SQUAD_PRESENTATION_NAMES=[
 // All mutations are to generated staging HTML; canonical candidate inputs
 // and production URLs/rules stay byte-for-byte unchanged.
 function squadPresentationBlocks(source){
- const rx=/\\/\\* BEGIN SHARED PRESENTATION ([A-Za-z][A-Za-z0-9]*) \\*\\/\\n([\\s\\S]*?)\\n\\/\\* END SHARED PRESENTATION \\1 \\*\\//g;
+ const rx=/\/\* BEGIN SHARED PRESENTATION ([A-Za-z][A-Za-z0-9]*) \*\/\n([\s\S]*?)\n\/\* END SHARED PRESENTATION \1 \*\//g;
  const matches=[...source.matchAll(rx)];
  assert.deepEqual(matches.map(m=>m[1]),SQUAD_PRESENTATION_NAMES,'exactly six named shared presentation functions');
  return matches.map(m=>{
   const name=m[1],body=m[2];
-  assert(new RegExp('(?:async\\\\s+)?function\\\\s+'+name+'\\\\s*\\\\(').test(body),'invalid shared function '+name);
+  assert(new RegExp('(?:async\\s+)?function\\s+'+name+'\\s*\\(').test(body),'invalid shared function '+name);
   return {name,body};
  });
 }
@@ -135,8 +135,8 @@ function patchSquadPresentation(html,source,modeName){
   html=replaceOnce(html,part.body,'',modeName+' remove legacy '+part.name);
  const marker='const layoutDefault={gad:';
  return replaceOnce(html,marker,
-  '/* BEGIN GENERATED SHARED 2V2 PRESENTATION */\\n'+source.trimEnd()+
-  '\\n/* END GENERATED SHARED 2V2 PRESENTATION */\\n'+marker,
+  '/* BEGIN GENERATED SHARED 2V2 PRESENTATION */\n'+source.trimEnd()+
+  '\n/* END GENERATED SHARED 2V2 PRESENTATION */\n'+marker,
   modeName+' inject 2v2 presentation');
 }
 
