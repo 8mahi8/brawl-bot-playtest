@@ -24,7 +24,11 @@ function observeShotAction(a,localPrediction){
  if(!own&&(!presence[a.owner]?.[a.connectionId]||a.seq<=(st.lastActionSeq||0)))return;
  const age=serverNow()-a.at;
  if(!Number.isFinite(age)||age>850||age<-250||earlyShots.has(a.eventId))return;
- earlyShots.set(a.eventId,{a,char,created:performance.now(),initial:clamp(age,0,140)});
+ // Catch up delayed peer projectiles to their action timestamp rather than
+ // replaying a 350ms-old shot from only 140ms into its flight. The 450ms cap
+ // avoids large visual jumps on resume or clock-offset spikes. This remains
+ // client-side drawing only: host collisions and HP are untouched.
+ earlyShots.set(a.eventId,{a,char,created:performance.now(),initial:clamp(age,0,450)});
  if(earlyShots.size>80)earlyShots.delete(earlyShots.keys().next().value);
  earlyShotStats.incoming++;if(char==='bomber')earlyShotStats.bomber++;
 }

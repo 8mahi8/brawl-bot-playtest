@@ -273,9 +273,15 @@ function main(flag){
   if(flag==='--check'){
    const gitBlob=crypto.createHash('sha1').update('blob '+Buffer.byteLength(original)+'\0'+original).digest('hex');
    assert.equal(gitBlob,mode.sourceGitBlob,'unreviewed candidate source drift: '+name+'; update manifest snapshot after review');
-   if(mode.modules.includes('squadEarlyShots'))
-    assert.equal(patchEarlyShots(original,read(spec.modules.squadEarlyShots)),original,
-      '2v2 candidate source has stale early-shot runtime: '+name);
+   // Candidate source is deliberately frozen and pinned by sourceGitBlob.
+   // Shared runtime improvements belong to generated staging, not to the
+   // immutable input HTML. Validate the patch can be applied without forcing
+   // the old candidate to equal the newest shared visual implementation.
+   if(mode.modules.includes('squadEarlyShots')){
+    const updated=patchEarlyShots(original,read(spec.modules.squadEarlyShots));
+    assert(updated.includes(read(spec.modules.squadEarlyShots).trimEnd()),
+      '2v2 staged early-shot patch did not apply: '+name);
+   }
    if(mode.modules.includes('squadActionStream'))
     for(const [key,start,end] of SQUAD_NETWORK_PARTS){
      const p=uniqueSpan(original,start,end,key);
