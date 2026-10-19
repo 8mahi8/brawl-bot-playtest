@@ -59,7 +59,7 @@ node scripts/build-friends-online.cjs --sync
 
 ## V3: 2vs2通信パイプラインの移行境界
 
-- 既存HTMLと共通モジュールのバイト単位での一致を照合したうえで、**ステージング生成HTMLにだけ**ネットワークモジュールを注入する。実装済みの4モード源HTMLとGoogle Sitesは差し替えない。
+- 初回抽出時に既存の2vs2通常・ドラフトHTMLと共通モジュールがバイト単位で一致することを確認した。元のHTMLは固定SHAで保護し、以降の修正は **共通モジュール1か所だけ**変更してステージング版へ自動注入する（元のHTMLを追って手修正する必要なし）。実装済みの4モード源HTMLとGoogle Sitesは差し替えない。
 - `registerPresence` / `validPosition` / `ingestPositions`: 接続世代、移動シーケンス番号とステート同期を維持する。
 - `acceptAction` から `submitAction`: 一時的なクライアント予測、受理済みイベントの照合、クラウド発射確定とリトライ判断。ドラフト固有の `validActionRequest` は共通化しない（ドラフトのみ `gadget2` を許可）。
 - `processHostQueue`: 同時発射を最大6アクション単位で処理するホスト側Firebaseトランザクション。カードやモード固有ルールは引き続き既存の `engine(g)` に保持する。
