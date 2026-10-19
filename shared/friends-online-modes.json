@@ -3,7 +3,10 @@
   "purpose": "Stage four standalone online variants with shared source injected at build time; pin input snapshots; do not touch live Google Sites or public HTML.",
   "modules": {
     "squadEarlyShots": "shared/runtime/friends-2v2-early-shots.inc.js",
-    "controlLayout": "shared/runtime/friends-control-layout.inc.js"
+    "controlLayout": "shared/runtime/friends-control-layout.inc.js",
+    "squadPresencePositions": "shared/runtime/friends-2v2-presence-positions.inc.js",
+    "squadActionStream": "shared/runtime/friends-2v2-action-stream.inc.js",
+    "squadHostActions": "shared/runtime/friends-2v2-host-actions.inc.js"
   },
   "modes": {
     "normal.1vs1": {
@@ -23,7 +26,10 @@
       "protocol": 3012,
       "modules": [
         "squadEarlyShots",
-        "controlLayout"
+        "controlLayout",
+        "squadPresencePositions",
+        "squadActionStream",
+        "squadHostActions"
       ],
       "sourceGitBlob": "e5c2c5b6a3c02b15fc02731b87ed83dc7d337106"
     },
@@ -44,7 +50,10 @@
       "protocol": 13012,
       "modules": [
         "squadEarlyShots",
-        "controlLayout"
+        "controlLayout",
+        "squadPresencePositions",
+        "squadActionStream",
+        "squadHostActions"
       ],
       "sourceGitBlob": "350ffa778bf4249bbe096e3e2bc1d8aaa60c9ca7"
     }
@@ -54,5 +63,10 @@
     "sites/BRAWL_FRIENDS_2vs2.html",
     "sites/BRAWL_DRAFT_FRIENDS_BETA_1vs1.html",
     "sites/BRAWL_DRAFT_FRIENDS_BETA_2vs2.html"
-  ]
+  ],
+  "legacySquadNetworkBlobs": {
+    "squadPresencePositions": "5b8bca56513862643571ce625f2244e2edc5fc1e",
+    "squadActionStream": "3420b4d106f83df64604d01b291f197871aaec45",
+    "squadHostActions": "cd2a5b919425cec0c6319c115a3069e0b02503c1"
+  }
 }

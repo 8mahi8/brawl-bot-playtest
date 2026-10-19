@@ -12,7 +12,8 @@ const remote='https://mygame-df915-default-rtdb.firebaseio.com/';
 const csp='connect-src https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://www.googleapis.com https://*.googleapis.com';
 const emulatorCsp='connect-src http://127.0.0.1:9000 ws://127.0.0.1:9000 http://localhost:9000 ws://localhost:9000';
 function fixture(file){
- let s=fs.readFileSync(path.join(dir,'sites',file),'utf8');
+ const selected=process.env.BRAWL_STAGE_2V2==='1'&&file==='BRAWL_DRAFT_FRIENDS_BETA_2vs2_LATENCY_CANDIDATE.html'?'artifacts/friends-online/draft-2vs2.html':'sites/'+file;
+ let s=fs.readFileSync(path.join(dir,selected),'utf8');
  assert(s.includes(remote)&&s.includes(csp));
  s=s.replaceAll(remote,demoUrl).replace(csp,emulatorCsp);
  const needle=file.includes('1vs1')?'    db=firebase.database();':' db=firebase.database(); // Friends beta uses selected cloud RTDB.';
@@ -193,16 +194,41 @@ async function run(){
   assert(received.stats.incoming>=1,'remote observer received peer shot before or during host confirmation');
   // Bomber is verified using the exact same wire action, not fabricated UI state.
   const bomberClient=red2Client.page;
+  const blueClient=clients[first.findIndex(q=>q.seat==='blue2')].page;
+  // Snapshot before firing: same-loop host handoff can beat the next RAF.
+  // The host can confirm a real bomb before an early transient is painted.
+  const beforeBomber=await blueClient.evaluate(()=>window.__brawlEarlyShotsQA().stats);
   await bomberClient.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:13000});
   assert.equal(await bomberClient.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true,
     'real Bomber launches one projectile using the action stream');
-  const blueClient=clients[first.findIndex(q=>q.seat==='blue2')].page;
-  await blueClient.waitForFunction(()=>{
-    const s=window.__brawlEarlyShotsQA?.()?.stats;
-    return !!s&&s.bomber>=1&&s.shown>0;
-  },null,{timeout:17000});
+  try{
+    await blueClient.waitForFunction(before=>{
+      const s=window.__brawlEarlyShotsQA?.()?.stats;
+      return !!s&&s.bomber>before.bomber&&
+        (s.shown>before.shown||s.hostHandoffs>before.hostHandoffs);
+    },beforeBomber,{timeout:17000});
+  }catch(e){
+    // Keep the failure strict; capture per-seat and local RTDB evidence before
+    // making changes to gameplay logic or weakening the Bomber assertion.
+    const describe=async client=>client.page.evaluate(async()=>{
+      const q=window.__brawlV3QA?.()||{},early=window.__brawlEarlyShotsQA?.();
+      const roomId=q.roomId;
+      const actions=roomId?(await window.firebase.database().ref('rooms2v2/'+roomId+'/actions').once('value')).val():null;
+      return {seat:q.seat,myId:q.myId,game:q.game,round:q.round,online:q.online,
+        positions:q.positionValues,early,actions:Object.values(actions||{}).map(a=>({
+          owner:a.owner,type:a.type,round:a.round,at:a.at,connectionId:a.connectionId
+        })).slice(-12)};
+    }).catch(err=>({evaluationError:String(err)}));
+    const [blueDiag,bomberDiag]=await Promise.all([describe(clients[first.findIndex(q=>q.seat==='blue2')]),describe(red2Client)]);
+    throw Error('2vs2 Bomber action arrival diagnosis: '+JSON.stringify({blueDiag,bomberDiag,
+      blueErrors:clients[first.findIndex(q=>q.seat==='blue2')].errors,
+      bomberErrors:red2Client.errors})+'; '+e.message);
+  }
   const bombSeen=await blueClient.evaluate(()=>window.__brawlEarlyShotsQA());
-  assert(bombSeen.stats.bomber>=1&&bombSeen.stats.shown>0);
+  assert(bombSeen.stats.bomber>beforeBomber.bomber,'peer received the real Bomber action');
+  assert(bombSeen.stats.shown>beforeBomber.shown||
+    bombSeen.stats.hostHandoffs>beforeBomber.hostHandoffs,
+    'Bomber must render an early flight or hand off to authoritative scheduled flight');
   console.log('PASS 2vs2 early peer-action prediction: blue sees red Bomber flight; red sees blue bullets, without changing HP');
 
 

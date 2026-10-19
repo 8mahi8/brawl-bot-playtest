@@ -13,6 +13,10 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-presence-positions.inc.js'
+      - 'shared/runtime/friends-2v2-action-stream.inc.js'
+      - 'shared/runtime/friends-2v2-host-actions.inc.js'
+      - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
       - 'tests/friends-2v2-normal-latency-webkit.cjs'
       - 'sites/BRAWL_FRIENDS_*_QA_CANDIDATE.html'
@@ -35,6 +39,10 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-presence-positions.inc.js'
+      - 'shared/runtime/friends-2v2-action-stream.inc.js'
+      - 'shared/runtime/friends-2v2-host-actions.inc.js'
+      - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
       - 'tests/friends-2v2-normal-latency-webkit.cjs'
       - 'sites/BRAWL_FRIENDS_*_QA_CANDIDATE.html'
@@ -67,6 +75,7 @@ jobs:
           node scripts/build-friends-online.cjs --check
           node tests/friends-online-build.cjs
           node tests/friends-control-layout.cjs
+          node tests/friends-2v2-network-foundation.cjs
           node tests/friends-2v2-latency-visual.cjs
           node --check tests/draft-friends-beta-webkit.cjs
           node --check tests/friends-2v2-normal-latency-webkit.cjs
@@ -95,4 +104,4 @@ jobs:
           test -s artifacts/firebase-sdk/firebase-app-compat.js
           test -s artifacts/firebase-sdk/firebase-database-compat.js
       - name: Run 2-client and 4-client beta HTML on LOCAL RTDB emulator only
-        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-draft-beta --config firebase.draft-friends-beta-e2e.json "node tests/draft-friends-beta-webkit.cjs && node tests/friends-2v2-normal-latency-webkit.cjs"
+        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-draft-beta --config firebase.draft-friends-beta-e2e.json "node tests/draft-friends-beta-webkit.cjs && node tests/friends-2v2-normal-latency-webkit.cjs && BRAWL_STAGE_2V2=1 node tests/draft-friends-beta-webkit.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-normal-latency-webkit.cjs"

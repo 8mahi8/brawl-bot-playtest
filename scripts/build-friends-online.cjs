@@ -87,6 +87,23 @@ function patchControlLayout(html,source,modeName){
  return html;
 }
 
+
+const SQUAD_NETWORK_PARTS=[
+ ['squadPresencePositions','async function registerPresence()','function attachRoom()'],
+ ['squadActionStream','function acceptAction(a,localPrediction=false)','// Up to six simultaneous friend actions'],
+ ['squadHostActions','async function processHostQueue()','function projectileStep(']
+];
+function patchSquadNetwork(html,parts){
+ for(const [key,start,end] of SQUAD_NETWORK_PARTS){
+  const canonical=parts[key];
+  assert(typeof canonical==='string'&&canonical.startsWith(start)&&canonical.endsWith('\n'),
+    'invalid squad network module '+key);
+  const span=uniqueSpan(html,start,end,key);
+  html=html.slice(0,span.begin)+canonical+html.slice(span.stop);
+ }
+ return html;
+}
+
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -113,11 +130,16 @@ function makeAll(moduleOverride=null){
  assert(canonical.startsWith(ACTION_BEGIN)&&canonical.endsWith('\n'),'bad shared early-shot source');
  assert(!canonical.includes(ACTION_END),'source must not contain marker after block');
  const layoutSource=read(spec.modules.controlLayout);
+ const squadNetwork=Object.fromEntries(SQUAD_NETWORK_PARTS.map(([key])=>[key,read(spec.modules[key])]));
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
   if(mode.modules.includes('squadEarlyShots'))html=patchEarlyShots(html,canonical);
   if(mode.modules.includes('controlLayout'))html=patchControlLayout(html,layoutSource,name);
+  if(mode.modules.includes('squadActionStream')){
+   assert(SQUAD_NETWORK_PARTS.every(([key])=>mode.modules.includes(key)),'incomplete network module set '+name);
+   html=patchSquadNetwork(html,squadNetwork);
+  }
   validate(html,name,mode);
   outputs[name]={mode,html,hash:crypto.createHash('sha256').update(html).digest('hex')};
  }
@@ -147,6 +169,16 @@ function main(flag){
    if(mode.modules.includes('squadEarlyShots'))
     assert.equal(patchEarlyShots(original,read(spec.modules.squadEarlyShots)),original,
       '2v2 candidate source has stale early-shot runtime: '+name);
+   if(mode.modules.includes('squadActionStream'))
+    for(const [key,start,end] of SQUAD_NETWORK_PARTS){
+     const p=uniqueSpan(original,start,end,key);
+     // The immutable input HTML is pinned separately. Future fixes change only
+     // shared/runtime, and are automatically emitted into BOTH 2v2 builds.
+     const legacy=original.slice(p.begin,p.stop);
+     const legacyBlob=crypto.createHash('sha1').update('blob '+Buffer.byteLength(legacy)+'\0'+legacy).digest('hex');
+     assert.equal(legacyBlob,spec.legacySquadNetworkBlobs[key],
+      'original 2v2 network baseline modified '+name+' / '+key);
+    }
    assert(html.includes('BrawlControlLayoutV1'),'control module must be inlined for '+name);
    console.log('PASS '+name+' canonical source and standalone ('+hash.slice(0,12)+')');
   }else if(flag==='--emit'){
@@ -166,4 +198,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchControlLayout,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,sharedSection,safeTarget,main};

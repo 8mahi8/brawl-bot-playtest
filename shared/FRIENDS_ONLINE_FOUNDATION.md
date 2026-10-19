@@ -1,4 +1,4 @@
-# BRAWL｜友達用オンライン4モード 開発基盤 V2
+# BRAWL｜友達用オンライン4モード 開発基盤 V3
 
 更新: 2026-10-19。以前のBOT専用 `scripts/build-brawl.cjs` とは別に、**実際に友達と遊ぶオンライン候補**を管理する。今回の実装はビルド・検証のみで公開版を差し替えない。
 
@@ -15,6 +15,8 @@
 | 用途 | ファイル |
 |---|---|
 | 4モードのコード元／5桁ルームのルートと通信プロトコル | `shared/friends-online-modes.json` |
+| **2vs2通常・ドラフト共通の受信・ホスト通信経路**：接続時のpresence登録・位置受信、発射イベントの処理、受領確認と再送制御、ホスト側の戦闘書込 | `shared/runtime/friends-2v2-presence-positions.inc.js`, `shared/runtime/friends-2v2-action-stream.inc.js`, `shared/runtime/friends-2v2-host-actions.inc.js` |
+| 上記ネットワーク処理の互換テスト・両モードへの反映防止 | `tests/friends-2v2-network-foundation.cjs` |
 | 全4モードに共通のGAD/ULT（ドラフト2vs2のみGAD2）ボタン座標・サイズ・保存データ読み取り | `shared/runtime/friends-control-layout.inc.js` |
 | 2vs2通常・ドラフト共通の「相手弾先行表示＋ボマーの飛行」の唯一の編集元 | `shared/runtime/friends-2v2-early-shots.inc.js` |
 | 4つのGoogle Sites貼り付け用HTMLを安全に生成・整合性検証 | `scripts/build-friends-online.cjs` |
@@ -30,6 +32,7 @@
 node scripts/build-friends-online.cjs --check
 node tests/friends-online-build.cjs
 node tests/friends-control-layout.cjs
+node tests/friends-2v2-network-foundation.cjs
 
 # 新しい4モード単体HTMLを artifacts/friends-online/ のみに生成
 node scripts/build-friends-online.cjs --emit
@@ -54,11 +57,21 @@ node scripts/build-friends-online.cjs --sync
 
 2vs2の全端末実戦で体感された「キャラは動くのに弾が遅い」は、少なくともホスト確定データ待ちの表示遅延によって説明できる。先行表示候補はこの待機をなくすための仮説改善で、実際の学校のWi-Fi／iPadでの改善値は未確認。
 
+## V3: 2vs2通信パイプラインの移行境界
+
+- 初回抽出時に既存の2vs2通常・ドラフトHTMLと共通モジュールがバイト単位で一致することを確認した。元のHTMLは固定SHAで保護し、以降の修正は **共通モジュール1か所だけ**変更してステージング版へ自動注入する（元のHTMLを追って手修正する必要なし）。実装済みの4モード源HTMLとGoogle Sitesは差し替えない。
+- `registerPresence` / `validPosition` / `ingestPositions`: 接続世代、移動シーケンス番号とステート同期を維持する。
+- `acceptAction` から `submitAction`: 一時的なクライアント予測、受理済みイベントの照合、クラウド発射確定とリトライ判断。ドラフト固有の `validActionRequest` は共通化しない（ドラフトのみ `gadget2` を許可）。
+- `processHostQueue`: 同時発射を最大6アクション単位で処理するホスト側Firebaseトランザクション。カードやモード固有ルールは引き続き既存の `engine(g)` に保持する。
+- 生成済み4モードを自動テストし、2vs2 **通常・ドラフトの生成版を4人のWebKit端末＋ローカルFirebaseエミュレーターで実際に試合進行させる**。古い候補版でも同じテストを実行する。
+- 共通化の目的は安全性・保守性。**実測ラグが軽減したと主張しない**。学校環境の再試験で確認する。
+- 次の移行候補: 各キャラの通常攻撃・壁当たり判定・戦闘状態更新（モード固有のカード処理とは分離）。先に一致性と遅延計測を確認し、段階的に進める。
+
 ## 次段階の移行方針
 
 1. **2vs2通信描画**: 全ユーザー向け共通早期弾表示を最初の本格共有モジュールとして運用し、意図せぬズレと先行表示バグを検出する。
 2. **UIと入力**: 位置・サイズ・保存の共通計算は V2 で完了。残る画面要素の共通化とタッチ操作の状態管理、UIテストを順次進める。GAD2はドラフト2vs2のみ存在する。
-3. **2vs2戦闘／ドラフト**: 通常のキャラ移動・弾・当たり判定とドラフト固有効果を分離。通常2vs2のネットコードをドラフトにコピーし続けない。
+3. **2vs2戦闘／ドラフト**: 位置同期・アクション送信・ホスト書込はV3で共通化。次に同じと証明できる通常の弾・ダメージの計算を抽出し、ドラフト固有効果は分離したままにする。
 4. **1vs1戦闘／ドラフト**: 同様に1vs1内の共通ロジックを分離し、2vs2とは互換性をテストできた部分だけ共有する。
 5. **公開手順**: 各HTMLをPRと自動テストで承認し、本人がGoogle Sitesへ貼り付けた後、実機での結果を記録。デプロイ自動化は本人の承認を得てから。
 
