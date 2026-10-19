@@ -6,6 +6,8 @@ on:
       - 'tests/draft-friends-beta-*.cjs'
       - 'tests/friends-four-mode-readiness.cjs'
       - 'tests/friends-online-build.cjs'
+      - 'tests/friends-squad-network-core.cjs'
+      - 'shared/runtime/friends-squad-network-combat.inc.js'
       - 'tests/friends-control-layout.cjs'
       - 'tests/friends-control-layout-webkit.cjs'
       - 'shared/runtime/friends-control-layout.inc.js'
@@ -28,6 +30,8 @@ on:
       - 'tests/draft-friends-beta-*.cjs'
       - 'tests/friends-four-mode-readiness.cjs'
       - 'tests/friends-online-build.cjs'
+      - 'tests/friends-squad-network-core.cjs'
+      - 'shared/runtime/friends-squad-network-combat.inc.js'
       - 'tests/friends-control-layout.cjs'
       - 'tests/friends-control-layout-webkit.cjs'
       - 'shared/runtime/friends-control-layout.inc.js'
@@ -66,6 +70,7 @@ jobs:
           node tests/friends-four-mode-readiness.cjs
           node scripts/build-friends-online.cjs --check
           node tests/friends-online-build.cjs
+          node tests/friends-squad-network-core.cjs
           node tests/friends-control-layout.cjs
           node tests/friends-2v2-latency-visual.cjs
           node --check tests/draft-friends-beta-webkit.cjs
@@ -95,4 +100,4 @@ jobs:
           test -s artifacts/firebase-sdk/firebase-app-compat.js
           test -s artifacts/firebase-sdk/firebase-database-compat.js
       - name: Run 2-client and 4-client beta HTML on LOCAL RTDB emulator only
-        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-draft-beta --config firebase.draft-friends-beta-e2e.json "node tests/draft-friends-beta-webkit.cjs && node tests/friends-2v2-normal-latency-webkit.cjs"
+        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-draft-beta --config firebase.draft-friends-beta-e2e.json "node tests/draft-friends-beta-webkit.cjs && node tests/friends-2v2-normal-latency-webkit.cjs && BRAWL_DRAFT_2V2_STAGING=1 node tests/draft-friends-beta-webkit.cjs && BRAWL_NORMAL_2V2_STAGING=1 node tests/friends-2v2-normal-latency-webkit.cjs"
