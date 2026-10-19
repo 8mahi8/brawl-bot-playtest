@@ -6,7 +6,8 @@
     "controlLayout": "shared/runtime/friends-control-layout.inc.js",
     "squadPresencePositions": "shared/runtime/friends-2v2-presence-positions.inc.js",
     "squadActionStream": "shared/runtime/friends-2v2-action-stream.inc.js",
-    "squadHostActions": "shared/runtime/friends-2v2-host-actions.inc.js"
+    "squadHostActions": "shared/runtime/friends-2v2-host-actions.inc.js",
+    "squadPositionPublish": "shared/runtime/friends-2v2-position-publish.inc.js"
   },
   "modes": {
     "normal.1vs1": {
@@ -26,6 +27,7 @@
       "protocol": 3012,
       "modules": [
         "squadEarlyShots",
+        "squadPositionPublish",
         "controlLayout",
         "squadPresencePositions",
         "squadActionStream",
@@ -50,6 +52,7 @@
       "protocol": 13012,
       "modules": [
         "squadEarlyShots",
+        "squadPositionPublish",
         "controlLayout",
         "squadPresencePositions",
         "squadActionStream",
