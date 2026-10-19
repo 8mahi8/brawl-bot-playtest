@@ -52,7 +52,7 @@ function patchControlLayout(html,source,modeName){
    'const size=Math.min(p.size,Math.max(40,rect.height*.36),Math.max(40,rect.width*.42));',
    "const size=BrawlControlLayoutV1.displaySize(p,rect.width,rect.height,'duel');",modeName+' drag size');
   html=replaceOnce(html,
-   'p.x=clamp((e.clientX-rect.left)/rect.width,(size/2+4)/rect.width,1-(size/2+4)/rect.width);\n     p.y=clamp((e.clientY-rect.top)/rect.height,(size/2+4)/rect.height,1-(size/2+4)/rect.height);',
+   'p.x=clamp((e.clientX-rect.left)/rect.width,(size/2+4)/rect.width,1-(size/2+4)/rect.width);\n    p.y=clamp((e.clientY-rect.top)/rect.height,(size/2+4)/rect.height,1-(size/2+4)/rect.height);',
    'Object.assign(p,BrawlControlLayoutV1.dragPoint(e,rect,size));',modeName+' drag coordinate');
  }else{
   html=replaceOnce(html,
