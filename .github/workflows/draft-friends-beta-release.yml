@@ -13,6 +13,9 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-position-publish.inc.js'
+      - 'tests/friends-2v2-position-cadence.cjs'
+      - 'network/FRIENDS_TRANSPORT_DECISIONS.md'
       - 'tests/friends-2v2-latency-visual.cjs'
       - 'tests/friends-2v2-normal-latency-webkit.cjs'
       - 'sites/BRAWL_FRIENDS_*_QA_CANDIDATE.html'
@@ -35,6 +38,9 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-position-publish.inc.js'
+      - 'tests/friends-2v2-position-cadence.cjs'
+      - 'network/FRIENDS_TRANSPORT_DECISIONS.md'
       - 'tests/friends-2v2-latency-visual.cjs'
       - 'tests/friends-2v2-normal-latency-webkit.cjs'
       - 'sites/BRAWL_FRIENDS_*_QA_CANDIDATE.html'
@@ -67,6 +73,7 @@ jobs:
           node scripts/build-friends-online.cjs --check
           node tests/friends-online-build.cjs
           node tests/friends-control-layout.cjs
+          node tests/friends-2v2-position-cadence.cjs
           node tests/friends-2v2-latency-visual.cjs
           node --check tests/draft-friends-beta-webkit.cjs
           node --check tests/friends-2v2-normal-latency-webkit.cjs
