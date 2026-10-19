@@ -1,8 +1,9 @@
 {
   "schemaVersion": 1,
-  "purpose": "Four standalone friend-playtest variants. Build candidate outputs without touching frozen published HTML or Google Sites.",
+  "purpose": "Stage four standalone online variants with shared source injected at build time; pin input snapshots; do not touch live Google Sites or public HTML.",
   "modules": {
-    "squadEarlyShots": "shared/runtime/friends-2v2-early-shots.inc.js"
+    "squadEarlyShots": "shared/runtime/friends-2v2-early-shots.inc.js",
+    "controlLayout": "shared/runtime/friends-control-layout.inc.js"
   },
   "modes": {
     "normal.1vs1": {
@@ -10,7 +11,10 @@
       "output": "artifacts/friends-online/normal-1vs1.html",
       "roomRoot": "rooms",
       "protocol": 31,
-      "modules": []
+      "modules": [
+        "controlLayout"
+      ],
+      "sourceGitBlob": "7a7a09acaf83bd3856de53cf91b183781c1cc9e2"
     },
     "normal.2vs2": {
       "source": "sites/BRAWL_FRIENDS_2vs2_LATENCY_CANDIDATE.html",
@@ -18,15 +22,20 @@
       "roomRoot": "rooms2v2",
       "protocol": 3012,
       "modules": [
-        "squadEarlyShots"
-      ]
+        "squadEarlyShots",
+        "controlLayout"
+      ],
+      "sourceGitBlob": "e5c2c5b6a3c02b15fc02731b87ed83dc7d337106"
     },
     "draft.1vs1": {
       "source": "sites/BRAWL_DRAFT_FRIENDS_BETA_1vs1.html",
       "output": "artifacts/friends-online/draft-1vs1.html",
       "roomRoot": "rooms",
       "protocol": 1031,
-      "modules": []
+      "modules": [
+        "controlLayout"
+      ],
+      "sourceGitBlob": "9e1acf5e0e81cb3b52b634b849cfdc90895db2bb"
     },
     "draft.2vs2": {
       "source": "sites/BRAWL_DRAFT_FRIENDS_BETA_2vs2_LATENCY_CANDIDATE.html",
@@ -34,8 +43,10 @@
       "roomRoot": "rooms2v2",
       "protocol": 13012,
       "modules": [
-        "squadEarlyShots"
-      ]
+        "squadEarlyShots",
+        "controlLayout"
+      ],
+      "sourceGitBlob": "350ffa778bf4249bbe096e3e2bc1d8aaa60c9ca7"
     }
   },
   "forbiddenWritePrefixes": [
