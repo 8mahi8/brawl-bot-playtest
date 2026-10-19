@@ -118,3 +118,11 @@ WebKit開発用コンソールで、対戦が `playing` に入ったら `window.
 **重要**：callback頻度はping/往復時間ではない。`previewDrawOperations`は弾ごとの件数ではなく描画の反復回数。Canvas送信までの時間は液晶表示までの時間ではない。sessionMaxは計測窓だけでなくセッション全体の最大値。実機iPadの遅延改善を示す測定値が揃うまでは「直った」と判断しない。
 
 自動回帰：`node tests/friends-2v2-latency-probe-v35.cjs`、4人WebKit＋Firebase **ローカル**エミュレータ上の通常/ドラフト生成版で実弾を観測。学校へ貼る公開HTMLの変更は本人承認の別工程。
+
+## V3.6：弾ラグ検証基盤の最終ゲート（2026-10-20）
+
+- `tests/friends-2v2-lag-stress-v36.cjs` は0〜160msの合成受信遅延、ジッター、16.67〜50msの描画間隔を固定seedでシミュレーションし、p50/p95/maxを比較する。**実際の通信品質やiPad実測とは異なる**。
+- `tests/friends-2v2-lag-delivery-webkit-v36.cjs` は**Firebaseローカルエミュレータ + WebKit 4人対戦**で、生成済み2vs2（通常版）の *ACTION callback の実行のみ*、指定した2端末に180ms/350msのテスト遅延を加える。これはネットワークパケットへの遅延注入ではなく、受信イベント処理の遅延を模したもの。第三者への通信、本番Firebase操作、既存HTMLの変更はない。
+- ACTIONの遅延下でも、ホストによる射撃のacceptとHP確定、表示イベントの到着、WebKitの例外ゼロを確認する。遅延で既にホストスナップショットが進んだ時は、先行描画がスキップされる場合があるため、*視覚的即応が保証された*とは報告しない。
+- CI は `artifacts/qa/v36-synthetic-scenarios.json` と `artifacts/qa/v36-four-peer-delivery-lag.json` を生成して `brawl-v36-lag-stress-results` の7日間限定artifactとして保存する。個人情報・ルームID・プレイヤーIDは含まない。
+- 基盤開発はいったんここで一区切り。学校での弾ラグが再現した場合は、個別に原因を特定して既存moduleを直す。診断UIの追加や公開版の変更は不要／未承認のため行わない。
