@@ -75,7 +75,7 @@ function patchControlLayout(html,source,modeName){
    modeName+' mock drag positions');
   if(modeName==='draft.2vs2'){
    html=replaceOnce(html,
-    'const size=Math.min(p.size,Math.max(30,Math.min(sw,sh)*.30));\n  b.style.width=size+\\'px\\';b.style.height=size+\\'px\\';',
+    "const size=Math.min(p.size,Math.max(30,Math.min(sw,sh)*.30));\n  b.style.width=size+'px';b.style.height=size+'px';",
     "const size=BrawlControlLayoutV1.displaySize(p,sw,sh,'squad');\n  b.style.width=size+'px';b.style.height=size+'px';",
     modeName+' gad2 size');
    html=replaceOnce(html,
