@@ -96,3 +96,13 @@ node scripts/build-friends-online.cjs --sync
 4モードのステージングHTML生成時、従来と**まったく同じ関数位置**でソースを入れ替える。古いHTML／Google Sites／本番Firebaseは変更しない。テストではソースの一致、1vs1と2vs2の分離、通常とドラフトへの単一編集伝播、PC照準・移動・入力タイムスタンプの各種境界値を確認する。既存の画面タッチハンドラや攻撃通信方式の全面再設計は行わない。
 
 この変更は保守性の改善であり、学校での2vs2弾ラグを実測で改善したと主張しない。
+
+## V3.4：タッチ操作と攻撃入力の共通化（2026-10-20）
+
+通常/ドラフト1vs1で既に同一だった pointerDown/pointerMove/pointerUp とULT・アクションボタンのタッチ/クリック抑止を二つの別モジュールとして共有する。通常/ドラフト2vs2は Canvas pointerdown/move/up/cancel/lostpointercapture、敵選択と shootAngle/bulletSpecs、touch発射からCanvas描画提出までの計測を三つの別モジュールにする。元HTMLで**完全一致した文字列だけ**採用。GAD2や特別ルールには触れない。
+
+共通ブロックは既存関数/イベント登録と同じ位置で差し替えるため、今の出荷候補の初期ビルドはコードとして no-op の設計。2vs2射撃は submitAction 経由でホストによるHP/KOの確定を維持。既存の1vs1と2vs2の通信方式も統合しない。
+
+テスト：前段V3.3の4モード不変チェック＋5モジュールのソース一致・二重登録防止・モード隔離、タッチ開始/移動/解除/キャンセル、射撃アクション、first-paint時間、WebKit 4人対戦（Firebaseローカルエミュレータ）を回帰させる。**Google Sites、本番Firebaseと公開HTMLは変更しない。** 本変更は保守基盤の改善で、学校iPadの実測ラグ低減を証明するものではない。
+
+Node実行：`node tests/friends-touch-combat-v34.cjs`。開発用HTML：`node scripts/build-friends-online.cjs --emit`（stagingのみ）。
