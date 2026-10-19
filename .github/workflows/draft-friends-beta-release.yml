@@ -35,6 +35,7 @@ on:
       - 'tests/friends-2v2-latency-probe-v35.cjs'
       - 'tests/friends-2v2-lag-stress-v36.cjs'
       - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
+      - 'tests/friends-2v2-visual-catchup-v37.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -81,6 +82,7 @@ on:
       - 'tests/friends-2v2-latency-probe-v35.cjs'
       - 'tests/friends-2v2-lag-stress-v36.cjs'
       - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
+      - 'tests/friends-2v2-visual-catchup-v37.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -121,6 +123,7 @@ jobs:
           node tests/friends-input-controls-v33.cjs
           node tests/friends-touch-combat-v34.cjs
           node tests/friends-2v2-latency-probe-v35.cjs
+          node tests/friends-2v2-visual-catchup-v37.cjs
           mkdir -p artifacts/qa
           node tests/friends-2v2-lag-stress-v36.cjs > artifacts/qa/v36-synthetic-scenarios.json
           node --check tests/friends-2v2-lag-delivery-webkit-v36.cjs
