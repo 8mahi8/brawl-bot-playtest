@@ -1,7 +1,6 @@
 // V3.6 deterministic lag/load analysis: no Firebase, no browser mutation.
 'use strict';
 const assert=require('node:assert/strict');
-const {performance}=require('node:perf_hooks');
 function simulate({latencyMs=0,jitterMs=0,frameMs=16.67,shots=60,seed=7}={}){
  assert(Number.isFinite(latencyMs)&&latencyMs>=0&&latencyMs<=2000);
  assert(Number.isFinite(jitterMs)&&jitterMs>=0&&jitterMs<=1000);
@@ -35,8 +34,16 @@ function run(){
   {name:'congested-20fps',latencyMs:160,jitterMs:90,frameMs:50}
  ];
  const results=cases.map(c=>({name:c.name,...simulate(c)}));
- for(const r of results)assert(r.observed.p95Ms>=r.observed.p50Ms);
- const report={version:'V3.6',generatedAt:new Date().toISOString(),
+ for(const r of results){
+  assert(r.observed.p95Ms>=r.observed.p50Ms,'percentiles ordered');
+  assert.deepEqual(simulate(r.settings),simulate(r.settings),'same seed must be reproducible');
+ }
+ assert(results[3].observed.p95Ms>results[0].observed.p95Ms,
+  'congested injection must produce worse synthetic responsiveness than ideal');
+ for(const bad of [{latencyMs:-1},{jitterMs:Infinity},{frameMs:0},{shots:0},{shots:10001}])
+  assert.throws(()=>simulate(bad),'reject invalid scenario inputs');
+
+ const report={version:'V3.6',
   source:'synthetic deterministic test, not device telemetry',
   scenarios:results.map(({name,settings,observed,notes})=>({name,settings,observed,notes}))};
  process.stdout.write(JSON.stringify(report,null,2)+'\n');
