@@ -194,13 +194,13 @@ async function run(){
   assert(received.stats.incoming>=1,'remote observer received peer shot before or during host confirmation');
   // Bomber is verified using the exact same wire action, not fabricated UI state.
   const bomberClient=red2Client.page;
+  const blueClient=clients[first.findIndex(q=>q.seat==='blue2')].page;
+  // Snapshot before firing: same-loop host handoff can beat the next RAF.
+  // The host can confirm a real bomb before an early transient is painted.
+  const beforeBomber=await blueClient.evaluate(()=>window.__brawlEarlyShotsQA().stats);
   await bomberClient.waitForFunction(()=>window.__brawlDraftFireReadyQA?.()?.canShoot,null,{timeout:13000});
   assert.equal(await bomberClient.evaluate(()=>window.__brawlDraftFireQA(Math.PI)),true,
     'real Bomber launches one projectile using the action stream');
-  const blueClient=clients[first.findIndex(q=>q.seat==='blue2')].page;
-  // The host can confirm a live bomb before the observer paints a transient
-  // preview frame. A canonical bomb handoff is an equally valid visual result.
-  const beforeBomber=await blueClient.evaluate(()=>window.__brawlEarlyShotsQA().stats);
   try{
     await blueClient.waitForFunction(before=>{
       const s=window.__brawlEarlyShotsQA?.()?.stats;
