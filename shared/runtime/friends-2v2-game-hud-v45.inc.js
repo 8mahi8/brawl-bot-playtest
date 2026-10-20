@@ -35,6 +35,9 @@ function requestGameHudRefreshV45(urgent=false){
 // renderGameHUD's original body has been renamed by the build-only patch.
 // Calls from periodicUiRefresh and critical lifecycle paths stay synchronous.
 function renderGameHUD(){
+ // A direct periodic HUD refresh may run before the queued animation frame.
+ // Cancel its duplicate so low-FPS iPads do not repeat the same DOM work.
+ if(v45HudPending){v45HudPending=false;v45HudToken++;v45HudPerf.invalidated++;}
  const began=performance.now();
  try{return renderGameHUDV45Base();}
  finally{
