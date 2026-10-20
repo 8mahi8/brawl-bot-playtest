@@ -71,6 +71,11 @@ function fixture(mode){
  '});'
  ].join('\n');
  s=s.replace(b,qa+'\n'+b);
+ if(process.env.BRAWL_V49_RENDER_PHASES==='1'){
+  const {instrumentV49}=require('./support/friends-2v2-render-patch-v49.cjs');
+  const v49=fs.readFileSync(path.join(root,'tests/support/friends-2v2-render-phases-v49.js'),'utf8');
+  s=instrumentV49(s,v49);
+ }
  // One receiver has callback-only delay. This is NOT a network RTT simulation.
  const callback=[
  'window.__v43DelayQA={ms:0,remoteActions:0};',
@@ -123,6 +128,8 @@ async function trial(mode,browser){
   const isolated=process.env.BRAWL_V45_ISOLATE_CANVAS==='1';
   const natural=process.env.BRAWL_V46_BASELINE_ACTIONS==='1';
   const indexed=process.env.BRAWL_V47_INDEX_EARLY_SHOTS==='1';
+  const renderPhases=process.env.BRAWL_V49_RENDER_PHASES==='1';
+  assert(!renderPhases||(natural&&!indexed&&!isolated),'V4.9 is a natural shot baseline with all Canvas renderers active');
   assert(!indexed||natural,'V4.7 candidate only alongside V4.6 natural no-injected-delay baseline');
   assert(!(isolated&&natural),'V4.6 natural action baseline must not disable guest Canvas');
   // No video encoding while establishing natural callback timings; the
@@ -165,7 +172,10 @@ async function trial(mode,browser){
   });
   assert(!ui.overlap&&ui.buttonTop>ui.viewportHeight-65,
    'manual network diagnosis never masks live match score');
-  for(const c of clients)await c.page.evaluate(()=>window.__brawlLagV39QA.start());
+  for(const c of clients)await c.page.evaluate(()=>{
+   window.__brawlLagV39QA.start();
+   window.__v49ShotFrames?.start();
+  });
   const startedVisual=await Promise.all(SEATS.map(async seat=>({
    seat,state:await bySeat[seat].evaluate(()=>window.__v43QA.state())
   })));
@@ -230,6 +240,7 @@ async function trial(mode,browser){
    return {seat,
     visual:await page.evaluate(()=>window.__v43QA.state()),
     latency:await page.evaluate(()=>window.__brawlLagV39QA.stop()),
+    renderPhases:renderPhases?await page.evaluate(()=>window.__v49ShotFrames.stop()):null,
     received:await page.evaluate(()=>window.__v43DelayQA.remoteActions)};
   }));
   assert(Object.values(travel).filter(x=>x>=90).length>=2,
@@ -238,7 +249,7 @@ async function trial(mode,browser){
   assert(reports.some(r=>r.received>=3),'guests must observe multiple remote action events');
   assert(reports.some(r=>r.visual.remotes>=3),'remote player draw positions must exist');
   for(const c of clients)assert.deepEqual(c.errors,[],'WebKit JS error '+mode);
-  result={version:indexed?'V4.7':natural?'V4.6':'V4.5',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
+  result={version:renderPhases?'V4.9':indexed?'V4.7':natural?'V4.6':'V4.5',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
    durationSec:DURATION,shots,travelWorldUnits:travel,characters:chars,
    receiverCallbackOnlyDelayMs:natural?{}:{red1:180},noSchoolNetworkRTT:true,
    peers:reports.map(r=>{
@@ -297,6 +308,7 @@ async function trial(mode,browser){
      seat:p.seat,remoteActions:p.received,
      stages:p.lagStages,events:p.events,
      gameCpu:p.localCpu,
+     renderPhases:renderPhases?reports.find(x=>x.seat===p.seat).renderPhases:null,
      earlyFrame:{
       calls:p.finalFrame.earlyFrame.calls -
        startedVisual.find(s=>s.seat===p.seat).state.earlyFrame.calls,
@@ -313,7 +325,8 @@ async function trial(mode,browser){
    };
    assert(baseline.seats.every(p=>p.events.remoteShots>=1),
     'natural 4-peer baseline must actually receive remote shots on every client');
-   const target=path.join(out,(indexed?'v47-':'v46-')+mode+(indexed?'-indexed-shot-pipeline.json':'-natural-shot-pipeline.json'));
+   const target=path.join(out,renderPhases?'v49-'+mode+'-frame-shot-pipeline.json':
+    (indexed?'v47-':'v46-')+mode+(indexed?'-indexed-shot-pipeline.json':'-natural-shot-pipeline.json'));
    fs.writeFileSync(target,JSON.stringify(baseline,null,2)+'\n');
    const summary=baseline.seats.map(p=>({
     seat:p.seat,remoteShots:p.events.remoteShots,hostTransactions:p.events.hostTransactions,
@@ -326,7 +339,23 @@ async function trial(mode,browser){
     activeEarlyShotDraws:p.earlyFrame.activeCalls,denseEarlyShotDraws:p.earlyFrame.denseCalls,
     earlyShotTotalDrawMs:p.earlyFrame.totalMs
    }));
-   console.log('PASS '+(indexed?'V4.7 indexed':'V4.6 natural')+' '+mode+' action stages '+JSON.stringify(summary));
+   if(renderPhases){
+    assert(baseline.seats.every(x=>x.renderPhases.events.remoteActions===x.events.remoteShots),
+     'V4.9 phases must count ONLY genuine remote shot ACTIONs, never own shots');
+    const phases=baseline.seats.map(x=>({seat:x.seat,
+     remoteActions:x.renderPhases.events.remoteActions,
+     firstFrames:x.renderPhases.events.firstFrames,
+     firstVisuals:x.renderPhases.events.firstVisuals,
+     skippedDrawWhilePending:x.renderPhases.events.skippedDrawDecisionsWhilePending,
+     toFrameP95:x.renderPhases.stages.receiveToNextFrameMs.p95Ms,
+     frameToVisualP95:x.renderPhases.stages.nextFrameToFirstVisualMs.p95Ms,
+     toVisualP95:x.renderPhases.stages.receiveToFirstVisualMs.p95Ms}));
+    assert(phases.every(x=>x.remoteActions>=20),
+     'each browser received real remote ACTIONs during the 27s trial');
+    assert(phases.some(x=>x.firstVisuals>0),
+     'actual Canvas early/authoritative bullet visuals must be observed');
+    console.log('PASS V4.9 '+mode+' real shot frame phases '+JSON.stringify(phases));
+   }else console.log('PASS '+(indexed?'V4.7 indexed':'V4.6 natural')+' '+mode+' action stages '+JSON.stringify(summary));
   }else{
    fs.writeFileSync(path.join(out,'v43-'+mode+'-motion.json'),JSON.stringify(result,null,2)+'\n');
    console.log('PASS V4.3 '+mode+' moving multiplayer '+JSON.stringify({shots,travel}));
