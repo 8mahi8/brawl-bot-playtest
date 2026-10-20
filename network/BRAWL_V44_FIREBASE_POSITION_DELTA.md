@@ -10,6 +10,7 @@ Firebase公式： [Optimize Database Performance](https://firebase.google.com/do
 
 - **V4.3まで：** `rooms2v2/{id}/positions` に `value` リスナー。4人のうち誰か1人が位置を更新するたび、JS callbackは4人分の位置オブジェクトを取得・再構築してから全件走査。
 - **V4.4開発版：** 位置パスに `child_added` / `child_changed` / `child_removed` を登録。位置変更時には **更新された1人のオブジェクト** だけを取り出し、変わった内容をローカルキャッシュに反映。初回接続時のみ `once('value')` で位置配列の取得完了を確認し、初期ロードの途中に届いた更新が古い初期値で巻き戻されないようガードする。
+- **受信CPUも改善：** child更新時の `ingestPositions(id)` は変更された1人だけ検証・更新する。初回・ラウンド切替・ロビー/在席情報更新では引き続き全員分の状態を再確認する。
 - **変更なし：** 送信間隔80ms（移動中）・500ms（停止中）、Firebaseへの書き込み、戦闘のホスト判定、命中/HP・ゲームルール、公開中Google Sites。通常2vs2とドラフト2vs2の **生成する開発HTMLだけ** に反映。1vs1は不変。
 - `child_removed` により、退出した遠隔プレイヤーのキャッシュが残る「幽霊表示」も削除。RTDB再接続/ラウンド更新時にseqを再利用しても以前の状態と混同しない。
 
