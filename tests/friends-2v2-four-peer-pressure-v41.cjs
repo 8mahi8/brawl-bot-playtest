@@ -23,11 +23,11 @@ const trafficPatch='window.__brawlV3QA=()=>({';
 assert.equal(src.split(trafficPatch).length-1,1,'single traffic diagnostic hook');
 src=src.replace(trafficPatch,`window.__v41TrafficQA={gameCallbacks:0,gameJsonEstimateBytes:0,gameMaxJsonEstimateBytes:0,positionCallbacks:0,positionJsonEstimateBytes:0,positionMaxJsonEstimateBytes:0};
 `+trafficPatch);
-const gameValueHook='const before=game;game=snap.val();reconcileHpPreviews(before,game);';
+const gameValueHook='const before=game;game=snap.val();window.__brawlLagV39QA.snapshot(game);';
 assert.equal(src.split(gameValueHook).length-1,1,'game snapshot telemetry injection point');
 src=src.replace(gameValueHook,`const before=game;game=snap.val();
  {const t=window.__v41TrafficQA;t.gameCallbacks++;const bytes=JSON.stringify(game||{}).length;t.gameJsonEstimateBytes+=bytes;t.gameMaxJsonEstimateBytes=Math.max(t.gameMaxJsonEstimateBytes,bytes);}
- reconcileHpPreviews(before,game);`);
+ window.__brawlLagV39QA.snapshot(game);`);
 const positionValueHook='rawPositions=snap.val()||{};positionsReady=true;';
 assert.equal(src.split(positionValueHook).length-1,1,'position snapshot telemetry injection point');
 src=src.replace(positionValueHook,`rawPositions=snap.val()||{};
