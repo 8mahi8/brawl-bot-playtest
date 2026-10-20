@@ -6,7 +6,8 @@ const at=src.indexOf('function ingestPositions(changedId=null)');
 assert(at>=0,'single changed-player ingestion entry point');
 const code=src.slice(at);
 assert(!code.includes('function attachRoom('),'only isolated canonical ingestPositions');
-assert(!code.includes('.set(')&&!code.includes('.transaction('),'pure client receiver');
+assert(!/\b(?:room|db|ref|activeRoom)\.child\(|\b(?:firebase|fetch)\s*\(/.test(code),
+ 'pure local pose ingestion must not perform Firebase reads or writes');
 const makePos=(seq,round=1)=>({
  x:100+seq,y:200+seq,a:0,seq,round,matchId:'m',
  motionRev:0,life:1,connectionId:'conn'
