@@ -340,6 +340,8 @@ async function trial(mode,browser){
     earlyShotTotalDrawMs:p.earlyFrame.totalMs
    }));
    if(renderPhases){
+    assert(baseline.seats.every(x=>x.renderPhases.events.remoteActions===x.events.remoteShots),
+     'V4.9 phases must count ONLY genuine remote shot ACTIONs, never own shots');
     const phases=baseline.seats.map(x=>({seat:x.seat,
      remoteActions:x.renderPhases.events.remoteActions,
      firstFrames:x.renderPhases.events.firstFrames,
