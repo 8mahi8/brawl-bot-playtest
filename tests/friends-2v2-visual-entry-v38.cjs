@@ -46,6 +46,7 @@ assert(start>=0&&end>start);
 const settings={value:''},storage=new Map();
 const configEnv={document:{getElementById:()=>settings},
  localStorage:{getItem:k=>storage.get(k)||'',setItem:(k,v)=>storage.set(k,v)},Object};
+configEnv.window=configEnv;
 vm.createContext(configEnv);vm.runInContext(normal.slice(start,end),configEnv);
 assert.equal(configEnv.BrawlOnlineConfig.get(),endpoint,'fresh iPad gets the correct DB automatically');
 settings.value='';
