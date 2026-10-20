@@ -43,7 +43,7 @@ guest.drain();
 assert.deepEqual([...guest.ctx.pendingActions.keys()],['a2'],
  'guest safely removes receipts from map iterator without sorting/copying');
 assert.equal(guest.ctx.seenActions.size,2,'handled receipts cannot replay');
-const built=makeAll();
+const built=makeAll(null,null,null,null,null,false);
 for(const name of ['normal.2vs2','draft.2vs2']){
  assert(built[name].html.includes(text),'normal/draft 2v2 share optimization');
 }
