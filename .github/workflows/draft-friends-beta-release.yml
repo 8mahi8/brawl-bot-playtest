@@ -16,9 +16,11 @@ on:
       - 'shared/runtime/friends-2v2-projectile-visual.inc.js'
       - 'shared/runtime/friends-2v2-position-publish.inc.js'
       - 'shared/runtime/friends-2v2-position-delta-v44.inc.js'
+      - 'shared/runtime/friends-2v2-game-hud-v45.inc.js'
       - 'tests/friends-2v2-position-cadence.cjs'
       - 'tests/friends-2v2-position-delta-v44.cjs'
       - 'tests/friends-2v2-position-ingest-v44.cjs'
+      - 'tests/friends-2v2-game-hud-v45.cjs'
       - 'network/FRIENDS_TRANSPORT_DECISIONS.md'
       - 'shared/runtime/friends-2v2-presence-positions.inc.js'
       - 'shared/runtime/friends-2v2-action-stream.inc.js'
@@ -76,9 +78,11 @@ on:
       - 'shared/runtime/friends-2v2-projectile-visual.inc.js'
       - 'shared/runtime/friends-2v2-position-publish.inc.js'
       - 'shared/runtime/friends-2v2-position-delta-v44.inc.js'
+      - 'shared/runtime/friends-2v2-game-hud-v45.inc.js'
       - 'tests/friends-2v2-position-cadence.cjs'
       - 'tests/friends-2v2-position-delta-v44.cjs'
       - 'tests/friends-2v2-position-ingest-v44.cjs'
+      - 'tests/friends-2v2-game-hud-v45.cjs'
       - 'network/FRIENDS_TRANSPORT_DECISIONS.md'
       - 'shared/runtime/friends-2v2-presence-positions.inc.js'
       - 'shared/runtime/friends-2v2-action-stream.inc.js'
@@ -146,6 +150,7 @@ jobs:
           node tests/friends-2v2-position-cadence.cjs
           node tests/friends-2v2-position-delta-v44.cjs
           node tests/friends-2v2-position-ingest-v44.cjs
+          node tests/friends-2v2-game-hud-v45.cjs
           node tests/friends-2v2-network-foundation.cjs
           node tests/friends-2v2-action-hotpath-v41.cjs
           node tests/friends-2v2-combat-presentation.cjs
