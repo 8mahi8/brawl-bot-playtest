@@ -33,8 +33,11 @@ const port=8878,server=http.createServer((req,res)=>{
  if(!(req.url in html)){res.writeHead(404);res.end();return;}
  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(html[req.url]);
 });
-async function open(browser,mode){
- const ctx=await browser.newContext({viewport:{width:1024,height:650},isMobile:true,hasTouch:true,locale:'ja-JP'});
+async function open(browser,mode,capture=false){
+ const videoDir=path.join(dir,'artifacts/qa/visual-v42');
+ if(capture)fs.mkdirSync(videoDir,{recursive:true});
+ const ctx=await browser.newContext({viewport:{width:1024,height:650},isMobile:true,hasTouch:true,locale:'ja-JP',
+  ...(capture?{recordVideo:{dir:videoDir,size:{width:1024,height:650}}}:{})});
  const page=await ctx.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  page.on('console',e=>{if(e.type()==='error')errors.push(e.text().slice(0,170));});
@@ -46,7 +49,7 @@ async function open(browser,mode){
  await page.goto('http://127.0.0.1:'+port+'/'+mode,{waitUntil:'load'});
  const qa=mode==='duel'?'__brawlV29QA':'__brawlV3QA';
  await page.waitForFunction(key=>typeof window[key]==='function',qa,{timeout:16000});
- return {ctx,page,errors,qa};
+ return {ctx,page,errors,qa,capture};
 }
 async function run(){
  await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));
@@ -141,7 +144,7 @@ async function run(){
   console.log('PASS FRIEND BETA 1vs1 delayed remote shot: muzzle birth, flash, combat age unchanged');
   await Promise.all([h,g].map(x=>x.ctx.close()));
 
-  const clients=await Promise.all(Array.from({length:4},()=>open(browser,'latency')));all.push(...clients);
+  const clients=await Promise.all(Array.from({length:4},(_,i)=>open(browser,'latency',process.env.BRAWL_VISUAL_QA==='1'&&i<2)));all.push(...clients);
   const host=clients[0].page;
   await host.locator('#createBtn').click();
   try{await host.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:17000});}
@@ -319,6 +322,12 @@ async function run(){
   console.log('PASS FRIEND BETA 2vs2: four WebKit clients joined, READY, real RTDB playing, draft protocol separate');
  }finally{
   for(const c of all)try{await c.ctx.close();}catch(_){}
+  for(let i=0;i<all.length;i++)if(all[i].capture){
+   const output=path.join(dir,'artifacts/qa/v42-draft-2v2-'+(i===all.findIndex(x=>x.capture)?'host':'guest')+'.webm');
+   await all[i].page.video().saveAs(output);
+   assert(fs.statSync(output).size>1000,'nonempty draft 2v2 match capture');
+   console.log('PASS V4.2 local draft 2vs2 visual capture '+path.basename(output));
+  }
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
  }

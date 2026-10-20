@@ -52,8 +52,11 @@ const server=http.createServer((req,res)=>{
  if(![0,180,350].includes(delay)){res.writeHead(400);res.end('Invalid test delay');return;}
  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(stressedHtml(delay));
 });
-async function open(browser,deliveryLag){
- const ctx=await browser.newContext({viewport:{width:1024,height:650},isMobile:true,hasTouch:true,deviceScaleFactor:1,locale:'ja-JP'});
+async function open(browser,deliveryLag,capture=false){
+ const videoDir=path.join(dir,'artifacts/qa/visual-v42');
+ if(capture)fs.mkdirSync(videoDir,{recursive:true});
+ const ctx=await browser.newContext({viewport:{width:1024,height:650},isMobile:true,hasTouch:true,deviceScaleFactor:1,locale:'ja-JP',
+  ...(capture?{recordVideo:{dir:videoDir,size:{width:1024,height:650}}}:{})});
  const page=await ctx.newPage(),errors=[];
  page.on('pageerror',e=>errors.push('JS '+e.message));
  page.on('console',m=>{if(m.type()==='error')errors.push('CONSOLE '+m.text().slice(0,170));});
@@ -66,14 +69,14 @@ async function open(browser,deliveryLag){
  await page.waitForFunction(()=>typeof window.__brawlV3QA==='function',null,{timeout:17000});
  await page.locator('details.online-config summary').click();
  await page.locator('#onlineDbInput').fill(fakeUrl);
- return {ctx,page,errors,deliveryLag};
+ return {ctx,page,errors,deliveryLag,capture};
 }
 async function run(){
  await new Promise(resolve=>server.listen(8879,'127.0.0.1',resolve));
  let browser,all=[];
  try{
   browser=await webkit.launch({headless:true});
-  all=await Promise.all([0,0,0,0].map(ms=>open(browser,ms)));
+  all=await Promise.all([0,0,0,0].map((ms,i)=>open(browser,ms,process.env.BRAWL_VISUAL_QA==='1'&&i<2)));
   const host=all[0].page;
   await host.locator('#createBtn').click();
   await host.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:18000});
@@ -217,6 +220,12 @@ async function run(){
   console.log('PASS V3.6 four WebKit peers, 180/350ms delayed action callback, authoritative accepted shots unchanged, bounded latency report '+target);
  }finally{
   await Promise.all(all.map(c=>c.ctx.close().catch(()=>{})));
+  for(let i=0;i<all.length;i++)if(all[i].capture){
+   const output=path.join(dir,'artifacts/qa/v42-normal-2v2-'+(i?'guest':'host')+'.webm');
+   await all[i].page.video().saveAs(output);
+   assert(fs.statSync(output).size>1000,'nonempty 2v2 match capture');
+   console.log('PASS V4.2 local 2vs2 visual capture '+path.basename(output));
+  }
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
  }
