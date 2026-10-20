@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>BRAWL｜学校ネットワーク通信テスト</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#091827;color:#ecf7ff;padding:12px}
+.wrap{max-width:680px;margin:0 auto}.head{display:flex;align-items:center;gap:10px;margin:0 0 9px}
+.logo{font-size:23px}h1{font-size:19px;line-height:1.3;margin:0}
+.muted{font-size:12px;color:#aec2d2;line-height:1.65;margin:6px 0 13px}
+.card{background:#102739;border:1px solid #325267;border-radius:12px;padding:13px;margin-bottom:11px}
+label{display:block;font-weight:700;font-size:13px;margin-bottom:7px}
+input,textarea{width:100%;font:14px system-ui,sans-serif;color:#eaf8ff;background:#081827;
+border:1px solid #627e91;border-radius:8px;padding:11px}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid #70d8e5;outline-offset:2px}
+input::placeholder{color:#7794a4}button{border:0;border-radius:10px;padding:11px 16px;
+font-weight:700;font-size:14px;color:#061f2a;background:#65d3dd;min-height:44px;cursor:pointer}
+button.secondary{background:#25475a;color:#eaf8ff}
+button:disabled{opacity:.45;cursor:default}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.status{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;padding:11px 0;border-top:1px solid #304658;font-size:14px}
+.status:first-child{border-top:0}.pill{font-size:12px;white-space:nowrap;background:#2b4150;
+border-radius:7px;padding:5px 8px}.pill.ok{background:#174938;color:#a7f2d1}
+.pill.bad{background:#592a33;color:#ffc7ca}.hint{color:#adc3d2;font-size:12px}
+textarea{height:168px;resize:vertical;line-height:1.6;font-size:12px}
+#details{min-height:21px;color:#c4dbe8;font-size:12px;line-height:1.5}
+</style>
+</head>
+<body>
+<main class="wrap">
+ <header class="head"><div class="logo">🎮</div><h1>BRAWL｜通信テスト</h1></header>
+ <p class="muted">学校のiPadでCloudflareに接続できるかだけを確認する、ゲームとは独立したテストです。対戦データ・個人情報・ログインは使いません。通信は「テスト開始」を押した時だけ行います。</p>
+ <section class="card">
+  <label for="base">Cloudflare Worker のURL</label>
+  <input id="base" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+    placeholder="https://（作成したWorkerのURL）.workers.dev" aria-describedby="basehint">
+  <p class="muted" id="basehint">Workerを先に公開したときのURLを貼り付けてください。架空のURLでは動きません。</p>
+  <div class="actions"><button id="test" type="button">接続テスト開始</button>
+   <button id="copy" type="button" class="secondary" disabled>結果をコピー</button></div>
+ </section>
+ <section class="card" aria-label="テスト結果">
+  <div class="status"><span>① HTTPS 通信</span><span id="http" class="pill">未確認</span></div>
+  <div class="status"><span>② WebSocket 接続</span><span id="socket" class="pill">未確認</span></div>
+  <div class="status"><span>③ メッセージ5回の往復</span><span id="echo" class="pill">未確認</span></div>
+  <p id="details" role="status" aria-live="polite">URLを入力し、「接続テスト開始」を押してください。</p>
+ </section>
+ <section class="card">
+  <label for="result">診断レポート（共有できる内容だけ）</label>
+  <textarea id="result" readonly placeholder="テスト後に結果が表示されます。"></textarea>
+  <p class="muted">測る時間は、この端末内の往復時間（RTT）の目安です。実際の4人対戦でのラグや学校側の許可を保証するものではありません。ブロックが確認された場合は学校の利用ルールに従ってください。</p>
+ </section>
+</main>
+<script>
+(function(){
+ "use strict";
+ const el=id=>document.getElementById(id);
+ const base=el("base"),go=el("test"),copy=el("copy"),report=el("result");
+ const statuses={http:el("http"),socket:el("socket"),echo:el("echo")};
+ const TIMEOUT_HTTP=6000,TIMEOUT_WS=6500,TIMEOUT_ECHO=4000,PINGS=5;
+ let running=false;
+ function set(id,text,kind){
+  const node=statuses[id];node.textContent=text;node.className="pill"+(kind?" "+kind:"");
+ }
+ function details(text){el("details").textContent=text;}
+ function makeOrigin(raw){
+  const u=new URL(raw.trim());
+  if(u.protocol!=="https:"||u.username||u.password||u.search||u.hash||
+     (u.pathname!=="/"&&u.pathname!=="")||u.port)
+   throw Error("https:// から始まるWorkerのURLだけを入力してください");
+  return u.origin;
+ }
+ function httpCheck(origin){
+  return new Promise(resolve=>{
+   const controller=new AbortController(),start=performance.now();
+   const timer=setTimeout(()=>controller.abort(),TIMEOUT_HTTP);
+   fetch(origin+"/health",{method:"GET",mode:"cors",cache:"no-store",
+    credentials:"omit",signal:controller.signal}).then(async response=>{
+    if(!response.ok)throw Error("HTTP "+response.status);
+    const body=await response.json();
+    if(body.probe!=="brawl-cf-connect"||body.status!=="ok"||body.version!==1)
+     throw Error("想定と異なるサーバー応答");
+    resolve({ok:true,ms:Math.round(performance.now()-start)});
+   }).catch(e=>resolve({ok:false,error:e.name==="AbortError"?"6秒でタイムアウト":
+    String(e.message||e).slice(0,130)})).finally(()=>clearTimeout(timer));
+  });
+ }
+ function wsCheck(origin,onConnect){
+  return new Promise(resolve=>{
+   const url="wss://"+new URL(origin).host+"/ws";
+   let ws,done=false,timer=null,seq=0,sentAt=0;
+   const values=[],nonce=Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,12);
+   function finish(out){
+    if(done)return;done=true;clearTimeout(timer);
+    try{if(ws&&ws.readyState<=1)ws.close(1000,"probe_completed");}catch(_){}
+    resolve(out);
+   }
+   function fail(reason){finish({ok:false,opened:seq>0||opened,error:reason,values});}
+   let opened=false;
+   function ping(){
+    clearTimeout(timer);sentAt=performance.now();
+    timer=setTimeout(()=>fail("応答待ちが4秒を超えました"),TIMEOUT_ECHO);
+    ws.send(JSON.stringify({type:"ping",seq,nonce}));
+   }
+   try{ws=new WebSocket(url);}catch(e){
+    finish({ok:false,opened:false,error:String(e.message||e),values});return;
+   }
+   timer=setTimeout(()=>fail("接続まで6.5秒を超えました"),TIMEOUT_WS);
+   ws.onopen=()=>{
+    if(done)return;opened=true;onConnect();ping();
+   };
+   ws.onmessage=event=>{
+    if(done)return;
+    let msg;
+    try{msg=JSON.parse(event.data);}catch(_){fail("JSON応答が不正です");return;}
+    if(msg?.type!=="pong"||msg.nonce!==nonce||msg.seq!==seq){
+     fail("送ったメッセージと応答が一致しません");return;
+    }
+    values.push(Math.round((performance.now()-sentAt)*10)/10);
+    seq++;
+    if(seq>=PINGS)finish({ok:true,opened:true,values});
+    else ping();
+   };
+   ws.onerror=()=>fail("WebSocketが接続・通信できませんでした");
+   ws.onclose=e=>{if(!done)fail("接続が途中で終了（"+e.code+"）");};
+  });
+ }
+ function stats(a){
+  const v=[...a].sort((x,y)=>x-y);
+  return {median:v[Math.floor(v.length/2)],
+   p95:v[Math.ceil(v.length*.95)-1],max:v[v.length-1]};
+ }
+ go.addEventListener("click",async()=>{
+  if(running)return;
+  running=true;go.disabled=true;copy.disabled=true;report.value="";
+  Object.keys(statuses).forEach(k=>set(k,"確認中"));
+  let origin;
+  try{origin=makeOrigin(base.value);}catch(e){
+   details(String(e.message||e));go.disabled=false;running=false;
+   Object.keys(statuses).forEach(k=>set(k,"未確認"));return;
+  }
+  details("HTTPSに接続しています…");
+  const http=await httpCheck(origin);
+  set("http",http.ok?("成功 "+http.ms+"ms"):"失敗",http.ok?"ok":"bad");
+  details("WebSocket接続を試しています…");
+  const socket=await wsCheck(origin,()=>set("socket","接続成功","ok"));
+  set("socket",socket.opened?"接続成功":"接続失敗",socket.opened?"ok":"bad");
+  set("echo",socket.ok?"5/5 応答あり":"完了せず",socket.ok?"ok":"bad");
+  const summary=socket.ok?stats(socket.values):null;
+  const lines=[
+   "BRAWL Cloudflare通信試験 / 接続元の端末のみ",
+   "HTTPS："+(http.ok?"成功（"+http.ms+"ms）":"失敗（"+http.error+"）"),
+   "WebSocket："+(socket.opened?"接続成功":"接続失敗"),
+   "往復メッセージ："+socket.values.length+"/"+PINGS,
+   "WebSocket RTT："+(summary?
+    "中央値 "+summary.median+"ms / 95%値 "+summary.p95+"ms / 最大 "+summary.max+"ms":"測定不能"),
+   ...(socket.ok?[]:["通信エラー："+(socket.error||"不明")]),
+   "テスト条件：Google Sites埋め込みかSafari単独かは表示されません",
+   "注意：通信できても本番4人対戦の快適さは未保証",
+   "注意：失敗だけで学校によるブロックとは断定できません",
+   "URL・ルーム番号・個人識別子は含みません"
+  ];
+  report.value=lines.join("\n");copy.disabled=false;
+  details(http.ok&&socket.ok?"HTTPSもWebSocketも成功。次は学校iPadのGoogle Sites内で同じ試験をしてください。":
+   "通信できない項目があります。URL、Workerの公開状況、埋め込み制限、接続環境を切り分けてください。");
+  running=false;go.disabled=false;
+ });
+ copy.addEventListener("click",async()=>{
+  if(!report.value)return;
+  try{
+   if(!navigator.clipboard?.writeText)throw Error("clipboard");
+   await navigator.clipboard.writeText(report.value);
+   details("結果をコピーしました。");
+  }catch(_){
+   report.focus();report.select();
+   details("コピーが使えない場合は、結果欄を長押しして全選択・コピーしてください。");
+  }
+ });
+})();
+</script>
+</body>
+</html>

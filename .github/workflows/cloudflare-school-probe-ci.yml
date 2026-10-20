@@ -1,0 +1,38 @@
+name: BRAWL School Cloudflare Transport Probe (offline)
+on:
+  push:
+    paths:
+      - "experiments/cloudflare-school-probe/**"
+      - "tests/cloudflare-school-probe.cjs"
+      - ".github/workflows/cloudflare-school-probe-ci.yml"
+  pull_request:
+    paths:
+      - "experiments/cloudflare-school-probe/**"
+      - "tests/cloudflare-school-probe.cjs"
+      - ".github/workflows/cloudflare-school-probe-ci.yml"
+permissions:
+  contents: read
+jobs:
+  local-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Static syntax and offline Worker/WebSocket/client behavior
+        run: |
+          node --check experiments/cloudflare-school-probe/worker.mjs
+          node --check tests/cloudflare-school-probe.cjs
+          node tests/cloudflare-school-probe.cjs
+      - name: Bundle paste-ready Cloudflare and Google Sites test code
+        uses: actions/upload-artifact@v4
+        with:
+          name: brawl-cloudflare-school-test-kit
+          path: |
+            experiments/cloudflare-school-probe/GoogleSites_Embed_Code.txt
+            experiments/cloudflare-school-probe/worker.mjs
+            experiments/cloudflare-school-probe/README.md
+          retention-days: 7
+          if-no-files-found: error
