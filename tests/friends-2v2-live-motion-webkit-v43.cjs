@@ -115,6 +115,15 @@ async function trial(mode,browser){
    const q=window.__brawlV3QA?.();
    return q?.game==='playing'&&q.scene==='game'&&q.online===4&&q.combatReadyNow;
   },null,{timeout:27000})));
+  // iPad legibility: no diagnostic toggle covering the top-center score HUD.
+  const ui=await first.evaluate(()=>{
+   const d=document.getElementById('brawlV40Open').getBoundingClientRect();
+   const score=document.getElementById('roundInfo').getBoundingClientRect();
+   const overlap=d.left<score.right&&d.right>score.left&&d.top<score.bottom&&d.bottom>score.top;
+   return {buttonTop:d.top,viewportHeight:innerHeight,overlap};
+  });
+  assert(!ui.overlap&&ui.buttonTop>ui.viewportHeight-65,
+   'manual network diagnosis never masks live match score');
   for(const c of clients)await c.page.evaluate(()=>window.__brawlLagV39QA.start());
   const progress=Object.fromEntries(SEATS.map(s=>[s,[]]));
   const shots=Object.fromEntries(SEATS.map(s=>[s,0]));
