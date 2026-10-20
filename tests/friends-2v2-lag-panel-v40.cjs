@@ -6,6 +6,8 @@ const src=fs.readFileSync(spec.modules.squadLagPanelV40,'utf8');
 assert(!/firebase\s*\.\s*database|room\.child|db\.ref|fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage|setInterval/.test(src),
  'UI must not send data, read game rooms, store data or start background timers');
 assert(!src.includes('</script>'),'must remain within inline script');
+assert(src.includes('position:absolute;box-sizing:border-box;left:50%;top:auto;bottom:34px'),
+ 'diagnostic overlay opens upward inside bottom-anchored transformed container');
 assert(src.includes('top:auto;bottom:max(3px,env(safe-area-inset-bottom));left:50%'),
  'touch diagnosis control stays at bottom center, never across round score HUD');
 const staged=makeAll(),baseline=makeAll(null,null,null,null,null,false);
