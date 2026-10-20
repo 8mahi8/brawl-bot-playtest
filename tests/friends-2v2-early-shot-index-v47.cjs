@@ -7,8 +7,10 @@ const {makeAll,spec}=require('../scripts/build-friends-online.cjs');
 const old=fs.readFileSync(spec.modules.squadEarlyShots,'utf8');
 const next=fs.readFileSync('shared/runtime/friends-2v2-early-shots-v47.inc.js','utf8');
 assert.notEqual(next,old,'candidate must differ');
-const original=makeAll();
-const candidate=makeAll(next);
+// Disable V3.9 build-time probe injection for byte-exact source comparison;
+// the default public-facing build and all its diagnostic hooks remain unchanged.
+const original=makeAll(null,null,null,null,null,false);
+const candidate=makeAll(next,null,null,null,null,false);
 for(const mode of ['normal.1vs1','draft.1vs1']){
  assert.equal(candidate[mode].hash,original[mode].hash,'1v1 unaffected: '+mode);
 }
