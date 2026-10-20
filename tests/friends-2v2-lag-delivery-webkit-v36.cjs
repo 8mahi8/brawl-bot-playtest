@@ -102,6 +102,17 @@ async function run(){
   // A real player chooses Bomber. This specifically targets the school issue.
   await lookup.red2.locator('#charPick button[data-char="bomber"]').click();
   await lookup.red2.waitForFunction(()=>window.__brawlV3QA?.()?.lobby?.seats?.red2?.char==='bomber',null,{timeout:12000});
+  // V4.0: exercise the real touch UI on all four iPad-sized WebKit pages.
+  // Nothing is started by default. Players explicitly press the diagnostic
+  // button before the match, and the recorder runs only in this browser.
+  for(const c of all){
+   assert.equal(await c.page.evaluate(()=>window.__brawlLagV40UI?.status().running),false);
+   await c.page.locator('#brawlV40Open').click();
+   await c.page.locator('#brawlV40Start').click();
+   assert.equal(await c.page.evaluate(()=>window.__brawlLagV40UI?.status().running),true);
+   assert.equal(await c.page.locator('#brawlV40Panel').isVisible(),false,
+    'start hides diagnostics, keeping the arena accessible');
+  }
   for(const c of all)await c.page.locator('#readyBtn').click();
   await Promise.all(all.map(c=>c.page.waitForFunction(()=>{
    const s=window.__brawlV3QA?.();return s?.game==='playing'&&s?.scene==='game'&&s?.online===4;
@@ -149,6 +160,38 @@ async function run(){
    }
    console.log('PASS V3.6 staged-only local sampler stable under injected ACTION callback delay');
   }
+  // Inspect real ACTION → screen/transaction stats after the two real shots.
+  // The artificial callback delay tests the instrumentation only: no claim
+  // about real mobile network ping, Firebase server latency, or school Wi-Fi.
+  const v40Probes=[];
+  for(const seat of ['blue1','red1','blue2','red2']){
+   const page=lookup[seat];
+   await page.locator('#brawlV40Open').click();
+   await page.locator('#brawlV40Stop').click();
+   const reportText=await page.locator('#brawlV40Result').inputValue();
+   const qa=await page.evaluate(()=>window.__brawlLagV39QA.report());
+   assert.equal(qa.version,'V3.9');
+   assert(reportText.includes('BRAWL 2vs2 通信診断 V4.0'));
+   assert(reportText.includes('pingではない'),'no fake ping claim on real iPad panel');
+   assert(!reportText.includes(roomId),'no room IDs in copied UI text');
+   assert(!JSON.stringify(qa).includes(roomId),'no room IDs in aggregate metrics');
+   assert(qa.events.hostTransactions>=0&&qa.events.remoteShots>=0,
+    'normal 2vs2 profiler reports numeric aggregate event counts');
+   v40Probes.push({seatRole:seat,
+    injectedActionCallbackDelayMs:all[seats.findIndex(q=>q.seat===seat)].deliveryLag||0,
+    metrics:qa.stages,events:qa.events});
+   await page.locator('#brawlV40Close').click();
+  }
+  assert(v40Probes.some(x=>x.events.remoteShots>0),'real remote shot listeners feed V3.9 report');
+  assert(v40Probes.some(x=>x.events.hostTransactions>0),'host authority reports transactions');
+  const v40Evidence={version:'V4.0',test:'FOUR real WebKit peers, LOCAL Firebase emulator only',
+   caveat:'callback delay injection; NOT packet latency or Firebase RTT',
+   profile:v40Probes};
+  assert(!JSON.stringify(v40Evidence).includes(roomId),'no live room ID in evidence');
+  fs.mkdirSync(path.join(dir,'artifacts/qa'),{recursive:true});
+  fs.writeFileSync(path.join(dir,'artifacts/qa/v40-four-peer-shot-pipeline.json'),
+    JSON.stringify(v40Evidence,null,2)+'\n');
+  console.log('PASS V4.0 four mobile WebKit diagnosis panels, local stage timings and anonymous export');
   const afterHP=await host.evaluate(()=>window.__brawlV3QA().hp);
   assert.deepEqual(afterHP,beforeHP,'remote visual-only preview never changes HP across long map');
   for(const c of all)assert.deepEqual(c.errors,[],'no Safari/WebKit page errors');

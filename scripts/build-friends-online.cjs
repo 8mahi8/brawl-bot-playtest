@@ -285,6 +285,20 @@ function patchSquadActionLagProbe(html,source,modeName){
  return html;
 }
 
+// V4.0 has no gameplay side effects. Install after the V3.9 timing API,
+// before QA exports; game initialization and Firebase protocol are untouched.
+function patchSquadLagPanelV40(html,source,modeName){
+ assert(html.includes('window.__brawlLagV39QA=Object.freeze('),
+  'V4.0 requires V3.9 measurement in '+modeName);
+ assert(source.includes('window.__brawlLagV40UI=Object.freeze('),
+  'missing V4.0 touch UI API');
+ assert(!source.includes('</script>')&&!html.includes('window.__brawlLagV40UI'),
+  'V4.0 UI cannot be inserted twice '+modeName);
+ return replaceOnce(html,'window.__brawlEarlyShotsQA=()=>',
+  source.trimEnd()+'\nwindow.__brawlEarlyShotsQA=()=>',
+  modeName+' iPad V4.0 opt-in diagnostics UI');
+}
+
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -320,6 +334,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
  const presentationSource=presentationOverride===null?read(spec.modules.squadCombatPresentation):presentationOverride;
  const latencyProbeSource=latencyProbeOverride===null?read(spec.modules.squadLatencyProbe):latencyProbeOverride;
  const lagStageSource=read(spec.modules.squadActionLagProbeV39);
+ const lagPanelSource=read(spec.modules.squadLagPanelV40);
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
@@ -343,6 +358,10 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
   if(includeV39&&mode.modules.includes('squadActionLagProbeV39')){
    assert(mode.roomRoot==='rooms2v2'&&mode.modules.includes('squadLatencyProbe'),'V3.9 requires 2v2 V3.5 sampler');
    html=patchSquadActionLagProbe(html,lagStageSource,name);
+  }
+  if(includeV39&&mode.modules.includes('squadLagPanelV40')){
+   assert(mode.modules.includes('squadActionLagProbeV39'),'V4.0 UI requires V3.9 timing API');
+   html=patchSquadLagPanelV40(html,lagPanelSource,name);
   }
   if(name==='normal.2vs2')html=patchNormalSquadRoomEntry(html);
   validate(html,name,mode);
@@ -415,4 +434,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,patchSquadLagPanelV40,sharedSection,safeTarget,main};
