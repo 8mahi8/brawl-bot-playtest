@@ -33,6 +33,9 @@ function fixture(mode){
  ' remotes:Object.values(remotes).filter(p=>Number.isFinite(p.x)).length,',
  ' bullets:bulletVisuals.size,early:earlyShotStats.incoming,',
  ' frames:workTiming.frameSamples,frameGaps:workTiming.frameGapOver100,',
+ ' gameCallbacks:workTiming.gameSnapshots,gameCallbackTotalMs:workTiming.gameSnapshotTotalMs,',
+ ' gameCallbackMaxMs:workTiming.gameSnapshotMaxMs,',
+ ' hudV45:window.__brawlHudV45QA?.()||null,',
  ' canvasDrawMs:drawTiming.totalDrawMs,draws:drawTiming.frames})',
  '});'
  ].join('\n');
@@ -125,6 +128,11 @@ async function trial(mode,browser){
   assert(!ui.overlap&&ui.buttonTop>ui.viewportHeight-65,
    'manual network diagnosis never masks live match score');
   for(const c of clients)await c.page.evaluate(()=>window.__brawlLagV39QA.start());
+  const startedVisual=await Promise.all(SEATS.map(async seat=>({
+   seat,state:await bySeat[seat].evaluate(()=>window.__v43QA.state())
+  })));
+  if(process.env.BRAWL_STAGE_2V2==='1')
+   assert(startedVisual.every(p=>p.state.hudV45),'V4.5 HUD timing available in both modes');
   const progress=Object.fromEntries(SEATS.map(s=>[s,[]]));
   const shots=Object.fromEntries(SEATS.map(s=>[s,0]));
   const keys=Object.fromEntries(SEATS.map(s=>[s,null]));
@@ -172,11 +180,23 @@ async function trial(mode,browser){
   assert(reports.some(r=>r.received>=3),'guests must observe multiple remote action events');
   assert(reports.some(r=>r.visual.remotes>=3),'remote player draw positions must exist');
   for(const c of clients)assert.deepEqual(c.errors,[],'WebKit JS error '+mode);
-  result={version:'V4.3',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
+  result={version:'V4.5',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
    durationSec:DURATION,shots,travelWorldUnits:travel,characters:chars,
    receiverCallbackOnlyDelayMs:{red1:180},noSchoolNetworkRTT:true,
-   peers:reports.map(r=>({seat:r.seat,received:r.received,
-    finalFrame:r.visual,lagStages:r.latency.stages,events:r.latency.events}))};
+   peers:reports.map(r=>{
+    const initial=startedVisual.find(s=>s.seat===r.seat).state;
+    const final=r.visual;
+    return {seat:r.seat,received:r.received,
+     finalFrame:final,
+     localCpu:{gameSnapshotCallbacks:final.gameCallbacks-initial.gameCallbacks,
+      gameCallbackWorkMs:Math.round((final.gameCallbackTotalMs-initial.gameCallbackTotalMs)*100)/100,
+      maxGameCallbackMs:final.gameCallbackMaxMs,
+      hudRenderingCount:final.hudV45.renderCalls-initial.hudV45.renderCalls,
+      hudCoalesced:final.hudV45.coalesced-initial.hudV45.coalesced,
+      hudFlushed:final.hudV45.flushed-initial.hudV45.flushed,
+      hudMaxWaitMs:final.hudV45.maxWaitMs},
+     lagStages:r.latency.stages,events:r.latency.events};
+   })};
   assert(!JSON.stringify(result).includes(roomId),'anonymous aggregate report only');
   fs.writeFileSync(path.join(out,'v43-'+mode+'-motion.json'),JSON.stringify(result,null,2)+'\n');
   console.log('PASS V4.3 '+mode+' moving multiplayer '+JSON.stringify({shots,travel}));
