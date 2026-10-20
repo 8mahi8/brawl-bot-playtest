@@ -39,7 +39,7 @@ function subscribeSquadPositionDeltas(ref,activeRoom,generation){
   squadPositionDeltaV44[kind]++;
   if(!squadPositionMerge(snap.key,snap.val()))return;
   if(positionsReady){
-   ingestPositions();reconcileRoomView('positions');
+   ingestPositions(snap.key);reconcileRoomView('positions');
   }
  });
  watch(ref,'child_added',snap=>upsert(snap,'added'));
