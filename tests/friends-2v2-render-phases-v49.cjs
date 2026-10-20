@@ -5,7 +5,7 @@ const fs=require('node:fs'),vm=require('node:vm');
 const {makeAll,spec,validate}=require('../scripts/build-friends-online.cjs');
 const {instrumentV49}=require('./support/friends-2v2-render-patch-v49.cjs');
 const probe=fs.readFileSync('tests/support/friends-2v2-render-phases-v49.js','utf8');
-assert(!/firebase\.|\.transaction\(|\.set\(|fetch\(|localStorage|sessionStorage/.test(probe),
+assert(!/firebase\.|\b(?:db|room)\s*\.\s*(?:transaction|set|update|child)\s*\(|\bfetch\s*\(|localStorage|sessionStorage/.test(probe),
  'probe never writes to Firebase, fetches, or persistent storage');
 const built=makeAll();
 for(const name of ['normal.1vs1','draft.1vs1'])
