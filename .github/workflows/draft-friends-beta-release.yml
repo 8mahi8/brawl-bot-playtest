@@ -13,6 +13,9 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-early-shots-v47.inc.js'
+      - 'tests/friends-2v2-early-shot-index-v47.cjs'
+      - 'network/BRAWL_V47_EARLY_SHOT_INDEX.md'
       - 'shared/runtime/friends-2v2-projectile-visual.inc.js'
       - 'shared/runtime/friends-2v2-position-publish.inc.js'
       - 'shared/runtime/friends-2v2-position-delta-v44.inc.js'
@@ -76,6 +79,9 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-early-shots-v47.inc.js'
+      - 'tests/friends-2v2-early-shot-index-v47.cjs'
+      - 'network/BRAWL_V47_EARLY_SHOT_INDEX.md'
       - 'shared/runtime/friends-2v2-projectile-visual.inc.js'
       - 'shared/runtime/friends-2v2-position-publish.inc.js'
       - 'shared/runtime/friends-2v2-position-delta-v44.inc.js'
@@ -163,6 +169,7 @@ jobs:
           node tests/friends-2v2-lag-panel-v40.cjs
           node tests/friends-2v2-visual-catchup-v37.cjs
           node tests/friends-2v2-visual-entry-v38.cjs
+          node tests/friends-2v2-early-shot-index-v47.cjs
           mkdir -p artifacts/qa
           node tests/friends-2v2-lag-stress-v36.cjs > artifacts/qa/v36-synthetic-scenarios.json
           node --check tests/friends-2v2-lag-delivery-webkit-v36.cjs
