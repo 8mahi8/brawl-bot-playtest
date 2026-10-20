@@ -10,7 +10,7 @@
  '#brawlV40Diagnostics button{min-width:0;min-height:32px;font:inherit;border:1px solid #618e9d;border-radius:9px;background:#122c3b;color:#e6f8ff;padding:5px 10px;touch-action:manipulation}',
  '#brawlV40Diagnostics #brawlV40Open{font-size:11px;opacity:.86;padding:3px 8px;min-height:25px;background:#09202acc}',
  '#brawlV40Diagnostics #brawlV40Open[data-running="true"]{border-color:#82e6ad;color:#b4ffe2}',
- '#brawlV40Diagnostics #brawlV40Panel{position:fixed;box-sizing:border-box;left:50%;top:32px;transform:translateX(-50%);width:min(450px,96vw);max-height:min(84dvh,520px);overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;background:#081c2a;box-shadow:0 8px 26px #000b;border:1px solid #6793a3;padding:12px;border-radius:12px;white-space:normal}',
+ '#brawlV40Diagnostics #brawlV40Panel{position:absolute;box-sizing:border-box;left:50%;top:auto;bottom:34px;transform:translateX(-50%);width:min(450px,96vw);max-height:min(84dvh,520px);overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;background:#081c2a;box-shadow:0 8px 26px #000b;border:1px solid #6793a3;padding:12px;border-radius:12px;white-space:normal}',
  '#brawlV40Diagnostics #brawlV40Panel[hidden]{display:none!important}',
  '#brawlV40Diagnostics #brawlV40Panel h3{margin:0 0 7px;font-size:15px}',
  '#brawlV40Diagnostics #brawlV40Panel p{margin:6px 0;font-size:12px;line-height:1.55;color:#bfd8e4;text-align:left}',
