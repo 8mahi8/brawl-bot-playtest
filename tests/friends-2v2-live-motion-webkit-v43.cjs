@@ -23,6 +23,15 @@ function fixture(mode){
  for(const anchor of [a,b,listener])assert.equal(s.split(anchor).length-1,1,'unique '+mode+' anchor');
  s=s.replace(a,a+" db.useEmulator('127.0.0.1',9000);");
  s=s.replace('connect-src ','connect-src http://127.0.0.1:9000 ws://127.0.0.1:9000 ');
+ // Extra V4.5 test-only switch: all 4 clients still run the real movement,
+ // RTDB listeners, action dispatch, and collision. Toggle only guest Canvas
+ // rendering for a controlled shared-runner CPU-load comparison.
+ if(process.env.BRAWL_V45_ISOLATE_CANVAS==='1'){
+  const canvasAnchor='function shouldDrawCanvasFrame(now){';
+  assert.equal(s.split(canvasAnchor).length-1,1,'one canvas frame policy');
+  s=s.replace(canvasAnchor,"window.__v45CanvasQA={enabled:true};\n"+
+   'function shouldDrawCanvasFrame(now){if(!window.__v45CanvasQA.enabled)return false;');
+ }
  // QA-only readable data and a call into the genuine production shootAngle().
  // Real movement uses the actual keyboard event handlers, not pose mutation.
  const qa=[
@@ -35,6 +44,8 @@ function fixture(mode){
  ' frames:workTiming.frameSamples,frameGaps:workTiming.frameGapOver100,',
  ' gameCallbacks:workTiming.gameSnapshots,gameCallbackTotalMs:workTiming.gameSnapshotTotalMs,',
  ' gameCallbackMaxMs:workTiming.gameSnapshotMaxMs,',
+ ' hudRenders:presentationMetrics.hudRenders,hudDomWrites:presentationMetrics.hudDomWrites,',
+ ' now:performance.now(),',
  ' hudV45:window.__brawlHudV45QA?.()||null,',
  ' canvasDrawMs:drawTiming.totalDrawMs,draws:drawTiming.frames})',
  '});'
@@ -89,7 +100,8 @@ async function key(page,k,pressed){
 async function trial(mode,browser){
  let clients=[],result;
  try{
-  clients=await Promise.all(SEATS.map((_,i)=>open(browser,mode,i<2)));
+  const isolated=process.env.BRAWL_V45_ISOLATE_CANVAS==='1';
+  clients=await Promise.all(SEATS.map((_,i)=>open(browser,mode,!isolated&&i<2)));
   const first=clients[0].page;
   await first.locator('#createBtn').click();
   await first.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:18000});
@@ -132,11 +144,30 @@ async function trial(mode,browser){
    seat,state:await bySeat[seat].evaluate(()=>window.__v43QA.state())
   })));
   if(process.env.BRAWL_STAGE_2V2==='1')
-   assert(startedVisual.every(p=>p.state.hudV45),'V4.5 HUD timing available in both modes');
+   assert(startedVisual.every(p=>p.state.gameCallbacks>=0),'staged 2v2 game CPU profiling is available');
+  const boundaries={};
+  if(isolated)boundaries.allStart=await first.evaluate(()=>window.__v43QA.state());
   const progress=Object.fromEntries(SEATS.map(s=>[s,[]]));
   const shots=Object.fromEntries(SEATS.map(s=>[s,0]));
   const keys=Object.fromEntries(SEATS.map(s=>[s,null]));
   for(let sec=0;sec<DURATION;sec++){
+   if(isolated&&sec===10){
+    boundaries.allEnd=await first.evaluate(()=>window.__v43QA.state());
+    await Promise.all(clients.slice(1).map(c=>c.page.evaluate(()=>{
+     window.__v45CanvasQA.enabled=false;
+    })));
+    boundaries.singleStart=await first.evaluate(()=>window.__v43QA.state());
+    boundaries.guestsStart=await Promise.all(clients.slice(1).map(c=>
+     c.page.evaluate(()=>window.__v43QA.state())));
+   }
+   if(isolated&&sec===21){
+    boundaries.singleEnd=await first.evaluate(()=>window.__v43QA.state());
+    boundaries.guestsEnd=await Promise.all(clients.slice(1).map(c=>
+     c.page.evaluate(()=>window.__v43QA.state())));
+    await Promise.all(clients.slice(1).map(c=>c.page.evaluate(()=>{
+     window.__v45CanvasQA.enabled=true;
+    })));
+   }
    const index=Math.floor(sec/3);
    await Promise.all(SEATS.map(async seat=>{
     const next=order[seat][index%order[seat].length],page=bySeat[seat];
@@ -167,6 +198,7 @@ async function trial(mode,browser){
     p[i].local.y-p[i-1].local.y);
    travel[seat]=Math.round(distance);
   }
+  if(isolated)boundaries.resumedEnd=await first.evaluate(()=>window.__v43QA.state());
   const reports=await Promise.all(SEATS.map(async seat=>{
    const page=bySeat[seat];
    return {seat,
@@ -191,12 +223,39 @@ async function trial(mode,browser){
      localCpu:{gameSnapshotCallbacks:final.gameCallbacks-initial.gameCallbacks,
       gameCallbackWorkMs:Math.round((final.gameCallbackTotalMs-initial.gameCallbackTotalMs)*100)/100,
       maxGameCallbackMs:final.gameCallbackMaxMs,
-      hudRenderingCount:final.hudV45.renderCalls-initial.hudV45.renderCalls,
-      hudCoalesced:final.hudV45.coalesced-initial.hudV45.coalesced,
-      hudFlushed:final.hudV45.flushed-initial.hudV45.flushed,
-      hudMaxWaitMs:final.hudV45.maxWaitMs},
+      hudRenderingCount:final.hudRenders-initial.hudRenders,
+      hudDomWrites:final.hudDomWrites-initial.hudDomWrites,
+      hudExperimentEnabled:!!final.hudV45,
+      hudCoalesced:final.hudV45&&initial.hudV45?
+       final.hudV45.coalesced-initial.hudV45.coalesced:null,
+      hudFlushed:final.hudV45&&initial.hudV45?
+       final.hudV45.flushed-initial.hudV45.flushed:null,
+      hudMaxWaitMs:final.hudV45?.maxWaitMs??null},
      lagStages:r.latency.stages,events:r.latency.events};
    })};
+  if(isolated){
+   const segment=(start,end)=>({
+    seconds:Math.round((end.now-start.now)/100)/10,
+    fps:Math.round((end.frames-start.frames)*100000/(end.now-start.now))/100,
+    frames:end.frames-start.frames,canvasFrames:end.draws-start.draws,
+    frameGapsOver100:end.frameGaps-start.frameGaps,
+    gameSnapshots:end.gameCallbacks-start.gameCallbacks,
+    gameCpuMs:Math.round((end.gameCallbackTotalMs-start.gameCallbackTotalMs)*100)/100
+   });
+   result.frameIsolation={
+    meaning:'Same 4 active Firebase clients; comparing 4 Canvas renderers vs 1 Canvas renderer on ONE CI host. Not one browser or school FPS.',
+    fourCanvas:segment(boundaries.allStart,boundaries.allEnd),
+    oneCanvas:segment(boundaries.singleStart,boundaries.singleEnd),
+    resumedFourCanvas:segment(boundaries.singleEnd,boundaries.resumedEnd),
+    guestDrawsSuppressed:boundaries.guestsStart.map((start,i)=>
+     boundaries.guestsEnd[i].draws-start.draws)
+   };
+   assert(result.frameIsolation.guestDrawsSuppressed.every(x=>x===0),
+    'three guest Canvas renderers paused only during controlled CPU isolation');
+   fs.writeFileSync(path.join(out,'v45-canvas-isolation-'+mode+'.json'),
+    JSON.stringify(result.frameIsolation,null,2)+'\n');
+   console.log('PASS V4.5 Canvas isolation '+mode+' '+JSON.stringify(result.frameIsolation));
+  }
   assert(!JSON.stringify(result).includes(roomId),'anonymous aggregate report only');
   fs.writeFileSync(path.join(out,'v43-'+mode+'-motion.json'),JSON.stringify(result,null,2)+'\n');
   console.log('PASS V4.3 '+mode+' moving multiplayer '+JSON.stringify({shots,travel}));
@@ -217,7 +276,7 @@ async function main(){
  let browser;
  try{
   browser=await webkit.launch({headless:true});
-  for(const mode of ['normal','draft'])await trial(mode,browser);
+  for(const mode of process.env.BRAWL_V45_ISOLATE_CANVAS==='1'?['normal']:['normal','draft'])await trial(mode,browser);
   console.log('PASS V4.3 two live-motion 27s 4-peer trials');
  }finally{
   if(browser)await browser.close();
