@@ -15,6 +15,9 @@ if(process.env.BRAWL_STAGE_2V2!=='1')throw Error('Generated staging 2v2 only');
 function fixture(mode){
  const input=path.join(root,'artifacts/friends-online/'+mode+'-2vs2.html');
  let s=fs.readFileSync(input,'utf8');
+ // Existing draft beta has a preconfigured RTDB URL and deliberately hides
+ // the connection editor. Redirect that URL to the emulator-only project.
+ if(mode==='draft')s=s.replaceAll('https://mygame-df915-default-rtdb.firebaseio.com/',url);
  const a=' db=firebase.database();',b='window.__brawlV3QA=()=>({';
  const listener="watch(room.child('actions'),'child_added',snap=>{const a=snap.val();if(a&&snap.key)acceptAction({...a,eventId:snap.key});});";
  for(const anchor of [a,b,listener])assert.equal(s.split(anchor).length-1,1,'unique '+mode+' anchor');
@@ -64,8 +67,14 @@ async function open(browser,mode,capture){
  });
  await page.goto('http://'+host+':'+port+'/'+mode,{waitUntil:'load'});
  await page.waitForFunction(()=>!!window.__v43QA&&typeof window.__brawlV3QA==='function',null,{timeout:16000});
- await page.locator('details.online-config summary').click();
- await page.locator('#onlineDbInput').fill(url);
+ const editor=page.locator('details.online-config summary');
+ if(await editor.isVisible()){
+  await editor.click();await page.locator('#onlineDbInput').fill(url);
+ }else{
+  // Draft mode hides this advanced editor; assign its value internally
+  // without forcing a nonexistent interactive action.
+  await page.locator('#onlineDbInput').evaluate((el,v)=>{el.value=v;},url);
+ }
  return {ctx,page,errors,capture};
 }
 async function key(page,k,pressed){
