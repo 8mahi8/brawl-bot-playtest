@@ -28,11 +28,15 @@ assert.equal(src.split(gameValueHook).length-1,1,'game snapshot telemetry inject
 src=src.replace(gameValueHook,`const before=game;game=snap.val();
  {const t=window.__v41TrafficQA;t.gameCallbacks++;const bytes=JSON.stringify(game||{}).length;t.gameJsonEstimateBytes+=bytes;t.gameMaxJsonEstimateBytes=Math.max(t.gameMaxJsonEstimateBytes,bytes);}
  window.__brawlLagV39QA.snapshot(game);`);
-const positionValueHook='rawPositions=snap.val()||{};positionsReady=true;';
-assert.equal(src.split(positionValueHook).length-1,1,'position snapshot telemetry injection point');
-src=src.replace(positionValueHook,`rawPositions=snap.val()||{};
- {const t=window.__v41TrafficQA;t.positionCallbacks++;const bytes=JSON.stringify(rawPositions).length;t.positionJsonEstimateBytes+=bytes;t.positionMaxJsonEstimateBytes=Math.max(t.positionMaxJsonEstimateBytes,bytes);}
- positionsReady=true;`);
+const positionDeltaHook="const upsert=(snap,kind)=>squadPositionDeltaMeasured(()=>{\n  if(!current()||!snap.key)return;";
+assert.equal(src.split(positionDeltaHook).length-1,1,'V4.4 per-child snapshot telemetry hook');
+src=src.replace(positionDeltaHook,positionDeltaHook+`
+ {const t=window.__v41TrafficQA;t.positionCallbacks++;
+  const bytes=JSON.stringify(snap.val()||{}).length;
+  t.positionJsonEstimateBytes+=bytes;
+  t.positionMaxJsonEstimateBytes=Math.max(t.positionMaxJsonEstimateBytes,bytes);}`);
+// From V4.4 onward positions are measured per changed PLAYER child, not the
+// prior full subtree value callback. JSON sizes are NOT actual wire bytes.
 const actionHook="watch(room.child('actions'),'child_added',snap=>{const a=snap.val();if(a&&snap.key)acceptAction({...a,eventId:snap.key});});";
 assert.equal(src.split(actionHook).length-1,1,'stable test-only ACTION callback injection point');
 function stressedHtml(delayMs){
