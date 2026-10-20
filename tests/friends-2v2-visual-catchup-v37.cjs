@@ -22,7 +22,7 @@ for(const [age,expected]of [[0,0],[180,180],[350,350],[450,450],[700,450]]){
 }
 const stale=action(900,901);env.observeShotAction(stale,false);
 assert(!env.earlyShots.has(stale.eventId),'expired shots do not reappear');
-const staged=makeAll();
+const staged=makeAll(null,null,null,null,null,false);
 for(const name of ['normal.2vs2','draft.2vs2']){
  assert(staged[name].html.includes(src.trimEnd()),'both 2v2 modes use improved visuals');
  assert(!fs.readFileSync(spec.modes[name].source,'utf8').includes('initial:clamp(age,0,450)'),

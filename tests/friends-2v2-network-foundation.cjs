@@ -5,7 +5,7 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict'),vm=require('node:vm');
 const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const {makeAll,spec,SQUAD_NETWORK_PARTS,patchSquadNetwork,validate}=require('../scripts/build-friends-online.cjs');
-const built=makeAll(),sources={};
+const built=makeAll(null,null,null,null,null,false),sources={};
 for(const [key,start,end]of SQUAD_NETWORK_PARTS){
  const text=read(spec.modules[key]);sources[key]=text;
  assert(text.startsWith(start)&&text.endsWith('\n'),'complete shared module '+key);
