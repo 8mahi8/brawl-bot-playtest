@@ -315,6 +315,25 @@ function patchSquadPositionDeltaV44(html,canonical,modeName){
   modeName+' incremental positions instead of value listener');
 }
 
+// V4.5: keep source 2v2 candidate files frozen; coalesce only the expensive
+// active-match HUD calculation, not authoritative snapshots or UI transitions.
+function patchSquadHudV45(html,canonical,modeName){
+ assert(canonical.includes('function requestGameHudRefreshV45(')&&
+  canonical.includes('function renderGameHUD(){')&&
+  canonical.includes('window.__brawlHudV45QA='),
+  'V4.5 shared HUD module missing entry points');
+ assert(!canonical.includes('</script>'),'unsafe inline V4.5 source');
+ assert(!html.includes('__brawlHudV45QA'),'HUD already patched '+modeName);
+ html=replaceOnce(html,'function renderGameHUD(){',
+  'function renderGameHUDV45Base(){',modeName+' extract original HUD render');
+ html=replaceOnce(html,"function reconcileRoomView(source='state'){",
+  canonical.trimEnd()+"\nfunction reconcileRoomView(source='state'){",
+  modeName+' V4.5 shared code injection');
+ return replaceOnce(html,'checkPaused();renderGameHUD();',
+  "checkPaused();requestGameHudRefreshV45(enteredGame||game.phase!=='playing'||paused);",
+  modeName+' defer normal-active game HUD to animation frame');
+}
+
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -335,7 +354,7 @@ function validate(html,modeName,mode){
  assert(html.includes('window.__brawlV3QA')||html.includes('window.__brawlV29QA'),'QA hook '+modeName);
  return true;
 }
-function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null,includeV39=true,includeV44=includeV39){
+function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null,includeV39=true,includeV44=includeV39,includeV45=includeV44){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  const projectileSource=read(spec.modules.squadProjectileVisual);
@@ -352,6 +371,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
  const lagStageSource=read(spec.modules.squadActionLagProbeV39);
  const lagPanelSource=read(spec.modules.squadLagPanelV40);
  const deltaPositionSource=read(spec.modules.squadPositionDeltaV44);
+ const hudV45Source=read(spec.modules.squadHudV45);
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
@@ -383,6 +403,11 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
   if(includeV44&&mode.modules.includes('squadPositionDeltaV44')){
    assert(mode.modules.includes('squadPresencePositions')&&mode.roomRoot==='rooms2v2','V4.4 only applies to 2v2 network');
    html=patchSquadPositionDeltaV44(html,deltaPositionSource,name);
+  }
+  if(includeV45&&mode.modules.includes('squadHudV45')){
+   assert(mode.roomRoot==='rooms2v2'&&mode.modules.includes('squadCombatPresentation'),
+    'V4.5 only applies to 2v2 presentation');
+   html=patchSquadHudV45(html,hudV45Source,name);
   }
   if(name==='normal.2vs2')html=patchNormalSquadRoomEntry(html);
   validate(html,name,mode);
@@ -455,4 +480,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,patchSquadLagPanelV40,patchSquadPositionDeltaV44,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,patchSquadLagPanelV40,patchSquadPositionDeltaV44,patchSquadHudV45,sharedSection,safeTarget,main};
