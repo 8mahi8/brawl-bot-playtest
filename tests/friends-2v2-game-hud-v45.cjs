@@ -5,7 +5,7 @@ const source=fs.readFileSync(spec.modules.squadHudV45,'utf8');
 assert(source.includes('requestAnimationFrame('),'HUD should coalesce at the presentation boundary');
 assert(!/\.transaction\s*\(|\.child\s*\(|\.set\s*\(|\bfetch\s*\(/.test(source),
  'UI batching must be isolated from Firebase and combat');
-const variants=makeAll(),base=makeAll(null,null,null,null,null,true,true,false);
+const base=makeAll(),variants=makeAll(null,null,null,null,null,true,true,true);
 for(const name of ['normal.2vs2','draft.2vs2']){
  const html=variants[name].html;
  assert.equal(html.split('window.__brawlHudV45QA=()=>').length-1,1,'single V4.5 instrumentation');
