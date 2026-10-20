@@ -1,0 +1,28 @@
+name: BRAWL School Cloudflare Transport Probe (offline)
+on:
+  push:
+    paths:
+      - "experiments/cloudflare-school-probe/**"
+      - "tests/cloudflare-school-probe.cjs"
+      - ".github/workflows/cloudflare-school-probe-ci.yml"
+  pull_request:
+    paths:
+      - "experiments/cloudflare-school-probe/**"
+      - "tests/cloudflare-school-probe.cjs"
+      - ".github/workflows/cloudflare-school-probe-ci.yml"
+permissions:
+  contents: read
+jobs:
+  local-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Static syntax and offline Worker/WebSocket/client behavior
+        run: |
+          node --check experiments/cloudflare-school-probe/worker.mjs
+          node --check tests/cloudflare-school-probe.cjs
+          node tests/cloudflare-school-probe.cjs
