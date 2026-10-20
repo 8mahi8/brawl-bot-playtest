@@ -354,7 +354,21 @@ function validate(html,modeName,mode){
  assert(html.includes('window.__brawlV3QA')||html.includes('window.__brawlV29QA'),'QA hook '+modeName);
  return true;
 }
-function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null,includeV39=true,includeV44=includeV39,includeV45=false){
+// V4.8: ACTION preview can exist before the host snapshot has a projectile.
+// Quiet KO / HOT ZONE may otherwise skip the Canvas even though a visible
+// remote bullet is waiting to be drawn. Apply to STAGING 2vs2 only.
+function patchSquadQuietEarlyShotWakeV48(html,modeName){
+ const anchor='function quietCanvasIdleEligible(){\n';
+ assert(!html.includes('/* V4.8 remote action Canvas wake */'),
+  'V4.8 wake may only be inserted once '+modeName);
+ assert(html.includes('const earlyShots=new Map(),earlyBombSmoothing=new Map();'),
+  'V4.8 needs shared early-shot maps '+modeName);
+ return replaceOnce(html,anchor,anchor+
+  ' /* V4.8 remote action Canvas wake */\n'+
+  ' if(earlyShots.size||earlyBombSmoothing.size)return false;\n',
+  modeName+' idle Canvas remote shot wake');
+}
+function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null,includeV39=true,includeV44=includeV39,includeV45=false,includeV48=true){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  const projectileSource=read(spec.modules.squadProjectileVisual);
@@ -409,6 +423,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
     'V4.5 only applies to 2v2 presentation');
    html=patchSquadHudV45(html,hudV45Source,name);
   }
+  if(includeV48&&mode.modules.includes('squadEarlyShots'))html=patchSquadQuietEarlyShotWakeV48(html,name);
   if(name==='normal.2vs2')html=patchNormalSquadRoomEntry(html);
   validate(html,name,mode);
   outputs[name]={mode,html,hash:crypto.createHash('sha256').update(html).digest('hex')};
@@ -480,4 +495,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,patchSquadLagPanelV40,patchSquadPositionDeltaV44,patchSquadHudV45,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,patchSquadLagPanelV40,patchSquadPositionDeltaV44,patchSquadHudV45,patchSquadQuietEarlyShotWakeV48,sharedSection,safeTarget,main};
