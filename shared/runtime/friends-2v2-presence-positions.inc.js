@@ -12,9 +12,14 @@ async function registerPresence(){if(!room||!myId||!connected||pageSuspended)ret
  try{await task;}finally{if(presenceTask===task)presenceTask=null;}
 }
 function validPosition(p){return !!p&&p.matchId===game?.matchId&&p.round===game?.round&&Number.isSafeInteger(p.seq)&&p.seq>=0&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.a)&&p.x>=R&&p.x<=W-R&&p.y>=R&&p.y<=H-R&&Number.isSafeInteger(p.motionRev)&&Number.isSafeInteger(p.life);}
-function ingestPositions(){if(!game)return;
- const scope=game.matchId+':'+game.round;if(positionScope!==scope){positions={};positionScope=scope;remotePositionReceivedAt.clear();}
- for(const [id,p]of Object.entries(rawPositions)){
+function ingestPositions(changedId=null){if(!game)return;
+ const scope=game.matchId+':'+game.round,scopeChanged=positionScope!==scope;
+ if(scopeChanged){positions={};positionScope=scope;remotePositionReceivedAt.clear();}
+ // Child listener changed ONE player's position. Avoid re-validating every
+ // other player for each 80ms update; preserve full reconciliation when the
+ // match/round changes or lobby/presence/game snapshots change.
+ const entries=changedId&&!scopeChanged?[[changedId,rawPositions[changedId]]]:Object.entries(rawPositions);
+ for(const [id,p]of entries){
   if(!playerSeat(id)||!validPosition(p)||p.motionRev!==(game.motions?.[id]?.rev||0)||p.life!==(game.stats?.[id]?.life||0))continue;
   const prior=positions[id];
   if(prior&&prior.connectionId===p.connectionId&&prior.life===p.life&&prior.motionRev===p.motionRev&&p.seq<=prior.seq)continue;

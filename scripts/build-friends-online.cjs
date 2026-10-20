@@ -299,6 +299,22 @@ function patchSquadLagPanelV40(html,source,modeName){
   modeName+' iPad V4.0 opt-in diagnostics UI');
 }
 
+// V4.4: keep Firebase RTDB, but use child deltas after a single bootstrap.
+// The published/immutable HTML inputs are never rewritten by this transform.
+function patchSquadPositionDeltaV44(html,canonical,modeName){
+ assert(canonical.includes('function subscribeSquadPositionDeltas(')&&
+  canonical.includes('window.__brawlPositionV44QA='),
+  'missing V4.4 selective position subscriber');
+ assert(!canonical.includes('</script>'),'unsafe V4.4 inline source');
+ assert(!html.includes('window.__brawlPositionV44QA'),'V4.4 already staged '+modeName);
+ const legacy="watch(room.child('positions'),'value',snap=>{const started=performance.now();presentationMetrics.positionSnapshots++;rawPositions=snap.val()||{};positionsReady=true;ingestPositions();reconcileRoomView('positions');workTiming.positionSnapshots++;workTiming.positionSnapshotTotalMs+=performance.now()-started;});";
+ html=replaceOnce(html,'function attachRoom(){',
+  canonical.trimEnd()+'\nfunction attachRoom(){',modeName+' install V4.4 listener');
+ return replaceOnce(html,legacy,
+  "subscribeSquadPositionDeltas(room.child('positions'),thisRoom,generation);",
+  modeName+' incremental positions instead of value listener');
+}
+
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -319,7 +335,7 @@ function validate(html,modeName,mode){
  assert(html.includes('window.__brawlV3QA')||html.includes('window.__brawlV29QA'),'QA hook '+modeName);
  return true;
 }
-function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null,includeV39=true){
+function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null,includeV39=true,includeV44=includeV39){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  const projectileSource=read(spec.modules.squadProjectileVisual);
@@ -335,6 +351,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
  const latencyProbeSource=latencyProbeOverride===null?read(spec.modules.squadLatencyProbe):latencyProbeOverride;
  const lagStageSource=read(spec.modules.squadActionLagProbeV39);
  const lagPanelSource=read(spec.modules.squadLagPanelV40);
+ const deltaPositionSource=read(spec.modules.squadPositionDeltaV44);
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
@@ -362,6 +379,10 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
   if(includeV39&&mode.modules.includes('squadLagPanelV40')){
    assert(mode.modules.includes('squadActionLagProbeV39'),'V4.0 UI requires V3.9 timing API');
    html=patchSquadLagPanelV40(html,lagPanelSource,name);
+  }
+  if(includeV44&&mode.modules.includes('squadPositionDeltaV44')){
+   assert(mode.modules.includes('squadPresencePositions')&&mode.roomRoot==='rooms2v2','V4.4 only applies to 2v2 network');
+   html=patchSquadPositionDeltaV44(html,deltaPositionSource,name);
   }
   if(name==='normal.2vs2')html=patchNormalSquadRoomEntry(html);
   validate(html,name,mode);
@@ -434,4 +455,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,patchSquadLagPanelV40,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,patchSquadLagPanelV40,patchSquadPositionDeltaV44,sharedSection,safeTarget,main};
