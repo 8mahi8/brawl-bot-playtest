@@ -22,11 +22,18 @@ function squadPositionMerge(id,p){
  rawPositions[id]=p;squadPositionDeltaV44.updatesApplied++;
  return true;
 }
+function squadPositionDeltaMeasured(fn){
+ const began=performance.now();
+ presentationMetrics.positionSnapshots++;
+ workTiming.positionSnapshots++;
+ try{return fn();}
+ finally{workTiming.positionSnapshotTotalMs+=performance.now()-began;}
+}
 function subscribeSquadPositionDeltas(ref,activeRoom,generation){
  let primed=false;
  const touched=new Set();
  const current=()=>room===activeRoom&&roomGeneration===generation;
- const upsert=(snap,kind)=>{
+ const upsert=(snap,kind)=>squadPositionDeltaMeasured(()=>{
   if(!current()||!snap.key)return;
   if(!primed)touched.add(snap.key);
   squadPositionDeltaV44[kind]++;
@@ -34,10 +41,10 @@ function subscribeSquadPositionDeltas(ref,activeRoom,generation){
   if(positionsReady){
    ingestPositions();reconcileRoomView('positions');
   }
- };
+ });
  watch(ref,'child_added',snap=>upsert(snap,'added'));
  watch(ref,'child_changed',snap=>upsert(snap,'changed'));
- watch(ref,'child_removed',snap=>{
+ watch(ref,'child_removed',snap=>squadPositionDeltaMeasured(()=>{
   if(!current()||!snap.key)return;
   if(!primed)touched.add(snap.key);
   squadPositionDeltaV44.removed++;
@@ -48,7 +55,7 @@ function subscribeSquadPositionDeltas(ref,activeRoom,generation){
    if(snap.key!==myId)quietCanvasPoseRevision++;
   }
   if(positionsReady)reconcileRoomView('positions');
- });
+ }));
  // Subscribe BEFORE priming. A player moving during the one-time read must
  // not be overwritten by its older initial snapshot or resurrected after a
  // child_removed event. The touched set captures that initialization race.
