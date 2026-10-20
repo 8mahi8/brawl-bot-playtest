@@ -129,9 +129,13 @@ async function trial(mode,browser){
   const natural=process.env.BRAWL_V46_BASELINE_ACTIONS==='1';
   const indexed=process.env.BRAWL_V47_INDEX_EARLY_SHOTS==='1';
   const renderPhases=process.env.BRAWL_V49_RENDER_PHASES==='1';
-  assert(!renderPhases||(natural&&!indexed&&!isolated),'V4.9 is a natural shot baseline with all Canvas renderers active');
+  const v50=process.env.BRAWL_V50_CANVAS_CPU_SPLIT==='1';
+  assert(!v50||(isolated&&natural&&renderPhases&&!indexed),
+   'V5.0 requires 4 networked WebKit clients, natural shot callbacks and the frame-phase probe');
+  assert(!renderPhases||(natural&&!indexed&&(!isolated||v50)),
+   'V4.9 normal baseline must keep all guest Canvas renderers active');
   assert(!indexed||natural,'V4.7 candidate only alongside V4.6 natural no-injected-delay baseline');
-  assert(!(isolated&&natural),'V4.6 natural action baseline must not disable guest Canvas');
+  assert(!(isolated&&natural&&!v50),'V4.6 natural action baseline must not disable guest Canvas');
   // No video encoding while establishing natural callback timings; the
   // existing V4.3 video test still records normal and draft UI screenshots.
   clients=await Promise.all(SEATS.map((_,i)=>open(browser,mode,!isolated&&!natural&&i<2)));
@@ -182,6 +186,7 @@ async function trial(mode,browser){
   if(process.env.BRAWL_STAGE_2V2==='1')
    assert(startedVisual.every(p=>p.state.gameCallbacks>=0),'staged 2v2 game CPU profiling is available');
   const boundaries={};
+  const v50Segments=[];
   if(isolated)boundaries.allStart=await first.evaluate(()=>window.__v43QA.state());
   const progress=Object.fromEntries(SEATS.map(s=>[s,[]]));
   const shots=Object.fromEntries(SEATS.map(s=>[s,0]));
@@ -189,9 +194,14 @@ async function trial(mode,browser){
   for(let sec=0;sec<DURATION;sec++){
    if(isolated&&sec===10){
     boundaries.allEnd=await first.evaluate(()=>window.__v43QA.state());
+    if(v50)v50Segments.push({
+     segment:'fourCanvas',
+     frames:await first.evaluate(()=>window.__v49ShotFrames.stop())
+    });
     await Promise.all(clients.slice(1).map(c=>c.page.evaluate(()=>{
      window.__v45CanvasQA.enabled=false;
     })));
+    if(v50)await first.evaluate(()=>window.__v49ShotFrames.start());
     boundaries.singleStart=await first.evaluate(()=>window.__v43QA.state());
     boundaries.guestsStart=await Promise.all(clients.slice(1).map(c=>
      c.page.evaluate(()=>window.__v43QA.state())));
@@ -200,9 +210,14 @@ async function trial(mode,browser){
     boundaries.singleEnd=await first.evaluate(()=>window.__v43QA.state());
     boundaries.guestsEnd=await Promise.all(clients.slice(1).map(c=>
      c.page.evaluate(()=>window.__v43QA.state())));
+    if(v50)v50Segments.push({
+     segment:'oneCanvas',
+     frames:await first.evaluate(()=>window.__v49ShotFrames.stop())
+    });
     await Promise.all(clients.slice(1).map(c=>c.page.evaluate(()=>{
      window.__v45CanvasQA.enabled=true;
     })));
+    if(v50)await first.evaluate(()=>window.__v49ShotFrames.start());
    }
    const index=Math.floor(sec/3);
    await Promise.all(SEATS.map(async seat=>{
@@ -249,7 +264,7 @@ async function trial(mode,browser){
   assert(reports.some(r=>r.received>=3),'guests must observe multiple remote action events');
   assert(reports.some(r=>r.visual.remotes>=3),'remote player draw positions must exist');
   for(const c of clients)assert.deepEqual(c.errors,[],'WebKit JS error '+mode);
-  result={version:renderPhases?'V4.9':indexed?'V4.7':natural?'V4.6':'V4.5',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
+  result={version:v50?'V5.0':renderPhases?'V4.9':indexed?'V4.7':natural?'V4.6':'V4.5',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
    durationSec:DURATION,shots,travelWorldUnits:travel,characters:chars,
    receiverCallbackOnlyDelayMs:natural?{}:{red1:180},noSchoolNetworkRTT:true,
    peers:reports.map(r=>{
@@ -289,9 +304,11 @@ async function trial(mode,browser){
    };
    assert(result.frameIsolation.guestDrawsSuppressed.every(x=>x===0),
     'three guest Canvas renderers paused only during controlled CPU isolation');
-   fs.writeFileSync(path.join(out,'v45-canvas-isolation-'+mode+'.json'),
-    JSON.stringify(result.frameIsolation,null,2)+'\n');
-   console.log('PASS V4.5 Canvas isolation '+mode+' '+JSON.stringify(result.frameIsolation));
+   if(!v50){
+    fs.writeFileSync(path.join(out,'v45-canvas-isolation-'+mode+'.json'),
+     JSON.stringify(result.frameIsolation,null,2)+'\n');
+    console.log('PASS V4.5 Canvas isolation '+mode+' '+JSON.stringify(result.frameIsolation));
+   }
   }
   assert(!JSON.stringify(result).includes(roomId),'anonymous aggregate report only');
   if(natural){
@@ -325,7 +342,50 @@ async function trial(mode,browser){
    };
    assert(baseline.seats.every(p=>p.events.remoteShots>=1),
     'natural 4-peer baseline must actually receive remote shots on every client');
-   const target=path.join(out,renderPhases?'v49-'+mode+'-frame-shot-pipeline.json':
+   if(v50){
+    const hostSeat=joined[0].seat;
+    const host=baseline.seats.find(p=>p.seat===hostSeat);
+    assert(host,'host report must be present');
+    v50Segments.push({segment:'resumedFourCanvas',frames:host.renderPhases});
+    assert.deepEqual(v50Segments.map(x=>x.segment),
+     ['fourCanvas','oneCanvas','resumedFourCanvas']);
+    const names=['fourCanvas','oneCanvas','resumedFourCanvas'];
+    const segments=v50Segments.map((x,i)=>({
+     phase:x.segment,
+     renderedCanvases:i===1?1:4,
+     // Every duration and quantile here was measured on the SAME WebKit host page.
+     hostFrame:result.frameIsolation[names[i]],
+     events:x.frames.events,
+     stages:x.frames.stages,
+     caveats:x.frames.caveats
+    }));
+    assert(segments.every(s=>s.events.remoteActions>=4&&
+      s.events.firstFrames===s.events.remoteActions),
+     'every segment must capture genuine incoming remote shots and first rAF callbacks');
+    assert(segments.some(s=>s.events.firstVisuals>0),
+     'at least one segment must have a visible remote shot');
+    const total=segments.reduce((sum,x)=>sum+x.events.remoteActions,0);
+    assert.equal(total,host.events.remoteShots,
+     'segmented remote ACTION totals must equal independent V3.9 host count');
+    baseline.version='V5.0';
+    baseline.segments=segments;
+    baseline.hostSeat=hostSeat;
+    baseline.frameIsolation=result.frameIsolation;
+    baseline.limitations.push('4→1→4 Canvas still runs 4 WebKit pages on one CI host; it is not a physical iPad alone');
+    const summary=segments.map(s=>({
+     phase:s.phase,activeCanvas:s.renderedCanvases,
+     fps:s.hostFrame.fps,framesOver100ms:s.hostFrame.frameGapsOver100,
+     received:s.events.remoteActions,
+     visuals:s.events.firstVisuals,
+     receiveToFrameP50Ms:s.stages.receiveToNextFrameMs.p50Ms,
+     receiveToFrameP95Ms:s.stages.receiveToNextFrameMs.p95Ms,
+     firstFrameToVisualP95Ms:s.stages.nextFrameToFirstVisualMs.p95Ms,
+     skippedWhilePending:s.events.skippedDrawDecisionsWhilePending
+    }));
+    console.log('PASS V5.0 '+mode+' matched host 4→1→4 Canvas render load '+JSON.stringify(summary));
+   }
+   const target=path.join(out,v50?'v50-'+mode+'-canvas-load-shot-phases.json':
+    renderPhases?'v49-'+mode+'-frame-shot-pipeline.json':
     (indexed?'v47-':'v46-')+mode+(indexed?'-indexed-shot-pipeline.json':'-natural-shot-pipeline.json'));
    fs.writeFileSync(target,JSON.stringify(baseline,null,2)+'\n');
    const summary=baseline.seats.map(p=>({
@@ -339,7 +399,7 @@ async function trial(mode,browser){
     activeEarlyShotDraws:p.earlyFrame.activeCalls,denseEarlyShotDraws:p.earlyFrame.denseCalls,
     earlyShotTotalDrawMs:p.earlyFrame.totalMs
    }));
-   if(renderPhases){
+   if(renderPhases&&!v50){
     assert(baseline.seats.every(x=>x.renderPhases.events.remoteActions===x.events.remoteShots),
      'V4.9 phases must count ONLY genuine remote shot ACTIONs, never own shots');
     const phases=baseline.seats.map(x=>({seat:x.seat,
@@ -355,7 +415,7 @@ async function trial(mode,browser){
     assert(phases.some(x=>x.firstVisuals>0),
      'actual Canvas early/authoritative bullet visuals must be observed');
     console.log('PASS V4.9 '+mode+' real shot frame phases '+JSON.stringify(phases));
-   }else console.log('PASS '+(indexed?'V4.7 indexed':'V4.6 natural')+' '+mode+' action stages '+JSON.stringify(summary));
+   }else if(!v50)console.log('PASS '+(indexed?'V4.7 indexed':'V4.6 natural')+' '+mode+' action stages '+JSON.stringify(summary));
   }else{
    fs.writeFileSync(path.join(out,'v43-'+mode+'-motion.json'),JSON.stringify(result,null,2)+'\n');
    console.log('PASS V4.3 '+mode+' moving multiplayer '+JSON.stringify({shots,travel}));
@@ -377,7 +437,9 @@ async function main(){
  let browser;
  try{
   browser=await webkit.launch({headless:true});
-  for(const mode of process.env.BRAWL_V45_ISOLATE_CANVAS==='1'?['normal']:['normal','draft'])await trial(mode,browser);
+  const both=process.env.BRAWL_V50_CANVAS_CPU_SPLIT==='1';
+  for(const mode of process.env.BRAWL_V45_ISOLATE_CANVAS==='1'&&!both?['normal']:['normal','draft'])
+   await trial(mode,browser);
   console.log('PASS V4.3 two live-motion 27s 4-peer trials');
  }finally{
   if(browser)await browser.close();
