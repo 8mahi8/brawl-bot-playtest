@@ -227,6 +227,64 @@ function patchSquadLatencyProbe(html,source,modeName){
    source.trimEnd()+'\nwindow.__brawlEarlyShotsQA=()=>',
    modeName+' insert optional V3.5 instrumentation');
 }
+// Opt-in local timing only, generated into two STAGING 2v2 HTMLs.
+// A stage may hold an action ID transiently but exports ONLY aggregate samples.
+// This instrumentation NEVER changes Firebase or the authoritative reducer.
+function patchSquadActionLagProbe(html,source,modeName){
+ assert(source.includes('window.__brawlLagV39QA=Object.freeze('),'V3.9 latency API missing');
+ assert(!source.includes('</script>')&&!html.includes('window.__brawlLagV39QA'),
+   'V3.9 probe cannot be inserted twice '+modeName);
+ html=replaceOnce(html,'window.__brawlEarlyShotsQA=()=>',
+   source.trimEnd()+'\nwindow.__brawlEarlyShotsQA=()=>',
+   modeName+' V3.9 opt-in recorder');
+ const change=(before,after,label)=>{html=replaceOnce(html,before,after,modeName+' V3.9 '+label);};
+ change(
+  "pendingActions.set(a.eventId,{action:a,networkSeen:!!old?.networkSeen||!localPrediction});",
+  "pendingActions.set(a.eventId,{action:a,networkSeen:!!old?.networkSeen||!localPrediction});\n if(!localPrediction&&a.type==='shot'&&a.owner!==myId)\n  window.__brawlLagV39QA.tap('receive',a,serverNow()-a.at);",
+  'incoming shot');
+ change(
+  'boundedRemember(queuedActions,id);hostQueue.push(a);',
+  "boundedRemember(queuedActions,id);hostQueue.push(a);",
+  'host queue preserved');
+ change(
+  "const roomKey=room.key,owner=myId,ref=room.child('actions').push(),a={...action,eventId:ref.key};",
+  "const roomKey=room.key,owner=myId,ref=room.child('actions').push(),a={...action,eventId:ref.key};\n if(a.type==='shot')window.__brawlLagV39QA.tap('send',a);",
+  'local shot start');
+ change(
+  "ref.set(action).then(()=>{\n  localPendingWrites.delete(a.eventId);",
+  "ref.set(action).then(()=>{\n  if(a.type==='shot')window.__brawlLagV39QA.tap('ack',a);\n  localPendingWrites.delete(a.eventId);",
+  'Firebase write ack');
+ change(
+  "}).catch(e=>{\n  localPendingWrites.delete(a.eventId);",
+  "}).catch(e=>{\n  if(a.type==='shot')window.__brawlLagV39QA.tap('failed',a);\n  localPendingWrites.delete(a.eventId);",
+  'Firebase write failed');
+ change(
+  "const input=inputSnapshot();\n   const result=await activeRoom.child('game').transaction(g=>{",
+  "const input=inputSnapshot();\n   const __v39TxnAt=performance.now();\n   const result=await activeRoom.child('game').transaction(g=>{",
+  'host transaction start');
+ change(
+  "},undefined,false);\n   if(!result.committed){",
+  "},undefined,false);\n   window.__brawlLagV39QA.tap('hostTxn',null,{durationMs:performance.now()-__v39TxnAt,committed:result.committed});\n   if(!result.committed){",
+  'host transaction result');
+ change(
+  'game=snap.val();reconcileHpPreviews(before,game);',
+  'game=snap.val();window.__brawlLagV39QA.snapshot(game);reconcileHpPreviews(before,game);',
+  'authoritative snapshot');
+ change(
+  'const pos=earlyBomberPoint(a,age);\n   ctx.fillStyle=',
+  "const pos=earlyBomberPoint(a,age);\n   window.__brawlLagV39QA.tap('visual',a);\n   ctx.fillStyle=",
+  'early bomber visual');
+ change(
+  "ctx.beginPath();ctx.arc(pt.x,pt.y,p.char==='sniper'?6:4,0,Math.PI*2);ctx.stroke();",
+  "window.__brawlLagV39QA.tap('visual',a);\n   ctx.beginPath();ctx.arc(pt.x,pt.y,p.char==='sniper'?6:4,0,Math.PI*2);ctx.stroke();",
+  'early bullet visual');
+ change(
+  'const previous=bulletVisuals.get(bullet.id);',
+  "const previous=bulletVisuals.get(bullet.id);\n   if(!previous&&bullet.owner!==myId&&bullet.fireId)\n    window.__brawlLagV39QA.tap('visual',{eventId:bullet.fireId});",
+  'authoritative projectile visual');
+ return html;
+}
+
 function sharedSection(html,name){
  const begin='BEGIN SHARED '+name,end='END SHARED '+name;
  const span=uniqueSpan(html,begin,end,name);
@@ -261,6 +319,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
  const squadNetwork=Object.fromEntries(SQUAD_NETWORK_PARTS.map(([key])=>[key,read(spec.modules[key])]));
  const presentationSource=presentationOverride===null?read(spec.modules.squadCombatPresentation):presentationOverride;
  const latencyProbeSource=latencyProbeOverride===null?read(spec.modules.squadLatencyProbe):latencyProbeOverride;
+ const lagStageSource=read(spec.modules.squadActionLagProbeV39);
  const outputs={};
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
@@ -280,6 +339,10 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
   if(mode.modules.includes('squadLatencyProbe')){
    assert(mode.roomRoot==='rooms2v2','no 1v1 probe leak '+name);
    html=patchSquadLatencyProbe(html,latencyProbeSource,name);
+  }
+  if(mode.modules.includes('squadActionLagProbeV39')){
+   assert(mode.roomRoot==='rooms2v2'&&mode.modules.includes('squadLatencyProbe'),'V3.9 requires 2v2 V3.5 sampler');
+   html=patchSquadActionLagProbe(html,lagStageSource,name);
   }
   if(name==='normal.2vs2')html=patchNormalSquadRoomEntry(html);
   validate(html,name,mode);
@@ -352,4 +415,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,sharedSection,safeTarget,main};
