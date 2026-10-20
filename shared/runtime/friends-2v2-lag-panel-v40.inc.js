@@ -6,7 +6,7 @@
  if(!primary||!secondary||document.getElementById('brawlV40Diagnostics'))return;
  const style=document.createElement('style');
  style.textContent=[
- '#brawlV40Diagnostics{position:fixed;z-index:2147483000;top:max(3px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);font:12px system-ui,-apple-system,sans-serif;touch-action:manipulation;color:#e6f8ff;pointer-events:auto}',
+ '#brawlV40Diagnostics{position:fixed;z-index:2147483000;top:auto;bottom:max(3px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);font:12px system-ui,-apple-system,sans-serif;touch-action:manipulation;color:#e6f8ff;pointer-events:auto}',
  '#brawlV40Diagnostics button{min-width:0;min-height:32px;font:inherit;border:1px solid #618e9d;border-radius:9px;background:#122c3b;color:#e6f8ff;padding:5px 10px;touch-action:manipulation}',
  '#brawlV40Diagnostics #brawlV40Open{font-size:11px;opacity:.86;padding:3px 8px;min-height:25px;background:#09202acc}',
  '#brawlV40Diagnostics #brawlV40Open[data-running="true"]{border-color:#82e6ad;color:#b4ffe2}',
