@@ -24,3 +24,9 @@ V4.6では、4人全員が移動射撃するローカルRTDB/WebKitの試験でA
 Node.jsの密集場面と少数場面でCPUマイクロベンチマークを実行する。ただしこれはSyntheticで実機FPS・通信ラグ改善の証拠ではない。テスト結果・安全性を確認し、効果が薄ければ本番開発版に入れない。外部方針：[Firebase公式性能最適化](https://firebase.google.com/docs/database/usage/optimize)、[web.dev Rendering Performance](https://web.dev/articles/rendering-performance/)。
 
 今後は実際の4人WebKitで候補を有効にしたときの計測と映像レビューを行い、学校iPad向けの採用可否を判定する。
+
+## V4.7実戦型A/Bテスト
+
+既存のWebKit試験に BRAWL_V47_INDEX_EARLY_SHOTS=1 のテスト専用切替を追加する。生成した開発候補HTMLのみインデックス版に差し替え、通常とドラフト両方で四人が27秒間移動と射撃を行う。
+比較対象はV4.6自然状態（人工ACTION遅延0）。初描画p95だけでなく、弾描画関数の呼出回数、早期弾が活動中の呼出回数、4件以上の密集フレーム数、早期弾関数の実測CPU合計を匿名で記録する。
+4ブラウザは同じCIのCPUを共有し試行も順番なので、学校iPadのFPS改善とは断定しない。密集が現実に発生しない場合や実戦測定で効果が薄い場合は標準採用を保留する。
