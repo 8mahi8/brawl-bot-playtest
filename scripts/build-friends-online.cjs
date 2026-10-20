@@ -305,7 +305,7 @@ function validate(html,modeName,mode){
  assert(html.includes('window.__brawlV3QA')||html.includes('window.__brawlV29QA'),'QA hook '+modeName);
  return true;
 }
-function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null){
+function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null,includeV39=true){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
  const projectileSource=read(spec.modules.squadProjectileVisual);
@@ -340,7 +340,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
    assert(mode.roomRoot==='rooms2v2','no 1v1 probe leak '+name);
    html=patchSquadLatencyProbe(html,latencyProbeSource,name);
   }
-  if(mode.modules.includes('squadActionLagProbeV39')){
+  if(includeV39&&mode.modules.includes('squadActionLagProbeV39')){
    assert(mode.roomRoot==='rooms2v2'&&mode.modules.includes('squadLatencyProbe'),'V3.9 requires 2v2 V3.5 sampler');
    html=patchSquadActionLagProbe(html,lagStageSource,name);
   }
