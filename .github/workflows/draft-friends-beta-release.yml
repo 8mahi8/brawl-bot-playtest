@@ -39,6 +39,7 @@ on:
       - 'tests/friends-2v2-latency-probe-v35.cjs'
       - 'tests/friends-2v2-lag-stages-v39.cjs'
       - 'tests/friends-2v2-four-peer-pressure-v41.cjs'
+      - 'tests/friends-2v2-action-hotpath-v41.cjs'
       - 'tests/friends-2v2-lag-panel-v40.cjs'
       - 'tests/friends-2v2-lag-stress-v36.cjs'
       - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
@@ -94,6 +95,7 @@ on:
       - 'tests/friends-2v2-latency-probe-v35.cjs'
       - 'tests/friends-2v2-lag-stages-v39.cjs'
       - 'tests/friends-2v2-four-peer-pressure-v41.cjs'
+      - 'tests/friends-2v2-action-hotpath-v41.cjs'
       - 'tests/friends-2v2-lag-panel-v40.cjs'
       - 'tests/friends-2v2-lag-stress-v36.cjs'
       - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
@@ -135,6 +137,7 @@ jobs:
           node tests/friends-control-layout.cjs
           node tests/friends-2v2-position-cadence.cjs
           node tests/friends-2v2-network-foundation.cjs
+          node tests/friends-2v2-action-hotpath-v41.cjs
           node tests/friends-2v2-combat-presentation.cjs
           node tests/friends-input-controls-v33.cjs
           node tests/friends-touch-combat-v34.cjs
