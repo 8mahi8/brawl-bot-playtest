@@ -6,7 +6,7 @@
  'use strict';
  const LIMIT=256,MAX_PENDING=128,AGE_LIMIT_MS=12000;
  const METRICS=['writeAckMs','remoteActionEstimatedAgeMs','receiveToFirstVisualMs',
-  'receiveToReceiptMs','hostTransactionMs','sendToReceiptMs'];
+  'receiveToReceiptMs','hostQueueWaitMs','hostTransactionMs','sendToReceiptMs'];
  let active=false,scope='',startedAt=0,tracks=new Map(),values={},counts={};
  const number=x=>typeof x==='number'&&Number.isFinite(x);
  const fresh=()=>{
@@ -14,7 +14,7 @@
   values=Object.fromEntries(METRICS.map(k=>[k,[]]));
   counts={localShots:0,writeAck:0,remoteShots:0,firstVisuals:0,
    visualBeforeAction:0,authoritativeReceipts:0,hostTransactions:0,
-   hostCommitted:0,hostAborted:0,failedWrites:0};
+   hostCommitted:0,hostAborted:0,hostQueued:0,failedWrites:0};
  };
  fresh();
  function currentScope(){
@@ -51,6 +51,14 @@
   }
   const t=track(action?.eventId);
   if(!t)return;
+  if(type==='hostQueued'&&!number(t.hostQueued)){
+   t.hostQueued=now;counts.hostQueued++;return;
+  }
+  if(type==='hostBegin'&&!number(t.hostStarted)){
+   t.hostStarted=now;
+   if(number(t.hostQueued))add('hostQueueWaitMs',now-t.hostQueued);
+   return;
+  }
   if(type==='send'&&!number(t.sent)){
    t.sent=now;counts.localShots++;return;
   }
