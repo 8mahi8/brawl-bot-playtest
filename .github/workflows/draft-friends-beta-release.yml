@@ -13,6 +13,7 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-projectile-visual.inc.js'
       - 'shared/runtime/friends-2v2-position-publish.inc.js'
       - 'tests/friends-2v2-position-cadence.cjs'
       - 'network/FRIENDS_TRANSPORT_DECISIONS.md'
@@ -36,6 +37,7 @@ on:
       - 'tests/friends-2v2-lag-stress-v36.cjs'
       - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
       - 'tests/friends-2v2-visual-catchup-v37.cjs'
+      - 'tests/friends-2v2-visual-entry-v38.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -60,6 +62,7 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-projectile-visual.inc.js'
       - 'shared/runtime/friends-2v2-position-publish.inc.js'
       - 'tests/friends-2v2-position-cadence.cjs'
       - 'network/FRIENDS_TRANSPORT_DECISIONS.md'
@@ -83,6 +86,7 @@ on:
       - 'tests/friends-2v2-lag-stress-v36.cjs'
       - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
       - 'tests/friends-2v2-visual-catchup-v37.cjs'
+      - 'tests/friends-2v2-visual-entry-v38.cjs'
       - 'tests/friends-2v2-combat-presentation.cjs'
       - 'tests/friends-2v2-network-foundation.cjs'
       - 'tests/friends-2v2-latency-visual.cjs'
@@ -124,6 +128,7 @@ jobs:
           node tests/friends-touch-combat-v34.cjs
           node tests/friends-2v2-latency-probe-v35.cjs
           node tests/friends-2v2-visual-catchup-v37.cjs
+          node tests/friends-2v2-visual-entry-v38.cjs
           mkdir -p artifacts/qa
           node tests/friends-2v2-lag-stress-v36.cjs > artifacts/qa/v36-synthetic-scenarios.json
           node --check tests/friends-2v2-lag-delivery-webkit-v36.cjs

@@ -18,7 +18,8 @@
     "squadTouchHandlers": "shared/runtime/friends-squad-touch-handlers.inc.js",
     "squadCombatAim": "shared/runtime/friends-squad-combat-aim.inc.js",
     "squadTouchPaint": "shared/runtime/friends-squad-touch-paint.inc.js",
-    "squadLatencyProbe": "shared/runtime/friends-2v2-latency-probe.inc.js"
+    "squadLatencyProbe": "shared/runtime/friends-2v2-latency-probe.inc.js",
+    "squadProjectileVisual": "shared/runtime/friends-2v2-projectile-visual.inc.js"
   },
   "modes": {
     "normal.1vs1": {
@@ -41,6 +42,7 @@
       "protocol": 3012,
       "modules": [
         "squadEarlyShots",
+        "squadProjectileVisual",
         "squadPositionPublish",
         "controlLayout",
         "squadPresencePositions",
@@ -77,6 +79,7 @@
       "protocol": 13012,
       "modules": [
         "squadEarlyShots",
+        "squadProjectileVisual",
         "squadPositionPublish",
         "controlLayout",
         "squadPresencePositions",
