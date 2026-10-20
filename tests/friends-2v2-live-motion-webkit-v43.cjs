@@ -101,7 +101,11 @@ async function trial(mode,browser){
  let clients=[],result;
  try{
   const isolated=process.env.BRAWL_V45_ISOLATE_CANVAS==='1';
-  clients=await Promise.all(SEATS.map((_,i)=>open(browser,mode,!isolated&&i<2)));
+  const natural=process.env.BRAWL_V46_BASELINE_ACTIONS==='1';
+  assert(!(isolated&&natural),'V4.6 natural action baseline must not disable guest Canvas');
+  // No video encoding while establishing natural callback timings; the
+  // existing V4.3 video test still records normal and draft UI screenshots.
+  clients=await Promise.all(SEATS.map((_,i)=>open(browser,mode,!isolated&&!natural&&i<2)));
   const first=clients[0].page;
   await first.locator('#createBtn').click();
   await first.waitForFunction(()=>/^\d{5}$/.test(window.__brawlV3QA?.()?.roomId||''),null,{timeout:18000});
@@ -124,7 +128,7 @@ async function trial(mode,browser){
    },{seat,char:chars[seat]},{timeout:13000});
   }
   // The receiver with callback delay still sees official game snapshots normally.
-  await bySeat.red1.evaluate(()=>{window.__v43DelayQA.ms=180;});
+  if(!natural)await bySeat.red1.evaluate(()=>{window.__v43DelayQA.ms=180;});
   for(const c of clients)await c.page.locator('#readyBtn').click();
   await Promise.all(clients.map(c=>c.page.waitForFunction(()=>{
    const q=window.__brawlV3QA?.();
@@ -185,7 +189,7 @@ async function trial(mode,browser){
    }
    await new Promise(r=>setTimeout(r,1000));
    for(const seat of SEATS)progress[seat].push(await bySeat[seat].evaluate(()=>window.__v43QA.state()));
-   if([6,15,24].includes(sec+1)){
+   if(!natural&&[6,15,24].includes(sec+1)){
     for(const seat of ['blue1','red1'])await bySeat[seat].screenshot({
      path:path.join(out,'v43-'+mode+'-'+seat+'-'+(sec+1)+'s.png')});
    }
@@ -212,9 +216,9 @@ async function trial(mode,browser){
   assert(reports.some(r=>r.received>=3),'guests must observe multiple remote action events');
   assert(reports.some(r=>r.visual.remotes>=3),'remote player draw positions must exist');
   for(const c of clients)assert.deepEqual(c.errors,[],'WebKit JS error '+mode);
-  result={version:'V4.5',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
+  result={version:natural?'V4.6':'V4.5',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
    durationSec:DURATION,shots,travelWorldUnits:travel,characters:chars,
-   receiverCallbackOnlyDelayMs:{red1:180},noSchoolNetworkRTT:true,
+   receiverCallbackOnlyDelayMs:natural?{}:{red1:180},noSchoolNetworkRTT:true,
    peers:reports.map(r=>{
     const initial=startedVisual.find(s=>s.seat===r.seat).state;
     const final=r.visual;
@@ -257,8 +261,41 @@ async function trial(mode,browser){
    console.log('PASS V4.5 Canvas isolation '+mode+' '+JSON.stringify(result.frameIsolation));
   }
   assert(!JSON.stringify(result).includes(roomId),'anonymous aggregate report only');
-  fs.writeFileSync(path.join(out,'v43-'+mode+'-motion.json'),JSON.stringify(result,null,2)+'\n');
-  console.log('PASS V4.3 '+mode+' moving multiplayer '+JSON.stringify({shots,travel}));
+  if(natural){
+   // Persist only bounded aggregate timings, never room keys or event IDs.
+   const baseline={
+    version:'V4.6',mode,peers:4,trialSeconds:DURATION,
+    setup:'four real moving/shooting WebKit clients and LOCAL RTDB emulator',
+    injectedCallbackDelayMs:0,videoCaptureEnabled:false,
+    limitations:['Not school Wi-Fi or a physical iPad FPS measurement',
+     'Server clock offsets prevent a true end-to-end packet RTT estimate',
+     'CI shares CPU across all four WebKit peers and the Firebase emulator',
+     'Visual timing ends at Canvas draw submission, not display scanout'],
+    seats:result.peers.map(p=>({
+     seat:p.seat,remoteActions:p.received,
+     stages:p.lagStages,events:p.events,
+     gameCpu:p.localCpu,
+     totalFrames:p.finalFrame.frames,framesOver100ms:p.finalFrame.frameGaps
+    }))
+   };
+   assert(baseline.seats.every(p=>p.events.remoteShots>=1),
+    'natural 4-peer baseline must actually receive remote shots on every client');
+   const target=path.join(out,'v46-'+mode+'-natural-shot-pipeline.json');
+   fs.writeFileSync(target,JSON.stringify(baseline,null,2)+'\n');
+   const summary=baseline.seats.map(p=>({
+    seat:p.seat,remoteShots:p.events.remoteShots,hostTransactions:p.events.hostTransactions,
+    writeAckP95Ms:p.stages.writeAckMs.p95Ms,
+    receiveToVisualP95Ms:p.stages.receiveToFirstVisualMs.p95Ms,
+    receiveToReceiptP95Ms:p.stages.receiveToReceiptMs.p95Ms,
+    hostQueueP95Ms:p.stages.hostQueueWaitMs.p95Ms,
+    hostTransactionP95Ms:p.stages.hostTransactionMs.p95Ms,
+    totalFrames:p.totalFrames,framesOver100ms:p.framesOver100ms
+   }));
+   console.log('PASS V4.6 natural '+mode+' action stages '+JSON.stringify(summary));
+  }else{
+   fs.writeFileSync(path.join(out,'v43-'+mode+'-motion.json'),JSON.stringify(result,null,2)+'\n');
+   console.log('PASS V4.3 '+mode+' moving multiplayer '+JSON.stringify({shots,travel}));
+  }
   return result;
  }finally{
   await Promise.allSettled(clients.map(c=>c.ctx.close()));
