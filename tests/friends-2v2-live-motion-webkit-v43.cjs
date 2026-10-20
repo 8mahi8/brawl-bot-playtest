@@ -15,6 +15,13 @@ if(process.env.BRAWL_STAGE_2V2!=='1')throw Error('Generated staging 2v2 only');
 function fixture(mode){
  const input=path.join(root,'artifacts/friends-online/'+mode+'-2vs2.html');
  let s=fs.readFileSync(input,'utf8');
+ if(process.env.BRAWL_V47_INDEX_EARLY_SHOTS==='1'){
+  // Candidate only in this local-emulator WebKit fixture; no generated
+  // release or pinned source HTML is modified.
+  const {makeAll}=require('../scripts/build-friends-online.cjs');
+  const indexed=fs.readFileSync(path.join(root,'shared/runtime/friends-2v2-early-shots-v47.inc.js'),'utf8');
+  s=makeAll(indexed)[mode+'.2vs2'].html;
+ }
  // Existing draft beta has a preconfigured RTDB URL and deliberately hides
  // the connection editor. Redirect that URL to the emulator-only project.
  if(mode==='draft')s=s.replaceAll('https://mygame-df915-default-rtdb.firebaseio.com/',url);
@@ -23,6 +30,17 @@ function fixture(mode){
  for(const anchor of [a,b,listener])assert.equal(s.split(anchor).length-1,1,'unique '+mode+' anchor');
  s=s.replace(a,a+" db.useEmulator('127.0.0.1',9000);");
  s=s.replace('connect-src ','connect-src http://127.0.0.1:9000 ws://127.0.0.1:9000 ');
+ if(process.env.BRAWL_V46_BASELINE_ACTIONS==='1'){
+  const mark=' renderEarlyShots(performance.now());';
+  assert.equal(s.split(mark).length-1,1,'one real Canvas shot-preview render');
+  s=s.replace(mark,` {const __start=performance.now(),__active=earlyShots.size;
+  renderEarlyShots(__start);
+  const __elapsed=performance.now()-__start,__m=window.__v47FrameQA;
+  __m.calls++;__m.totalMs+=__elapsed;__m.maxMs=Math.max(__m.maxMs,__elapsed);
+  if(__active)__m.activeCalls++;
+  if(__active>=4)__m.denseCalls++;
+  }`);
+ }
  // Extra V4.5 test-only switch: all 4 clients still run the real movement,
  // RTDB listeners, action dispatch, and collision. Toggle only guest Canvas
  // rendering for a controlled shared-runner CPU-load comparison.
@@ -35,6 +53,7 @@ function fixture(mode){
  // QA-only readable data and a call into the genuine production shootAngle().
  // Real movement uses the actual keyboard event handlers, not pose mutation.
  const qa=[
+ 'window.__v47FrameQA={calls:0,totalMs:0,maxMs:0,activeCalls:0,denseCalls:0};',
  'window.__v43QA=Object.freeze({',
  ' shoot:angle=>{if(!combatReady()||game?.phase!==\'playing\')return false;',
  ' const before=actionSeq;shootAngle(angle);return actionSeq>before;},',
@@ -47,6 +66,7 @@ function fixture(mode){
  ' hudRenders:presentationMetrics.hudRenders,hudDomWrites:presentationMetrics.hudDomWrites,',
  ' now:performance.now(),',
  ' hudV45:window.__brawlHudV45QA?.()||null,',
+ ' earlyFrame:window.__v47FrameQA?{...window.__v47FrameQA}:null,',
  ' canvasDrawMs:drawTiming.totalDrawMs,draws:drawTiming.frames})',
  '});'
  ].join('\n');
@@ -102,6 +122,8 @@ async function trial(mode,browser){
  try{
   const isolated=process.env.BRAWL_V45_ISOLATE_CANVAS==='1';
   const natural=process.env.BRAWL_V46_BASELINE_ACTIONS==='1';
+  const indexed=process.env.BRAWL_V47_INDEX_EARLY_SHOTS==='1';
+  assert(!indexed||natural,'V4.7 candidate only alongside V4.6 natural no-injected-delay baseline');
   assert(!(isolated&&natural),'V4.6 natural action baseline must not disable guest Canvas');
   // No video encoding while establishing natural callback timings; the
   // existing V4.3 video test still records normal and draft UI screenshots.
@@ -216,7 +238,7 @@ async function trial(mode,browser){
   assert(reports.some(r=>r.received>=3),'guests must observe multiple remote action events');
   assert(reports.some(r=>r.visual.remotes>=3),'remote player draw positions must exist');
   for(const c of clients)assert.deepEqual(c.errors,[],'WebKit JS error '+mode);
-  result={version:natural?'V4.6':'V4.5',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
+  result={version:indexed?'V4.7':natural?'V4.6':'V4.5',mode,description:'Scripted 4-peer movement and shooting, WebKit/LOCAL RTDB only',
    durationSec:DURATION,shots,travelWorldUnits:travel,characters:chars,
    receiverCallbackOnlyDelayMs:natural?{}:{red1:180},noSchoolNetworkRTT:true,
    peers:reports.map(r=>{
@@ -275,12 +297,23 @@ async function trial(mode,browser){
      seat:p.seat,remoteActions:p.received,
      stages:p.lagStages,events:p.events,
      gameCpu:p.localCpu,
+     earlyFrame:{
+      calls:p.finalFrame.earlyFrame.calls -
+       startedVisual.find(s=>s.seat===p.seat).state.earlyFrame.calls,
+      activeCalls:p.finalFrame.earlyFrame.activeCalls -
+       startedVisual.find(s=>s.seat===p.seat).state.earlyFrame.activeCalls,
+      denseCalls:p.finalFrame.earlyFrame.denseCalls -
+       startedVisual.find(s=>s.seat===p.seat).state.earlyFrame.denseCalls,
+      totalMs:Math.round((p.finalFrame.earlyFrame.totalMs -
+       startedVisual.find(s=>s.seat===p.seat).state.earlyFrame.totalMs)*100)/100,
+      maxMs:Math.round(p.finalFrame.earlyFrame.maxMs*100)/100
+     },
      totalFrames:p.finalFrame.frames,framesOver100ms:p.finalFrame.frameGaps
     }))
    };
    assert(baseline.seats.every(p=>p.events.remoteShots>=1),
     'natural 4-peer baseline must actually receive remote shots on every client');
-   const target=path.join(out,'v46-'+mode+'-natural-shot-pipeline.json');
+   const target=path.join(out,(indexed?'v47-':'v46-')+mode+(indexed?'-indexed-shot-pipeline.json':'-natural-shot-pipeline.json'));
    fs.writeFileSync(target,JSON.stringify(baseline,null,2)+'\n');
    const summary=baseline.seats.map(p=>({
     seat:p.seat,remoteShots:p.events.remoteShots,hostTransactions:p.events.hostTransactions,
@@ -289,9 +322,11 @@ async function trial(mode,browser){
     receiveToReceiptP95Ms:p.stages.receiveToReceiptMs.p95Ms,
     hostQueueP95Ms:p.stages.hostQueueWaitMs.p95Ms,
     hostTransactionP95Ms:p.stages.hostTransactionMs.p95Ms,
-    totalFrames:p.totalFrames,framesOver100ms:p.framesOver100ms
+    totalFrames:p.totalFrames,framesOver100ms:p.framesOver100ms,
+    activeEarlyShotDraws:p.earlyFrame.activeCalls,denseEarlyShotDraws:p.earlyFrame.denseCalls,
+    earlyShotTotalDrawMs:p.earlyFrame.totalMs
    }));
-   console.log('PASS V4.6 natural '+mode+' action stages '+JSON.stringify(summary));
+   console.log('PASS '+(indexed?'V4.7 indexed':'V4.6 natural')+' '+mode+' action stages '+JSON.stringify(summary));
   }else{
    fs.writeFileSync(path.join(out,'v43-'+mode+'-motion.json'),JSON.stringify(result,null,2)+'\n');
    console.log('PASS V4.3 '+mode+' moving multiplayer '+JSON.stringify({shots,travel}));

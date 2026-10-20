@@ -13,6 +13,9 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-early-shots-v47.inc.js'
+      - 'tests/friends-2v2-early-shot-index-v47.cjs'
+      - 'network/BRAWL_V47_EARLY_SHOT_INDEX.md'
       - 'shared/runtime/friends-2v2-projectile-visual.inc.js'
       - 'shared/runtime/friends-2v2-position-publish.inc.js'
       - 'shared/runtime/friends-2v2-position-delta-v44.inc.js'
@@ -76,6 +79,9 @@ on:
       - 'scripts/build-friends-online.cjs'
       - 'shared/friends-online-modes.json'
       - 'shared/runtime/friends-2v2-early-shots.inc.js'
+      - 'shared/runtime/friends-2v2-early-shots-v47.inc.js'
+      - 'tests/friends-2v2-early-shot-index-v47.cjs'
+      - 'network/BRAWL_V47_EARLY_SHOT_INDEX.md'
       - 'shared/runtime/friends-2v2-projectile-visual.inc.js'
       - 'shared/runtime/friends-2v2-position-publish.inc.js'
       - 'shared/runtime/friends-2v2-position-delta-v44.inc.js'
@@ -163,6 +169,7 @@ jobs:
           node tests/friends-2v2-lag-panel-v40.cjs
           node tests/friends-2v2-visual-catchup-v37.cjs
           node tests/friends-2v2-visual-entry-v38.cjs
+          node tests/friends-2v2-early-shot-index-v47.cjs
           mkdir -p artifacts/qa
           node tests/friends-2v2-lag-stress-v36.cjs > artifacts/qa/v36-synthetic-scenarios.json
           node --check tests/friends-2v2-lag-delivery-webkit-v36.cjs
@@ -195,7 +202,7 @@ jobs:
           test -s artifacts/firebase-sdk/firebase-app-compat.js
           test -s artifacts/firebase-sdk/firebase-database-compat.js
       - name: Run 2-client and 4-client beta HTML on LOCAL RTDB emulator only
-        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-draft-beta --config firebase.draft-friends-beta-e2e.json "node tests/draft-friends-beta-webkit.cjs && node tests/friends-2v2-normal-latency-webkit.cjs && BRAWL_STAGE_2V2=1 BRAWL_VISUAL_QA=1 node tests/draft-friends-beta-webkit.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-normal-latency-webkit.cjs && BRAWL_STAGE_2V2=1 BRAWL_VISUAL_QA=1 node tests/friends-2v2-lag-delivery-webkit-v36.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-four-peer-pressure-v41.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-live-motion-webkit-v43.cjs && BRAWL_STAGE_2V2=1 BRAWL_V45_ISOLATE_CANVAS=1 node tests/friends-2v2-live-motion-webkit-v43.cjs && BRAWL_STAGE_2V2=1 BRAWL_V46_BASELINE_ACTIONS=1 node tests/friends-2v2-live-motion-webkit-v43.cjs"
+        run: ./node_modules/.bin/firebase emulators:exec --only database --project demo-brawl-draft-beta --config firebase.draft-friends-beta-e2e.json "node tests/draft-friends-beta-webkit.cjs && node tests/friends-2v2-normal-latency-webkit.cjs && BRAWL_STAGE_2V2=1 BRAWL_VISUAL_QA=1 node tests/draft-friends-beta-webkit.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-normal-latency-webkit.cjs && BRAWL_STAGE_2V2=1 BRAWL_VISUAL_QA=1 node tests/friends-2v2-lag-delivery-webkit-v36.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-four-peer-pressure-v41.cjs && BRAWL_STAGE_2V2=1 node tests/friends-2v2-live-motion-webkit-v43.cjs && BRAWL_STAGE_2V2=1 BRAWL_V45_ISOLATE_CANVAS=1 node tests/friends-2v2-live-motion-webkit-v43.cjs && BRAWL_STAGE_2V2=1 BRAWL_V46_BASELINE_ACTIONS=1 node tests/friends-2v2-live-motion-webkit-v43.cjs && BRAWL_STAGE_2V2=1 BRAWL_V46_BASELINE_ACTIONS=1 BRAWL_V47_INDEX_EARLY_SHOTS=1 node tests/friends-2v2-live-motion-webkit-v43.cjs"
       - name: Publish synthetic and four-peer delivery-lag evidence (no room IDs)
         if: always()
         uses: actions/upload-artifact@v4
@@ -225,6 +232,7 @@ jobs:
             artifacts/qa/v43-*.png
             artifacts/qa/v43-*.json
             artifacts/qa/v46-*.json
+            artifacts/qa/v47-*.json
           retention-days: 7
           if-no-files-found: warn
       - name: Archive V4.5 four-client Canvas load isolation (local emulator only)
