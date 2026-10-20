@@ -34,9 +34,11 @@ on:
       - 'tests/friends-touch-combat-v34.cjs'
       - 'shared/runtime/friends-2v2-latency-probe.inc.js'
       - 'shared/runtime/friends-2v2-action-lag-probe-v39.inc.js'
+      - 'shared/runtime/friends-2v2-lag-panel-v40.inc.js'
       - 'network/BRAWL_V39_EXTERNAL_RESEARCH.md'
       - 'tests/friends-2v2-latency-probe-v35.cjs'
       - 'tests/friends-2v2-lag-stages-v39.cjs'
+      - 'tests/friends-2v2-lag-panel-v40.cjs'
       - 'tests/friends-2v2-lag-stress-v36.cjs'
       - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
       - 'tests/friends-2v2-visual-catchup-v37.cjs'
@@ -86,9 +88,11 @@ on:
       - 'tests/friends-touch-combat-v34.cjs'
       - 'shared/runtime/friends-2v2-latency-probe.inc.js'
       - 'shared/runtime/friends-2v2-action-lag-probe-v39.inc.js'
+      - 'shared/runtime/friends-2v2-lag-panel-v40.inc.js'
       - 'network/BRAWL_V39_EXTERNAL_RESEARCH.md'
       - 'tests/friends-2v2-latency-probe-v35.cjs'
       - 'tests/friends-2v2-lag-stages-v39.cjs'
+      - 'tests/friends-2v2-lag-panel-v40.cjs'
       - 'tests/friends-2v2-lag-stress-v36.cjs'
       - 'tests/friends-2v2-lag-delivery-webkit-v36.cjs'
       - 'tests/friends-2v2-visual-catchup-v37.cjs'
@@ -134,6 +138,7 @@ jobs:
           node tests/friends-touch-combat-v34.cjs
           node tests/friends-2v2-latency-probe-v35.cjs
           node tests/friends-2v2-lag-stages-v39.cjs
+          node tests/friends-2v2-lag-panel-v40.cjs
           node tests/friends-2v2-visual-catchup-v37.cjs
           node tests/friends-2v2-visual-entry-v38.cjs
           mkdir -p artifacts/qa
@@ -173,6 +178,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: brawl-v36-lag-stress-results
-          path: artifacts/qa/v36-*.json
+          path: |
+            artifacts/qa/v36-*.json
+            artifacts/qa/v40-*.json
           retention-days: 7
           if-no-files-found: warn
