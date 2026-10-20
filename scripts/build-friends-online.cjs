@@ -11,6 +11,8 @@ const spec=JSON.parse(fs.readFileSync(path.join(root,'shared/friends-online-mode
 const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 const ACTION_BEGIN='// Never feed early remote visuals into host collision, hit preview or RTDB.';
 const ACTION_END='\n function visualCombatNow()';
+const PROJECTILE_BEGIN='function squadRemoteProjectileVisual(';
+const PROJECTILE_END='function drawSmoothProjectiles(dt){';
 const POSITION_BEGIN='// Only active motion needs the 80ms network cadence.';
 const POSITION_END='function update(dt,movementDt=dt)';
 const safeOutputPrefix='artifacts/friends-online/';
@@ -24,6 +26,15 @@ function uniqueSpan(html,start,end,label){
 function patchEarlyShots(html,canonical){
  const x=uniqueSpan(html,ACTION_BEGIN,ACTION_END,'squad early-shot visuals');
  return html.slice(0,x.begin)+canonical+html.slice(x.stop);
+}
+
+// Authoritative 2v2 projectiles are displayed at their already-advanced
+// snapshot coordinates, not replayed again from their muzzle.
+function patchSquadProjectileVisual(html,canonical){
+ assert(canonical.startsWith(PROJECTILE_BEGIN)&&canonical.endsWith('\n'),'invalid shared projectile renderer');
+ assert(!canonical.includes(PROJECTILE_END),'projectile renderer overlaps next function');
+ const span=uniqueSpan(html,PROJECTILE_BEGIN,PROJECTILE_END,'2v2 host projectile visualization');
+ return html.slice(0,span.begin)+canonical+html.slice(span.stop);
 }
 
 // Build-only position cadence extraction; game HTML inputs remain immutable.
@@ -154,6 +165,27 @@ function patchSquadPresentation(html,source,modeName){
   modeName+' inject 2v2 presentation');
 }
 
+// Google Sites normal 2v2 should join with a 5-digit code, just like draft
+// 2v2. Keep the existing editable advanced endpoint field for local emulators,
+// but prefill the USER-CONFIRMED Firebase RTDB instead of requiring every iPad
+// to configure it. Applies ONLY to the generated normal 2v2 staging HTML.
+function patchNormalSquadRoomEntry(html){
+ const endpoint='https://mygame-df915-default-rtdb.firebaseio.com/';
+ html=replaceOnce(html,"const value=(el?.value||''||stored).trim();",
+   "const value=(el?.value||stored||'"+endpoint+"').trim();",'normal 2v2 endpoint get');
+ html=replaceOnce(html,"el.value=''||stored;",
+   "el.value=stored||'"+endpoint+"';",'normal 2v2 endpoint prefill');
+ html=replaceOnce(html,
+   '接続先を入力後にルーム作成・参加。設定はブラウザ内だけに保存されます。',
+   'ルーム番号だけで参加できます。接続先設定は通常不要です。',
+   'normal 2v2 endpoint note');
+ html=replaceOnce(html,
+   'オンライン開発検証版。安全な隔離Firebaseのテスト環境専用。まだ公開しないでください。',
+   '友達とのオンライン対戦。5桁のルーム番号で参加できます。',
+   'normal 2v2 public-facing description');
+ return html;
+}
+
 const FRIEND_INPUT_SPANS={
  duelPointerAim:{start:'  function pcPointer(e){',end:'\n\n\n  function alertStatus(',modes:['normal.1vs1','draft.1vs1']},
  squadPointerAim:{start:'function pcPointer(e){',end:'let pcShot=null;',modes:['normal.2vs2','draft.2vs2']},
@@ -218,6 +250,7 @@ function validate(html,modeName,mode){
 function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
+ const projectileSource=read(spec.modules.squadProjectileVisual);
  assert(canonical.startsWith(ACTION_BEGIN)&&canonical.endsWith('\n'),'bad shared early-shot source');
  assert(!canonical.includes(ACTION_END),'source must not contain marker after block');
  const layoutSource=read(spec.modules.controlLayout);
@@ -232,6 +265,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
  for(const [name,mode] of Object.entries(spec.modes)){
   let html=read(mode.source);
   if(mode.modules.includes('squadEarlyShots'))html=patchEarlyShots(html,canonical);
+  if(mode.modules.includes('squadProjectileVisual'))html=patchSquadProjectileVisual(html,projectileSource);
   if(mode.modules.includes('squadPositionPublish'))html=patchPositionPublish(html,positionSource);
   if(mode.modules.includes('controlLayout'))html=patchControlLayout(html,layoutSource,name);
   if(mode.modules.includes('squadActionStream')){
@@ -247,6 +281,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
    assert(mode.roomRoot==='rooms2v2','no 1v1 probe leak '+name);
    html=patchSquadLatencyProbe(html,latencyProbeSource,name);
   }
+  if(name==='normal.2vs2')html=patchNormalSquadRoomEntry(html);
   validate(html,name,mode);
   outputs[name]={mode,html,hash:crypto.createHash('sha256').update(html).digest('hex')};
  }
