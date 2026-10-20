@@ -11,8 +11,12 @@ function instrumentV49(html,probe){
  assert(!html.includes('window.__v49ShotFrames'),'cannot inject twice');
  html=one(html,'window.__brawlV3QA=()=>({',
   probe.trimEnd()+'\nwindow.__brawlV3QA=()=>({','insert V4.9 local-only probe');
- const receive="window.__brawlLagV39QA.tap('receive',a,serverNow()-a.at);";
- html=one(html,receive,receive+'window.__v49ShotFrames.receive(a);','real remote ACTION listener');
+ const receive="if(!localPrediction&&a.type==='shot'&&a.owner!==myId)\n  window.__brawlLagV39QA.tap('receive',a,serverNow()-a.at);";
+ html=one(html,receive,
+  "if(!localPrediction&&a.type==='shot'&&a.owner!==myId){\n"+
+  "  window.__brawlLagV39QA.tap('receive',a,serverNow()-a.at);\n"+
+  "  window.__v49ShotFrames.receive(a);\n }",
+  'remote-only shot callback; never include own local prediction');
  const frame='function frame(now){const elapsed=';
  html=one(html,frame,
   'function frame(now){window.__v49ShotFrames.frame(performance.now());const elapsed=',
