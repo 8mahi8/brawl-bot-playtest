@@ -244,8 +244,8 @@ function patchSquadActionLagProbe(html,source,modeName){
   'incoming shot');
  change(
   'boundedRemember(queuedActions,id);hostQueue.push(a);',
-  "boundedRemember(queuedActions,id);hostQueue.push(a);",
-  'host queue preserved');
+  "boundedRemember(queuedActions,id);hostQueue.push(a);window.__brawlLagV39QA.tap('hostQueued',a);",
+  'host queue staging timestamp');
  change(
   "const roomKey=room.key,owner=myId,ref=room.child('actions').push(),a={...action,eventId:ref.key};",
   "const roomKey=room.key,owner=myId,ref=room.child('actions').push(),a={...action,eventId:ref.key};\n if(a.type==='shot')window.__brawlLagV39QA.tap('send',a);",
@@ -260,7 +260,7 @@ function patchSquadActionLagProbe(html,source,modeName){
   'Firebase write failed');
  change(
   "const input=inputSnapshot();\n   const result=await activeRoom.child('game').transaction(g=>{",
-  "const input=inputSnapshot();\n   const __v39TxnAt=performance.now();\n   const result=await activeRoom.child('game').transaction(g=>{",
+  "const input=inputSnapshot();\n   const __v39TxnAt=performance.now();\n   for(const __a of activeBatch)window.__brawlLagV39QA.tap('hostBegin',__a);\n   const result=await activeRoom.child('game').transaction(g=>{",
   'host transaction start');
  change(
   "},undefined,false);\n   if(!result.committed){",
