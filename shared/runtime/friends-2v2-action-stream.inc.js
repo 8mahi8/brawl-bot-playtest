@@ -25,9 +25,18 @@ function validActionReceipt(a,r){return !!r&&typeof r==='object'&&r.owner===a.ow
  }
  function drainActions(){const now=serverNow();
  if(!clockReady)return;
+ // Position snapshots can trigger reconciliation tens of times per second.
+ // When there are no actions, skip the entire pending-action scan/sort. Keep
+ // dispatching any already-enqueued host batch through its normal safety gate.
+ if(!pendingActions.size){scheduleHostActionDispatch();return;}
  for(const [id,p]of pendingActions)if(p.action.at<now-ACTION_TTL||p.action.at>now+ACTION_FUTURE||failedLocalActions.has(id)){pendingActions.delete(id);clientBullets=clientBullets.filter(b=>!b.id.startsWith(id+':'));}
  if(!lobbyReady||!gameReady||!presenceReady||!positionsReady||!game||game.matchId!==lobby?.matchId||roundResetKey!==game.matchId+':'+game.round||pageSuspended)return;
- const sorted=[...pendingActions.values()].sort((p,q)=>p.action.owner.localeCompare(q.action.owner)||p.action.seq-q.action.seq);
+ // Only the authoritative host requires deterministic cross-player ordering.
+ // Guests only retire their own receipt entries, so copying/sorting every
+ // pending action on every position/game callback burns iPad CPU for no gain.
+ const sorted=isAuthoritative()?
+  [...pendingActions.values()].sort((p,q)=>p.action.owner.localeCompare(q.action.owner)||p.action.seq-q.action.seq):
+  pendingActions.values();
  for(const p of sorted){const a=p.action,id=a.eventId;
   if(a.matchId!==game.matchId||a.round!==game.round||!playerSeat(a.owner))continue;
   const receipt=game.usedActions?.[id];
