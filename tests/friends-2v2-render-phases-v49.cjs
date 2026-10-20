@@ -14,7 +14,9 @@ for(const name of ['normal.2vs2','draft.2vs2']){
  const html=instrumentV49(built[name].html,probe);
  validate(html,name,built[name].mode);
  assert.equal(html.split('window.__v49ShotFrames=Object.freeze(').length-1,1,'single probe '+name);
- assert(html.includes("if(!localPrediction&&a.type==='shot'&&a.owner!==myId){\n  window.__brawlLagV39QA.tap('receive',a,serverNow()-a.at);\n  window.__v49ShotFrames.receive(a);\n }"),\n  'remote-only ACTION instrumentation preserves local-prediction guard '+name);\n assert(html.includes("window.__v49ShotFrames.visual(a.eventId,'early');"),
+ assert(html.includes("if(!localPrediction&&a.type==='shot'&&a.owner!==myId){\n  window.__brawlLagV39QA.tap('receive',a,serverNow()-a.at);\n  window.__v49ShotFrames.receive(a);\n }"),
+  'remote-only ACTION instrumentation preserves local-prediction guard '+name);
+ assert(html.includes("window.__v49ShotFrames.visual(a.eventId,'early');"),
   'early visual phase recorded '+name);
  assert(html.includes("window.__v49ShotFrames.visual(bullet.fireId,'authoritative');"),
   'authoritative fallback phase recorded '+name);
