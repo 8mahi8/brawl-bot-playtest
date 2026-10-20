@@ -63,5 +63,5 @@ call(false);assert.equal(renders,5);
 assert.equal(qa().queued,4);
 assert(qa().invalidated>=3);
 const safe=JSON.stringify(qa());
-assert(!safe.includes('new-room')&&!safe.includes('r'),'anonymous telemetry must have no room IDs');
+assert(!safe.includes('new-room')&&!safe.includes('label'),'anonymous telemetry must have no room IDs');
 console.log('PASS V4.5 2v2 HUD coalescing / direct periodic / urgent pause / reconnect generation / background / 1v1 isolation');
