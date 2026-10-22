@@ -59,38 +59,54 @@ function squadProjectileSegmentHitsWall(x0,y0,x1,y1,r,w){
  }
  return enter<=exit;
 }
+// Cache the collision preflight by authoritative projectile object.
+// Snapshot objects are replaced on RTDB updates, while rAF reads them repeatedly.
+// WeakMap avoids leaking dead bullet IDs across rounds.
+const squadProjectileGuardMemo=new WeakMap();
 function squadProjectileGuardedRemoteAhead(b,baseline,requested,spawnDelay,walls,width,height,portableWalls,at){
  if(requested<=baseline)return requested;
  if(!b||!Number.isFinite(b.x)||!Number.isFinite(b.y)||
     !Number.isFinite(b.vx)||!Number.isFinite(b.vy)||
     !Number.isFinite(baseline)||!Number.isFinite(requested)||
-    !Number.isFinite(spawnDelay))
-  return baseline;
- // Check the full 180ms extension from its first frame, not just the
- // elapsed fraction. Otherwise crossing a wall at 150ms could make an
- // already-advanced bullet jump backward to the 110ms baseline.
+    !Number.isFinite(spawnDelay))return baseline;
+ const memo=squadProjectileGuardMemo.get(b);
+ if(memo&&memo.baseline===baseline&&memo.spawnDelay===spawnDelay&&
+    memo.walls===walls&&memo.portableWalls===portableWalls&&
+    memo.width===width&&memo.height===height&&at<memo.validUntil&&
+    memo.x===b.x&&memo.y===b.y&&memo.vx===b.vx&&memo.vy===b.vy&&
+    memo.dist===b.dist&&memo.range===b.range&&memo.radius===b.radius)
+  return memo.allow?requested:baseline;
+ // Evaluate the complete 110–180ms segment even on its first frame.
+ // Checking only the elapsed fraction can cause a later wall-driven rewind.
  const from=Math.max(0,baseline-spawnDelay),to=Math.max(0,Math.max(requested,.18)-spawnDelay);
- if(to<=from)return requested;
+ let validUntil=Infinity,allow=true;
  const x0=b.x+b.vx*from,y0=b.y+b.vy*from;
  const x1=b.x+b.vx*to,y1=b.y+b.vy*to;
- const r=Number.isFinite(b.radius)?Math.max(0,b.radius):4;
- if(!Number.isFinite(x0)||!Number.isFinite(y0)||
-    !Number.isFinite(x1)||!Number.isFinite(y1)||
-    !Number.isFinite(width)||!Number.isFinite(height)||
-    x1<r||x1>width-r||y1<r||y1>height-r)return baseline;
+ const radius=Number.isFinite(b.radius)?Math.max(0,b.radius):4;
+ if(!Number.isFinite(x0)||!Number.isFinite(y0)||!Number.isFinite(x1)||
+    !Number.isFinite(y1)||!Number.isFinite(width)||!Number.isFinite(height)||
+    x1<radius||x1>width-radius||y1<radius||y1>height-radius)allow=false;
  const speed=Math.hypot(b.vx,b.vy);
- if(Number.isFinite(b.range)&&Number.isFinite(b.dist)&&
-    b.dist+speed*to>=b.range)return baseline;
- for(const w of walls||[]){
-  if(squadProjectileSegmentHitsWall(x0,y0,x1,y1,r,w))return baseline;
+ if(allow&&Number.isFinite(b.range)&&Number.isFinite(b.dist)&&
+    b.dist+speed*to>=b.range)allow=false;
+ if(allow&&to>from)for(const wall of walls||[]){
+  if(squadProjectileSegmentHitsWall(x0,y0,x1,y1,radius,wall)){
+   allow=false;break;
+  }
  }
- // The draft mode also has short-lived portable walls. Never allow a staged
- // extra look-ahead to cross one while it is active.
+ // A portable wall can activate or expire between two rAF frames even
+ // without a new RTDB snapshot. Expire memo at its next time transition.
  if(portableWalls)for(const key in portableWalls){
   if(!Object.prototype.hasOwnProperty.call(portableWalls,key))continue;
-  const w=portableWalls[key];
-  if(w?.kind!=='portable_wall'||!(w.start<=at&&w.until>at))continue;
-  if(squadProjectileSegmentHitsWall(x0,y0,x1,y1,r,w))return baseline;
+  const wall=portableWalls[key];
+  if(wall?.kind!=='portable_wall')continue;
+  if(wall.start>at&&wall.start<validUntil)validUntil=wall.start;
+  else if(wall.until>at&&wall.until<validUntil)validUntil=wall.until;
+  if(allow&&wall.start<=at&&wall.until>at&&to>from&&
+     squadProjectileSegmentHitsWall(x0,y0,x1,y1,radius,wall))allow=false;
  }
- return requested;
+ squadProjectileGuardMemo.set(b,{baseline,spawnDelay,walls,portableWalls,
+  width,height,validUntil,allow,x:b.x,y:b.y,vx:b.vx,vy:b.vy,
+  dist:b.dist,range:b.range,radius:b.radius});
+ return allow?requested:baseline;
 }
