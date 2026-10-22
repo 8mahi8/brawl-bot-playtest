@@ -10,22 +10,26 @@ const end='function updateCameraLabel()';
 function approximate(actual,expected,label){
  assert(Math.abs(actual-expected)<.02,label+': '+actual+' vs '+expected);
 }
-function replay(html,ageMs,owner='peer'){
+function replay(html,ageMs,owner='peer',options={}){
  const start=html.indexOf(source),stop=html.indexOf(end,start);
  assert(start>=0&&stop>start,'missing projectile renderer');
  assert.equal(html.indexOf(source,start+source.length),-1,'duplicate projectile renderer');
  const snippet=html.slice(start,stop);
  const time=1000+ageMs;
  const projectile={id:'remoteShot:0',fireId:'remoteShot',owner,
-   x:100,y:130,vx:660,vy:0,dist:400,spawnAt:1000,team:'red',char:'sniper'};
+   x:100,y:130,vx:660,vy:0,dist:400,spawnAt:1000,team:'red',char:'sniper',
+   ...(options.bullet||{})};
  const bulletVisuals=new Map(),ctx={
   beginPath(){},arc(){},stroke(){},save(){},restore(){},moveTo(){},lineTo(){}
  };
  const env={Math,Object,Number,Set,Map,
+  W:options.width||1920,H:options.height||1120,
+  WALLS:options.walls||[],combatNow:()=>time,
   window:{__brawlLagV39QA:{tap(){}}},performance:{now:()=>time},
   clamp:(x,a,b)=>Math.max(a,Math.min(b,x)),serverNow:()=>time,
   game:{clock:{t:1000,wallAt:1000},projectiles:{'remoteShot:0':projectile},
-   gad2FakeShots:{}},myId:'local',ctx,clientBullets:[],bulletVisuals,
+   gad2FakeShots:{},gad2Walls:options.portableWalls||{}},
+  myId:'local',ctx,clientBullets:[],bulletVisuals,
   remoteMuzzleVolleys:new Set(),boundedRemember:(s,k)=>s.add(k),
   previewVisibleBulletCollision:()=>{},
   visualCombatNow:()=>time};
@@ -57,6 +61,33 @@ for(const name of modes){
  approximate(next[4]-next[3],660*.03,name+' maintained 150–180ms motion');
  approximate(next[5],next[4],name+' new 180ms safety cap');
  assert(next[4]>baseline[4]+40,'visual motion must improve under 180ms stale snapshot');
+ // Static KO wall: the requested extra flight would cross solid geometry.
+ const wall=[{x:190,y:115,w:30,h:50}];
+ approximate(replay(candidate,180,'peer',{walls:wall}),baseline[4],
+  name+' static wall blocks extra-only segment');
+ // A wall that is not on the bullet path must not freeze extra motion.
+ approximate(replay(candidate,180,'peer',{walls:[{x:190,y:250,w:30,h:50}]}),
+  next[4],name+' distant wall does not block');
+ // Draft GAD2 portable wall obeys its active time window.
+ const portable={wall:{kind:'portable_wall',x:190,y:115,w:30,h:50,
+  start:0,until:3000}};
+ approximate(replay(candidate,180,'peer',{portableWalls:portable}),baseline[4],
+  name+' active portable wall blocks extra-only segment');
+ portable.wall.until=1;
+ approximate(replay(candidate,180,'peer',{portableWalls:portable}),next[4],
+  name+' expired portable wall does not block');
+ // If the extra segment would cross the arena boundary, retain old cap.
+ const edge={bullet:{x:1780,vx:1000,range:2000,dist:50}};
+ approximate(replay(candidate,180,'peer',edge),replay(original,180,'peer',edge),
+  name+' arena edge stops extended path');
+ // Never visually extend past known shot range.
+ const short={bullet:{range:490}};
+ approximate(replay(candidate,180,'peer',short),baseline[4],
+  name+' shot range prevents additional ghost');
+ // Spawn time is accounted for before checking extra travel vs walls.
+ const delayed={bullet:{spawnAt:1050}};
+ assert(replay(candidate,180,'peer',delayed)>replay(original,180,'peer',delayed)+35,
+  name+' delayed spawn still advances safely when free');
  for(const x of [original,candidate])assert(x.includes('function drawSmoothProjectiles(dt)'),
   'same actual Canvas renderer');
  console.log('PASS V5.3 '+name+' simulated stale snapshot Canvas positions '+
