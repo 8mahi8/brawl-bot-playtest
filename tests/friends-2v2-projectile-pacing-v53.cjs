@@ -65,6 +65,9 @@ for(const name of modes){
  const wall=[{x:190,y:115,w:30,h:50}];
  approximate(replay(candidate,180,'peer',{walls:wall}),baseline[4],
   name+' static wall blocks extra-only segment');
+ for(const age of [115,120,135,150,170,180])
+  approximate(replay(candidate,age,'peer',{walls:wall}),replay(original,age,'peer',{walls:wall}),
+   name+' wall lookahead must not cause late bullet rewind at '+age+'ms');
  // A wall that is not on the bullet path must not freeze extra motion.
  approximate(replay(candidate,180,'peer',{walls:[{x:190,y:250,w:30,h:50}]}),
   next[4],name+' distant wall does not block');
