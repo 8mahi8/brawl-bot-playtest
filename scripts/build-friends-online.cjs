@@ -37,11 +37,16 @@ function patchSquadProjectileVisual(html,canonical){
  const patched=html.slice(0,span.begin)+canonical+html.slice(span.stop);
  // Stage-only: the pinned candidate files and Google Sites HTML remain intact.
  assert(canonical.includes('function squadProjectileVisualAheadSeconds('),'missing V5.3 visual pacing policy');
- return replaceOnce(patched,
+ const ageExpression='serverNow()-game.clock.wallAt';
+ const stage=replaceOnce(patched,
   '  const ahead=game?.clock?clamp((serverNow()-game.clock.wallAt)/1000,0,.11):0;',
-  '  const ahead=game?.clock?squadProjectileVisualAheadSeconds(serverNow()-game.clock.wallAt):0;',
-  'V5.3 2vs2 projectile extrapolation');
-
+  '  const localAhead=game?.clock?clamp(('+ageExpression+')/1000,0,.11):0;\\n'+
+   '  const remoteAhead=game?.clock?squadProjectileVisualAheadSeconds('+ageExpression+'):0;',
+  'V5.3 2vs2 age buckets');
+ return replaceOnce(stage,
+  '  for(const bullet of authoritative){\\n   if((bullet.spawnAt||0)>',
+  '  for(const bullet of authoritative){\\n   const ahead=bullet.owner===myId?localAhead:remoteAhead;\\n   if((bullet.spawnAt||0)>',
+  'V5.3 2vs2 remote-only pacing');
 }
 
 // Build-only position cadence extraction; game HTML inputs remain immutable.
