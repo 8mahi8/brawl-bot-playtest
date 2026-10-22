@@ -10,13 +10,13 @@ const end='function updateCameraLabel()';
 function approximate(actual,expected,label){
  assert(Math.abs(actual-expected)<.02,label+': '+actual+' vs '+expected);
 }
-function replay(html,ageMs){
+function replay(html,ageMs,owner='peer'){
  const start=html.indexOf(source),stop=html.indexOf(end,start);
  assert(start>=0&&stop>start,'missing projectile renderer');
  assert.equal(html.indexOf(source,start+source.length),-1,'duplicate projectile renderer');
  const snippet=html.slice(start,stop);
  const time=1000+ageMs;
- const projectile={id:'remoteShot:0',fireId:'remoteShot',owner:'peer',
+ const projectile={id:'remoteShot:0',fireId:'remoteShot',owner,
    x:100,y:130,vx:660,vy:0,dist:400,spawnAt:1000,team:'red',char:'sniper'};
  const bulletVisuals=new Map(),ctx={
   beginPath(){},arc(){},stroke(){},save(){},restore(){},moveTo(){},lineTo(){}
@@ -47,6 +47,11 @@ for(const name of modes){
  const baseline=ages.map(age=>replay(original,age));
  const next=ages.map(age=>replay(candidate,age));
  for(let i=0;i<3;i++)approximate(next[i],baseline[i],name+' normal-age parity');
+ // V5.3 must never speed up the local owner's authoritative projectiles.
+ const baselineOwn=ages.map(age=>replay(original,age,'local'));
+ const stagingOwn=ages.map(age=>replay(candidate,age,'local'));
+ for(let i=0;i<ages.length;i++)
+  approximate(stagingOwn[i],baselineOwn[i],name+' own-shot '+ages[i]+'ms parity');
  approximate(baseline[3],baseline[2],name+' old 110ms plateau');
  approximate(next[3]-next[2],660*.04,name+' maintained 110–150ms motion');
  approximate(next[4]-next[3],660*.03,name+' maintained 150–180ms motion');
