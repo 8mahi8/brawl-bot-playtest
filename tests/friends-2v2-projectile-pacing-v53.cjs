@@ -177,6 +177,46 @@ for(const name of modes){
  }
 }
 
+// Validate the memoized guard in the actual built Canvas functions. Reusing the
+// SAME bullet object models frames between authoritative Firebase snapshots.
+for(const name of modes){
+ const html=generated[name].html;
+ const start=html.indexOf('function squadProjectileSegmentHitsWall(');
+ const stop=html.indexOf('function drawSmoothProjectiles(',start);
+ assert(start>=0&&stop>start,name+' guard span found');
+ const env={Math,Number,Object,WeakMap};
+ vm.createContext(env);
+ vm.runInContext(html.slice(start,stop),env,{timeout:1000});
+ assert.equal(typeof env.squadProjectileGuardedRemoteAhead,'function');
+ const guard=(b,walls,portable,at)=>env.squadProjectileGuardedRemoteAhead(
+  b,.11,.18,0,walls,1920,1120,portable,at);
+ const b={x:100,y:130,vx:660,vy:0,dist:400,range:1500,radius:4};
+ const empty=[],distant=[{x:400,y:250,w:30,h:30}];
+ let wallChecks=0;
+ const hit=env.squadProjectileSegmentHitsWall;
+ env.squadProjectileSegmentHitsWall=(...args)=>{wallChecks++;return hit(...args);};
+ approximate(guard(b,distant,{},1000),.18,name+' free line');
+ for(let i=0;i<50;i++)approximate(guard(b,distant,{},1001+i),.18,
+  name+' same snapshot cached frame '+i);
+ assert.equal(wallChecks,1,name+' static geometry only examined once per snapshot');
+ b.x=150;
+ approximate(guard(b,distant,{},1100),.18,name+' bullet movement invalidates cache');
+ assert.equal(wallChecks,2,name+' position mutation caused new wall check');
+ const staticWall=[{x:190,y:115,w:30,h:50}];
+ approximate(guard(b,staticWall,{},1101),.11,name+' new wall reference invalidates');
+ b.x=100;
+ const portable={wall:{kind:'portable_wall',x:190,y:115,w:30,h:50,
+  start:1050,until:1800}};
+ approximate(guard(b,empty,portable,1000),.18,name+' wall scheduled but inactive');
+ approximate(guard(b,empty,portable,1050),.11,name+' wall activation invalidates memo');
+ approximate(guard(b,empty,portable,1700),.11,name+' wall remains active');
+ approximate(guard(b,empty,portable,1800),.18,name+' wall expiry invalidates memo');
+ b.range=430;
+ approximate(guard(b,empty,portable,1801),.11,name+' range mutation invalidates memo');
+ console.log('PASS V5.3 '+name+' cache invalidation with a changed bullet, '+ 
+  'changed geometry, timed portable wall, and range');
+}
+
 for(const name of ['normal.1vs1','draft.1vs1']){
  assert(!generated[name].html.includes('squadProjectileVisualAheadSeconds'),
   'staging experiment must never affect '+name);
