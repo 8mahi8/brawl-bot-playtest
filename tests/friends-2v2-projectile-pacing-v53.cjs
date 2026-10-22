@@ -38,7 +38,7 @@ function replay(html,ageMs){
 for(const name of modes){
  const original=fs.readFileSync(spec.modes[name].source,'utf8');
  const candidate=generated[name].html;
- assert.equal((candidate.match(/function squadProjectileVisualAheadSeconds\\(/g)||[]).length,1,
+ assert.equal(candidate.split('function squadProjectileVisualAheadSeconds(').length-1,1,
   'one staging visual policy '+name);
  assert(!original.includes('function squadProjectileVisualAheadSeconds('),
   'fixed source HTML must remain unchanged');
