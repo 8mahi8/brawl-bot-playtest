@@ -30,7 +30,7 @@ const code=[
 function fixture(html){
  const original='https://mygame-df915-default-rtdb.firebaseio.com/';
  assert(html.includes(original));
- let s=html.replaceAll(original,'https://demo-brawl-v51-default-rtdb.firebaseio.com/');
+ let s=html.replaceAll(original,'https://demo-brawl-draft-beta-default-rtdb.firebaseio.com/');
  s=once(s,'db=firebase.database();',"db=firebase.database();db.useEmulator('127.0.0.1',9000);",'SDK');
  s=once(s,'connect-src ','connect-src http://127.0.0.1:9000 ws://127.0.0.1:9000 ','CSP');
  s=once(s,'  window.__brawlV29QA=()=>({',code+'\n  window.__brawlV29QA=()=>({','QA');
