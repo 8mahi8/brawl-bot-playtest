@@ -25,3 +25,12 @@ function squadRemoteProjectileVisual(b,prev,targetX,targetY,nowMs,weight,selfId)
   }
   return updated;
  }
+
+// V5.3 STAGING EXPERIMENT: move remote authoritative visual bullets for a
+// bounded 180ms after the last host clock, rather than freezing after 110ms.
+// This only changes Canvas coordinates; no game state, collision, HP, or RTDB.
+// Keep bounded to avoid long-lived ghost bullets when snapshots stop arriving.
+function squadProjectileVisualAheadSeconds(snapshotAgeMs){
+  if(!Number.isFinite(snapshotAgeMs))return 0;
+  return Math.min(.18,Math.max(0,snapshotAgeMs/1000));
+}
