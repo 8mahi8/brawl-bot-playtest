@@ -18,6 +18,7 @@ on:
       - 'tests/friends-2v2-quiet-action-wake-v48.cjs'
       - 'tests/friends-2v2-render-phases-v49.cjs'
       - 'tests/friends-2v2-canvas-load-v50.cjs'
+      - 'tests/friends-2v2-projectile-pacing-v53.cjs'
       - 'tests/friends-1v1-stable-vs-shared-webkit-v51.cjs'
       - 'tests/friends-duel-frame-stability-v52.cjs'
       - 'network/BRAWL_V52_DUEL_WARP_FIX.md'
@@ -96,6 +97,7 @@ on:
       - 'tests/friends-2v2-quiet-action-wake-v48.cjs'
       - 'tests/friends-2v2-render-phases-v49.cjs'
       - 'tests/friends-2v2-canvas-load-v50.cjs'
+      - 'tests/friends-2v2-projectile-pacing-v53.cjs'
       - 'tests/friends-1v1-stable-vs-shared-webkit-v51.cjs'
       - 'tests/friends-duel-frame-stability-v52.cjs'
       - 'network/BRAWL_V52_DUEL_WARP_FIX.md'
@@ -197,6 +199,7 @@ jobs:
           node tests/friends-2v2-quiet-action-wake-v48.cjs
           node tests/friends-2v2-render-phases-v49.cjs
           node tests/friends-2v2-canvas-load-v50.cjs
+          node tests/friends-2v2-projectile-pacing-v53.cjs
           node tests/friends-duel-frame-stability-v52.cjs
           mkdir -p artifacts/qa
           node tests/friends-2v2-lag-stress-v36.cjs > artifacts/qa/v36-synthetic-scenarios.json
