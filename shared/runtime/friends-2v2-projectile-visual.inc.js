@@ -39,7 +39,8 @@ function squadProjectileVisualAheadSeconds(snapshotAgeMs){
  // Existing <=110ms and own-shot trajectories are deliberately unchanged.
  // Slab intersection avoids stepping through an arbitrary number of pixels.
 function squadProjectileSegmentHitsWall(x0,y0,x1,y1,r,w){
- if(!w||![w.x,w.y,w.w,w.h].every(Number.isFinite))return false;
+ if(!w||!Number.isFinite(w.x)||!Number.isFinite(w.y)||
+    !Number.isFinite(w.w)||!Number.isFinite(w.h))return false;
  const left=w.x-r,right=w.x+w.w+r,top=w.y-r,bottom=w.y+w.h+r;
  const dx=x1-x0,dy=y1-y0;
  let enter=0,exit=1;
@@ -60,14 +61,19 @@ function squadProjectileSegmentHitsWall(x0,y0,x1,y1,r,w){
 }
 function squadProjectileGuardedRemoteAhead(b,baseline,requested,spawnDelay,walls,width,height,portableWalls,at){
  if(requested<=baseline)return requested;
- if(!b||![b.x,b.y,b.vx,b.vy,baseline,requested,spawnDelay].every(Number.isFinite))
+ if(!b||!Number.isFinite(b.x)||!Number.isFinite(b.y)||
+    !Number.isFinite(b.vx)||!Number.isFinite(b.vy)||
+    !Number.isFinite(baseline)||!Number.isFinite(requested)||
+    !Number.isFinite(spawnDelay))
   return baseline;
  const from=Math.max(0,baseline-spawnDelay),to=Math.max(0,requested-spawnDelay);
  if(to<=from)return requested;
  const x0=b.x+b.vx*from,y0=b.y+b.vy*from;
  const x1=b.x+b.vx*to,y1=b.y+b.vy*to;
  const r=Number.isFinite(b.radius)?Math.max(0,b.radius):4;
- if(![x0,y0,x1,y1,width,height].every(Number.isFinite)||
+ if(!Number.isFinite(x0)||!Number.isFinite(y0)||
+    !Number.isFinite(x1)||!Number.isFinite(y1)||
+    !Number.isFinite(width)||!Number.isFinite(height)||
     x1<r||x1>width-r||y1<r||y1>height-r)return baseline;
  const speed=Math.hypot(b.vx,b.vy);
  if(Number.isFinite(b.range)&&Number.isFinite(b.dist)&&
@@ -77,7 +83,9 @@ function squadProjectileGuardedRemoteAhead(b,baseline,requested,spawnDelay,walls
  }
  // The draft mode also has short-lived portable walls. Never allow a staged
  // extra look-ahead to cross one while it is active.
- for(const w of Object.values(portableWalls||{})){
+ if(portableWalls)for(const key in portableWalls){
+  if(!Object.prototype.hasOwnProperty.call(portableWalls,key))continue;
+  const w=portableWalls[key];
   if(w?.kind!=='portable_wall'||!(w.start<=at&&w.until>at))continue;
   if(squadProjectileSegmentHitsWall(x0,y0,x1,y1,r,w))return baseline;
  }
