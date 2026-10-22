@@ -21,7 +21,8 @@ function replay(html,ageMs){
  const bulletVisuals=new Map(),ctx={
   beginPath(){},arc(){},stroke(){},save(){},restore(){},moveTo(){},lineTo(){}
  };
- const env={Math,Object,Number,Set,Map,performance:{now:()=>time},
+ const env={Math,Object,Number,Set,Map,
+  window:{__brawlLagV39QA:{tap(){}}},performance:{now:()=>time},
   clamp:(x,a,b)=>Math.max(a,Math.min(b,x)),serverNow:()=>time,
   game:{clock:{t:1000,wallAt:1000},projectiles:{'remoteShot:0':projectile},
    gad2FakeShots:{}},myId:'local',ctx,clientBullets:[],bulletVisuals,
