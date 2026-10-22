@@ -217,6 +217,92 @@ for(const name of modes){
   'changed geometry, timed portable wall, and range');
 }
 
+// Simulate consecutive host snapshots, 60fps rendering and variable delivery
+// delays. This checks the complete easing renderer, not one frozen frame.
+// All coordinates are fabricated, no network, production Firebase or real FPS.
+function squadJitterScenario(kind){
+ const all=[];
+ for(let t=0;t<=1300;t+=80){
+  const n=Math.floor(t/80);
+  const latency=kind==='steady'?60:
+   kind==='burst'?(n%7===4?250:95):
+   (n%5>=2?155:75);
+  all.push({received:t+latency,clock:t});
+ }
+ all.sort((a,b)=>a.received-b.received);
+ let latest=-1;
+ return all.filter(msg=>{
+  if(msg.clock<=latest)return false;
+  latest=msg.clock;
+  return true;
+ });
+}
+function squadJitterTrace(html,deliveries){
+ const start=html.indexOf(source),stop=html.indexOf(end,start);
+ assert(start>=0&&stop>start,'jitter trace renderer');
+ let now=0,clock=1000;
+ const bulletVisuals=new Map();
+ const ctx={beginPath(){},arc(){},stroke(){},save(){},restore(){},
+  moveTo(){},lineTo(){}};
+ let bullet={id:'jitter:0',fireId:'jitter',owner:'peer',
+  x:100,y:100,vx:660,vy:0,dist:400,range:9000,
+  spawnAt:1000,team:'red',char:'sniper'};
+ const env={Math,Object,WeakMap,Map,Set,Number,
+  W:1920,H:1120,WALLS:[],combatNow:()=>clock,
+  visualCombatNow:()=>1000+now,
+  window:{__brawlLagV39QA:{tap(){}}},
+  performance:{now:()=>now},
+  clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),
+  serverNow:()=>1000+now,
+  game:{clock:{t:clock,wallAt:clock},projectiles:{'jitter:0':bullet},
+   gad2Walls:{},gad2FakeShots:{}},
+  ctx,myId:'local',bulletVisuals,remoteMuzzleVolleys:new Set(),
+  boundedRemember:(set,key)=>set.add(key),clientBullets:[],
+  previewVisibleBulletCollision(){}};
+ vm.createContext(env);
+ vm.runInContext(html.slice(start,stop),env,{timeout:1000});
+ let cursor=0,errors=0,stalls=0,backwards=0,last=NaN,samples=0;
+ for(let frame=0;frame<=84;frame++){
+  now=frame*(1000/60);
+  while(cursor<deliveries.length&&deliveries[cursor].received<=now){
+   const msg=deliveries[cursor++],t=msg.clock;
+   clock=1000+t;
+   bullet={...bullet,x:100+660*t/1000,dist:400+660*t/1000};
+   env.game={clock:{t:clock,wallAt:clock},
+    projectiles:{'jitter:0':bullet},gad2Walls:{},gad2FakeShots:{}};
+  }
+  env.drawSmoothProjectiles(1/60);
+  const point=bulletVisuals.get('jitter:0');
+  assert(point&&Number.isFinite(point.x),'jitter frame must render a bullet');
+  if(Number.isFinite(last)){
+   if(point.x+0.1<last)backwards++;
+   if(Math.abs(point.x-last)<.25)stalls++;
+  }
+  last=point.x;
+  errors+=Math.abs((100+660*now/1000)-point.x);
+  samples++;
+ }
+ return {meanError:errors/samples,stalls,backwards};
+}
+for(const name of modes){
+ const original=fs.readFileSync(spec.modes[name].source,'utf8');
+ const candidate=generated[name].html;
+ for(const kind of ['steady','burst','wifi']){
+  const packets=squadJitterScenario(kind);
+  const before=squadJitterTrace(original,packets);
+  const after=squadJitterTrace(candidate,packets);
+  assert.equal(after.backwards,0,name+' '+kind+' no backwards jumps');
+  assert(after.meanError<before.meanError-2,
+   name+' '+kind+' lower ideal-trajectory error '+JSON.stringify({before,after}));
+  assert(after.stalls<=before.stalls,name+' '+kind+' no extra stationary frames');
+  console.log('PASS V5.3 jittered-host snapshots '+JSON.stringify({
+   mode:name,kind,packets:packets.length,
+   baselineError:+before.meanError.toFixed(2),
+   candidateError:+after.meanError.toFixed(2),
+   baselineStalls:before.stalls,candidateStalls:after.stalls}));
+ }
+}
+
 for(const name of ['normal.1vs1','draft.1vs1']){
  assert(!generated[name].html.includes('squadProjectileVisualAheadSeconds'),
   'staging experiment must never affect '+name);
