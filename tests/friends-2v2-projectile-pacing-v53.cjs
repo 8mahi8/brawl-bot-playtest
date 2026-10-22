@@ -191,16 +191,16 @@ for(const name of modes){
  const guard=(b,walls,portable,at)=>env.squadProjectileGuardedRemoteAhead(
   b,.11,.18,0,walls,1920,1120,portable,at);
  const b={x:100,y:130,vx:660,vy:0,dist:400,range:1500,radius:4};
- const empty=[],distant=[{x:400,y:250,w:30,h:30}];
+ const empty=[],noPortable={},distant=[{x:400,y:250,w:30,h:30}];
  let wallChecks=0;
  const hit=env.squadProjectileSegmentHitsWall;
  env.squadProjectileSegmentHitsWall=(...args)=>{wallChecks++;return hit(...args);};
- approximate(guard(b,distant,{},1000),.18,name+' free line');
- for(let i=0;i<50;i++)approximate(guard(b,distant,{},1001+i),.18,
+ approximate(guard(b,distant,noPortable,1000),.18,name+' free line');
+ for(let i=0;i<50;i++)approximate(guard(b,distant,noPortable,1001+i),.18,
   name+' same snapshot cached frame '+i);
  assert.equal(wallChecks,1,name+' static geometry only examined once per snapshot');
  b.x=150;
- approximate(guard(b,distant,{},1100),.18,name+' bullet movement invalidates cache');
+ approximate(guard(b,distant,noPortable,1100),.18,name+' bullet movement invalidates cache');
  assert.equal(wallChecks,2,name+' position mutation caused new wall check');
  const staticWall=[{x:190,y:115,w:30,h:50}];
  approximate(guard(b,staticWall,{},1101),.11,name+' new wall reference invalidates');
