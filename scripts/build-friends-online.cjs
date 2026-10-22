@@ -40,12 +40,12 @@ function patchSquadProjectileVisual(html,canonical){
  const ageExpression='serverNow()-game.clock.wallAt';
  const stage=replaceOnce(patched,
   '  const ahead=game?.clock?clamp((serverNow()-game.clock.wallAt)/1000,0,.11):0;',
-  '  const localAhead=game?.clock?clamp(('+ageExpression+')/1000,0,.11):0;\\n'+
+  '  const localAhead=game?.clock?clamp(('+ageExpression+')/1000,0,.11):0;\n'+
    '  const remoteAhead=game?.clock?squadProjectileVisualAheadSeconds('+ageExpression+'):0;',
   'V5.3 2vs2 age buckets');
  return replaceOnce(stage,
-  '  for(const bullet of authoritative){\\n   if((bullet.spawnAt||0)>',
-  '  for(const bullet of authoritative){\\n   const ahead=bullet.owner===myId?localAhead:remoteAhead;\\n   if((bullet.spawnAt||0)>',
+  '  for(const bullet of authoritative){\n   if((bullet.spawnAt||0)>',
+  '  for(const bullet of authoritative){\n   const ahead=bullet.owner===myId?localAhead:remoteAhead;\n   if((bullet.spawnAt||0)>',
   'V5.3 2vs2 remote-only pacing');
 }
 
