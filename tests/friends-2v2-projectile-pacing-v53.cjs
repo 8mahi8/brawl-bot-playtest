@@ -120,6 +120,63 @@ for(const name of modes){
   JSON.stringify({snapshotAgeMs:ages,baselineX:baseline.map(x=>Math.round(x*10)/10),
     stagingX:next.map(x=>Math.round(x*10)/10)}));
 }
+// Continuous rAF playback, preserving bulletVisuals between frames. The
+// independent-frame probes above do not model the real easing pipeline.
+function continuousTrace(html,fps,walls=[]){
+ const begin=html.indexOf(source),finish=html.indexOf(end,begin);
+ assert(begin>=0&&finish>begin,'continuous replay must use real Canvas renderer');
+ const projectile={id:'remoteShot:0',fireId:'remoteShot',owner:'peer',
+  x:100,y:130,vx:660,vy:0,dist:400,spawnAt:1000,team:'red',char:'sniper'};
+ let now=1000;
+ const bulletVisuals=new Map();
+ const ctx={beginPath(){},arc(){},stroke(){},save(){},restore(){},moveTo(){},lineTo(){}};
+ const env={Math,Object,Number,Set,Map,W:1920,H:1120,WALLS:walls,
+  combatNow:()=>now,visualCombatNow:()=>now,
+  window:{__brawlLagV39QA:{tap(){}}},performance:{now:()=>now},
+  clamp:(x,a,b)=>Math.max(a,Math.min(b,x)),serverNow:()=>now,
+  game:{clock:{t:1000,wallAt:1000},projectiles:{'remoteShot:0':projectile},
+   gad2FakeShots:{},gad2Walls:{}},myId:'local',ctx,clientBullets:[],
+  bulletVisuals,remoteMuzzleVolleys:new Set(),boundedRemember:(s,k)=>s.add(k),
+  previewVisibleBulletCollision(){}};
+ vm.createContext(env);vm.runInContext(html.slice(begin,finish),env,{timeout:1000});
+ const points=[];
+ for(let frame=0;frame<=Math.round(336*fps/1000);frame++){
+  const ms=frame*1000/fps;
+  now=1000+ms;
+  env.drawSmoothProjectiles(1/fps);
+  points.push({ms,x:bulletVisuals.get('remoteShot:0').x});
+ }
+ return points;
+}
+function continuousStats(points){
+ let stopped=0;
+ for(let i=1;i<points.length;i++)
+  if(Math.abs(points[i].x-points[i-1].x)<.25)stopped++;
+ const late=points.filter(p=>p.ms>=120&&p.ms<=210);
+ return {stopped,lateMove:late[late.length-1].x-late[0].x};
+}
+for(const name of modes){
+ const original=fs.readFileSync(spec.modes[name].source,'utf8');
+ const candidate=generated[name].html;
+ for(const fps of [30,60]){
+  const old=continuousTrace(original,fps);
+  const next=continuousTrace(candidate,fps);
+  const a=continuousStats(old),b=continuousStats(next);
+  assert(b.stopped<a.stopped,name+' '+fps+'fps fewer fully eased frames');
+  assert(b.lateMove>a.lateMove+25,name+' '+fps+'fps extra movement under stale snapshot');
+  const wall=[{x:190,y:115,w:30,h:50}];
+  const oldWall=continuousTrace(original,fps,wall);
+  const nextWall=continuousTrace(candidate,fps,wall);
+  for(let i=0;i<oldWall.length;i++)
+   approximate(nextWall[i].x,oldWall[i].x,
+    name+' '+fps+'fps continuous wall path '+i);
+  console.log('PASS V5.3 '+name+' '+fps+'fps continuous rAF replay '+JSON.stringify({
+   baselineStopped:a.stopped,candidateStopped:b.stopped,
+   baselineLateMovement:+a.lateMove.toFixed(2),
+   candidateLateMovement:+b.lateMove.toFixed(2)}));
+ }
+}
+
 for(const name of ['normal.1vs1','draft.1vs1']){
  assert(!generated[name].html.includes('squadProjectileVisualAheadSeconds'),
   'staging experiment must never affect '+name);
