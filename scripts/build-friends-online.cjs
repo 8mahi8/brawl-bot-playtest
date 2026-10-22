@@ -34,7 +34,14 @@ function patchSquadProjectileVisual(html,canonical){
  assert(canonical.startsWith(PROJECTILE_BEGIN)&&canonical.endsWith('\n'),'invalid shared projectile renderer');
  assert(!canonical.includes(PROJECTILE_END),'projectile renderer overlaps next function');
  const span=uniqueSpan(html,PROJECTILE_BEGIN,PROJECTILE_END,'2v2 host projectile visualization');
- return html.slice(0,span.begin)+canonical+html.slice(span.stop);
+ const patched=html.slice(0,span.begin)+canonical+html.slice(span.stop);
+ // Stage-only: the pinned candidate files and Google Sites HTML remain intact.
+ assert(canonical.includes('function squadProjectileVisualAheadSeconds('),'missing V5.3 visual pacing policy');
+ return replaceOnce(patched,
+  '  const ahead=game?.clock?clamp((serverNow()-game.clock.wallAt)/1000,0,.11):0;',
+  '  const ahead=game?.clock?squadProjectileVisualAheadSeconds(serverNow()-game.clock.wallAt):0;',
+  'V5.3 2vs2 projectile extrapolation');
+
 }
 
 // Build-only position cadence extraction; game HTML inputs remain immutable.
