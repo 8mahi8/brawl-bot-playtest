@@ -61,6 +61,29 @@ for(const name of modes){
  approximate(next[4]-next[3],660*.03,name+' maintained 150–180ms motion');
  approximate(next[5],next[4],name+' new 180ms safety cap');
  assert(next[4]>baseline[4]+40,'visual motion must improve under 180ms stale snapshot');
+
+ // Count Canvas frame pairs that have stopped advancing during an artificially
+ // delayed authoritative snapshot. This is a visual-only replay, not network RTT.
+ const frameAges=Array.from({length:15},(_,i)=>i*16);
+ const baselineFrames=frameAges.map(age=>replay(original,age));
+ const stagedFrames=frameAges.map(age=>replay(candidate,age));
+ const stopFrames=xs=>xs.slice(1).reduce((count,x,i)=>
+  count+(Math.abs(x-xs[i])<.02?1:0),0);
+ const baselineStops=stopFrames(baselineFrames);
+ const stagedStops=stopFrames(stagedFrames);
+ assert(baselineStops>=7, name+' baseline must demonstrate a multi-frame freeze');
+ assert(stagedStops<=4, name+' guarded pacing must have fewer stopped frames');
+ assert(stagedStops<baselineStops, name+' staged replay must improve frame continuity');
+ const boundedWall={walls:[{x:190,y:115,w:30,h:50}]};
+ const guardedWallFrames=frameAges.map(age=>replay(candidate,age,'peer',boundedWall));
+ const unmodifiedWallFrames=frameAges.map(age=>replay(original,age,'peer',boundedWall));
+ for(let i=0;i<frameAges.length;i++)
+  approximate(guardedWallFrames[i],unmodifiedWallFrames[i],
+   name+' preflight collision must retain old trajectory '+frameAges[i]+'ms');
+ console.log('V5.3 '+name+' paused-snapshot visual frame test '+JSON.stringify({
+  sampleStepMs:16,snapshotUnchangedMs:224,baselineStoppedFrames:baselineStops,
+  stagingStoppedFrames:stagedStops,wallGuardStoppedFrames:stopFrames(guardedWallFrames)}));
+
  // Static KO wall: the requested extra flight would cross solid geometry.
  const wall=[{x:190,y:115,w:30,h:50}];
  approximate(replay(candidate,180,'peer',{walls:wall}),baseline[4],
