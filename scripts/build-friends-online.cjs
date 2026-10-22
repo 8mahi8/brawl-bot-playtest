@@ -368,6 +368,29 @@ function patchSquadQuietEarlyShotWakeV48(html,modeName){
   ' if(earlyShots.size||earlyBombSmoothing.size)return false;\n',
   modeName+' idle Canvas remote shot wake');
 }
+// V5.2 opt-in STAGING-only 1vs1 renderer guard. Original published HTML and
+// the 2vs2 engines are deliberately unchanged; no network/combat state edits.
+function patchDuelFrameStabilityV52(html,modeName){
+ assert(['normal.1vs1','draft.1vs1'].includes(modeName),'V5.2 only for duel staging');
+ assert(!html.includes('/* V5.2 1vs1 warp guard */'),'duplicate V5.2 guard');
+ html=replaceOnce(html,
+  '    if(gap>125){remote.x=target.x;remote.y=target.y;}\n    else{remote.x+=(target.x-remote.x)*smoothing;remote.y+=(target.y-remote.y)*smoothing;}',
+  '    /* V5.2 1vs1 warp guard */\n'+
+  '    // A delayed position packet must not teleport a walking opponent.\n'+
+  '    // Keep intentional dash/jump correction immediate. Combat targets remain authoritative.\n'+
+  '    if(gap>125&&(remote.dash>0||jumping?.actor===remote)){remote.x=target.x;remote.y=target.y;}\n'+
+  '    else{remote.x+=(target.x-remote.x)*smoothing;remote.y+=(target.y-remote.y)*smoothing;}',
+  modeName+' V5.2 remote display warp');
+ html=replaceOnce(html,
+  '    canvas.width=Math.max(1,Math.round(sw*dpr));canvas.height=Math.max(1,Math.round(sh*dpr));',
+  '    // iPad Safari may fire window resize and ResizeObserver for one layout update.\n'+
+  '    // Setting the same Canvas dimensions still clears and reallocates its backing store.\n'+
+  '    const bw=Math.max(1,Math.round(sw*dpr)),bh=Math.max(1,Math.round(sh*dpr));\n'+
+  '    if(canvas.width!==bw)canvas.width=bw;\n'+
+  '    if(canvas.height!==bh)canvas.height=bh;',
+  modeName+' V5.2 Canvas no-op resize');
+ return html;
+}
 function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=null,friendInputOverrides=null,latencyProbeOverride=null,includeV39=true,includeV44=includeV39,includeV45=false,includeV48=true){
  assert.equal(spec.schemaVersion,1);
  const canonical=moduleOverride===null?read(spec.modules.squadEarlyShots):moduleOverride;
@@ -402,6 +425,7 @@ function makeAll(moduleOverride=null,positionOverride=null,presentationOverride=
    html=patchSquadPresentation(html,presentationSource,name);
   }
   html=patchFriendInputs(html,name,friendInputOverrides);
+  if(name.endsWith('.1vs1'))html=patchDuelFrameStabilityV52(html,name);
   if(mode.modules.includes('squadLatencyProbe')){
    assert(mode.roomRoot==='rooms2v2','no 1v1 probe leak '+name);
    html=patchSquadLatencyProbe(html,latencyProbeSource,name);
@@ -495,4 +519,4 @@ function main(flag){
  if(flag==='--emit')console.log('PASS four standalone Google Sites copy-ready HTMLs; publication is always manual');
 }
 if(require.main===module)main(process.argv[2]);
-module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,patchSquadLagPanelV40,patchSquadPositionDeltaV44,patchSquadHudV45,patchSquadQuietEarlyShotWakeV48,sharedSection,safeTarget,main};
+module.exports={spec,makeAll,validate,patchEarlyShots,patchPositionPublish,patchControlLayout,patchSquadNetwork,SQUAD_NETWORK_PARTS,patchSquadPresentation,squadPresentationBlocks,SQUAD_PRESENTATION_NAMES,FRIEND_INPUT_SPANS,patchFriendInputs,patchSquadLatencyProbe,patchSquadActionLagProbe,patchSquadLagPanelV40,patchSquadPositionDeltaV44,patchSquadHudV45,patchSquadQuietEarlyShotWakeV48,patchDuelFrameStabilityV52,sharedSection,safeTarget,main};
