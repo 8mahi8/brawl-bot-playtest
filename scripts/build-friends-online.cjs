@@ -45,7 +45,12 @@ function patchSquadProjectileVisual(html,canonical){
   'V5.3 2vs2 age buckets');
  return replaceOnce(stage,
   '  for(const bullet of authoritative){\n   if((bullet.spawnAt||0)>',
-  '  for(const bullet of authoritative){\n   const ahead=bullet.owner===myId?localAhead:remoteAhead;\n   if((bullet.spawnAt||0)>',
+  '  for(const bullet of authoritative){\n'+
+   '   const ahead=bullet.owner===myId||remoteAhead<=localAhead?localAhead:\n'+
+   '    squadProjectileGuardedRemoteAhead(bullet,localAhead,remoteAhead,\n'+
+   '     Math.max(0,((bullet.spawnAt||0)-(game?.clock?.t||0))/1000),\n'+
+   '     WALLS,W,H,game?.gad2Walls,combatNow());\n'+
+   '   if((bullet.spawnAt||0)>',
   'V5.3 2vs2 remote-only pacing');
 }
 
