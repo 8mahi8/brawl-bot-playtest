@@ -66,7 +66,10 @@ function squadProjectileGuardedRemoteAhead(b,baseline,requested,spawnDelay,walls
     !Number.isFinite(baseline)||!Number.isFinite(requested)||
     !Number.isFinite(spawnDelay))
   return baseline;
- const from=Math.max(0,baseline-spawnDelay),to=Math.max(0,requested-spawnDelay);
+ // Check the full 180ms extension from its first frame, not just the
+ // elapsed fraction. Otherwise crossing a wall at 150ms could make an
+ // already-advanced bullet jump backward to the 110ms baseline.
+ const from=Math.max(0,baseline-spawnDelay),to=Math.max(0,Math.max(requested,.18)-spawnDelay);
  if(to<=from)return requested;
  const x0=b.x+b.vx*from,y0=b.y+b.vy*from;
  const x1=b.x+b.vx*to,y1=b.y+b.vy*to;
